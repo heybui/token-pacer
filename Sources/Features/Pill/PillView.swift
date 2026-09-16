@@ -138,10 +138,10 @@ struct PillView: View {
                 size: 46, lineWidth: 6,
                 label: isLoading ? nil : headline
             )
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(statusLine)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Typography.sans(13, .semibold))
                         .foregroundStyle(.white)
                     Spacer(minLength: 14)
                     HStack(spacing: 4) {
@@ -150,16 +150,23 @@ struct PillView: View {
                             size: 11.5, color: .white.opacity(0.5), weight: .regular
                         )
                         Text("left")
-                            .font(.system(size: 11.5, design: .monospaced))
+                            .font(Typography.mono(11.5))
                             .foregroundStyle(.white.opacity(0.5))
                     }
                 }
+
+                CapBar(
+                    percent: snapshot?.weeklyPercent,
+                    tone: Tokens.tone(snapshot?.weeklyPercent ?? 0),
+                    height: 4
+                )
+
                 HStack(spacing: 6) {
                     if let attention {
                         AttentionBadge(message: attention, size: 10)
                     }
                     Text(detailLine)
-                        .font(.system(size: 10.5, design: .monospaced))
+                        .font(Typography.mono(10.5))
                         .foregroundStyle(attention == nil ? .white.opacity(0.42) : Tokens.amber.opacity(0.9))
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -187,12 +194,20 @@ struct PillView: View {
     private var detailLine: String {
         if let attention { return attention }
         guard let snapshot else { return "reading logs…" }
+
         let origin = switch snapshot.origin {
         case .authoritative: reportedLabel(snapshot)
         case .inferred: "estimated"
         case .unknown: "no ceiling yet"
         }
-        let headroom = snapshot.burn.headroomMinutes.map { " · ~\($0) min headroom" } ?? ""
-        return "\(snapshot.source.displayName) · \(origin)\(headroom)"
+        var parts = ["Week \(Format.percent(snapshot.weeklyPercent))"]
+        if let rate = snapshot.burn.percentPerHour, rate > 0 {
+            parts.append("\(Int(rate.rounded()))%/hr")
+        }
+        if let headroom = snapshot.burn.headroomMinutes {
+            parts.append("~\(headroom) min headroom")
+        }
+        parts.append(origin)
+        return parts.joined(separator: " · ")
     }
 }
