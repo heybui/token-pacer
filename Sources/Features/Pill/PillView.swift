@@ -55,7 +55,15 @@ struct PillView: View {
     }
 
     private var shell: some View {
-        content
+        ZStack(alignment: .top) {
+            // Cross-faded, not swapped. The shell's frame springs open over
+            // ~400ms; content that appears at full opacity on the first frame
+            // reads as a jump no matter how smooth the box is.
+            content
+                .frame(width: state.size.width, height: state.size.height)
+                .id(state)
+                .transition(.opacity.animation(.easeInOut(duration: 0.22)))
+        }
             .frame(width: state.size.width, height: state.size.height)
             .clipShape(shape)
             // The shadow is cast by the shape itself, never by the composited
