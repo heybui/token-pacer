@@ -59,7 +59,6 @@ struct RateLimits: Equatable, Sendable {
     let secondary: RateLimitWindow?
     let planType: String?
     let observedAt: Date
-    var extra: ExtraUsage?
 }
 
 struct SourceSnapshot: Sendable {

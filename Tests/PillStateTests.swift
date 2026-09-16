@@ -145,14 +145,10 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(Format.blocks(-5) == "░░░░░░░░░░")
 }
 
-@Test func historyLabelsNameTheDayThenCountBack() {
-    var utc = Calendar(identifier: .gregorian)
-    utc.timeZone = TimeZone(identifier: "UTC")!
-    let yesterday = now.addingTimeInterval(-24 * 3600)
-
-    #expect(Format.historyLabel(now, compact: false, from: now, calendar: utc) == "today")
-    #expect(Format.historyLabel(yesterday, compact: false, from: now, calendar: utc) == "D-01")
-    #expect(Format.historyLabel(yesterday, compact: true, from: now, calendar: utc).count == 3)
+@Test func historyLabelsNameTheWeekdayOverAWeekAndTheDateOverAMonth() {
+    // A month of "Mon, Tue, Wed…" repeats four times over and says nothing.
+    #expect(Format.historyLabel(now, compact: true).count == 3)
+    #expect(Format.historyLabel(now, compact: false).contains { $0.isNumber })
 }
 
 @Test func spendProjectionScalesTheMonthElapsed() {

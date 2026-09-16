@@ -47,8 +47,7 @@ struct UsageLimitsResponse: Sendable, Equatable {
                                 resetsAt: $0.resetsAt ?? observedAt)
             },
             planType: nil,
-            observedAt: observedAt,
-            extra: extraUsage
+            observedAt: observedAt
         )
     }
 }

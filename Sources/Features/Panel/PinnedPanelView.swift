@@ -27,6 +27,7 @@ struct PinnedPanelView: View {
         .padding(.top, 26)
         .padding(.horizontal, 22)
         .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var divider: some View {
@@ -153,13 +154,12 @@ struct PinnedPanelView: View {
 
     // MARK: - history and spend
 
+    /// Takes whatever height the sections above leave, so the 30-day list fills
+    /// the panel instead of scrolling inside a 118pt window with dead space below.
     private var footer: some View {
-        HStack(alignment: .top, spacing: 26) {
-            history.frame(maxWidth: .infinity, alignment: .leading)
-            if let extra = snapshot?.extraUsage {
-                SpendCell(extra: extra).frame(width: 300)
-            }
-        }
+        history
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var historyRows: [DayUsage] {
@@ -187,7 +187,10 @@ struct PinnedPanelView: View {
                     }
                 }
             }
-            .frame(maxHeight: showAllHistory ? 118 : .infinity, alignment: .top)
+            // A scroller bar over a black panel reads as damage; the rows that
+            // run past the edge are the affordance.
+            .scrollIndicators(.hidden)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
     }
 
@@ -283,35 +286,5 @@ private struct HistoryRow: View {
                 .foregroundStyle(.white.opacity(0.52))
         }
         .font(Typography.mono(11))
-    }
-}
-
-/// Only drawn for accounts that buy usage past the plan. The budget is the
-/// account's own monthly limit, not a preference we invented.
-private struct SpendCell: View {
-    let extra: ExtraUsage
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("API spend · month to date")
-                .font(Typography.sans(11))
-                .foregroundStyle(.white.opacity(0.4))
-            HStack(alignment: .firstTextBaseline, spacing: 9) {
-                OdometerText(text: Format.dollars(extra.usedCredits), size: 26, color: .white)
-                if let limit = extra.monthlyLimit {
-                    Text("of \(Format.dollars(limit)) budget")
-                        .font(Typography.sans(11.5))
-                        .foregroundStyle(.white.opacity(0.44))
-                }
-            }
-            CapBar(
-                percent: extra.utilization,
-                tone: Tokens.tone(extra.utilization ?? 0),
-                height: 7, trackOpacity: 0.12
-            )
-            Text(Format.projection(used: extra.usedCredits))
-                .font(Typography.mono(10.5))
-                .foregroundStyle(.white.opacity(0.4))
-        }
     }
 }

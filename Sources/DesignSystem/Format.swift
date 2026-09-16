@@ -19,15 +19,12 @@ enum Format {
         date.formatted(.dateTime.weekday(.abbreviated).hour(.twoDigits(amPM: .omitted)).minute())
     }
 
-    /// Weekday for the 7-day strip, countdown-style for the 30-day one, where
-    /// seven repeating weekday names would tell you nothing.
-    static func historyLabel(_ day: Date, compact: Bool, from now: Date = Date(),
-                             calendar: Calendar = .current) -> String {
-        if compact { return day.formatted(.dateTime.weekday(.abbreviated)) }
-        let days = calendar.dateComponents(
-            [.day], from: calendar.startOfDay(for: day), to: calendar.startOfDay(for: now)
-        ).day ?? 0
-        return days == 0 ? "today" : "D-\(String(format: "%02d", days))"
+    /// Weekday over a week, where every name is distinct; the date itself over a
+    /// month, where seven repeating weekday names would tell you nothing.
+    static func historyLabel(_ day: Date, compact: Bool) -> String {
+        compact
+            ? day.formatted(.dateTime.weekday(.abbreviated))
+            : day.formatted(.dateTime.month(.abbreviated).day(.twoDigits))
     }
 
     /// The design's ten-block bar, drawn in monospace text rather than geometry.

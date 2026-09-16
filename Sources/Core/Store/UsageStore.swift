@@ -188,8 +188,7 @@ final class UsageStore {
             primary: primary.rolled(to: now, usedPercent: live),
             secondary: anchored.secondary,
             planType: anchored.planType,
-            observedAt: anchored.observedAt,
-            extra: anchored.extra
+            observedAt: anchored.observedAt
         )
     }
 }
