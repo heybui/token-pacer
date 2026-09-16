@@ -19,6 +19,7 @@ app: build
 	mkdir -p $(DEST)/Contents/MacOS $(DEST)/Contents/Resources
 	cp $(BIN) $(DEST)/Contents/MacOS/$(APP)
 	cp Resources/Info.plist $(DEST)/Contents/Info.plist
+	cp -R Resources/Fonts $(DEST)/Contents/Resources/Fonts
 	codesign --force --deep --sign - $(DEST)
 	@echo "→ $(DEST)"
 
