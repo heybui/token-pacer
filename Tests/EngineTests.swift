@@ -182,3 +182,65 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
     let fresh = TokenCounts(output: 1000).weighted(.default)
     #expect(cached < fresh)
 }
+
+// MARK: - headroom must agree with the window
+
+/// Headroom longer than the window is nonsense: at the reset it refills, so you
+/// never run out. Report no figure rather than one that outlasts the countdown.
+@Test func headroomNeverOutlastsTheWindow() {
+    let now = t0.addingTimeInterval(600)
+    let events = [event(0.05, output: 10), event(0.1, output: 10)]   // a trickle
+    let rate = BurnRateCalculator.rate(
+        events: events, window: nil,
+        ceiling: Ceiling(weightedTokens: 100_000_000, observedWindows: 3),
+        at: now, currentPercent: 14,
+        windowEndsAt: now.addingTimeInterval(157 * 60)
+    )
+    #expect(rate.headroomMinutes == nil)
+    #expect(rate.percentPerHour != nil)      // the rate itself is still known
+}
+
+@Test func headroomIsReportedWhenItFitsInsideTheWindow() {
+    let now = t0.addingTimeInterval(600)
+    let events = [event(0.05, output: 200_000), event(0.15, output: 200_000)]
+    let rate = BurnRateCalculator.rate(
+        events: events, window: nil, ceiling: .unknown, at: now,
+        currentPercent: 90, weightedPerPercent: 900_000,
+        windowEndsAt: now.addingTimeInterval(300 * 60)
+    )
+    let headroom = try! #require(rate.headroomMinutes)
+    #expect(headroom > 0 && headroom < 300)
+}
+
+/// The calibrated conversion is measured against the real limit; the ceiling is
+/// only ever inferred. When both exist the calibration wins.
+@Test func calibrationBeatsTheInferredCeiling() {
+    let now = t0.addingTimeInterval(600)
+    let events = [event(0.05, output: 100_000)]
+    let calibrated = BurnRateCalculator.rate(
+        events: events, window: nil,
+        ceiling: Ceiling(weightedTokens: 50_000_000, observedWindows: 5),
+        at: now, currentPercent: 10, weightedPerPercent: 10_000
+    )
+    let inferred = BurnRateCalculator.rate(
+        events: events, window: nil,
+        ceiling: Ceiling(weightedTokens: 50_000_000, observedWindows: 5),
+        at: now, currentPercent: 10
+    )
+    #expect(calibrated.percentPerHour != inferred.percentPerHour)
+}
+
+/// Headroom is measured from the figure on screen, not from a second opinion.
+@Test func headroomFollowsTheReportedPercentage() {
+    let now = t0.addingTimeInterval(600)
+    let events = [event(0.05, output: 100_000)]
+    let nearlyFull = BurnRateCalculator.rate(
+        events: events, window: nil, ceiling: .unknown, at: now,
+        currentPercent: 95, weightedPerPercent: 10_000
+    )
+    let nearlyEmpty = BurnRateCalculator.rate(
+        events: events, window: nil, ceiling: .unknown, at: now,
+        currentPercent: 5, weightedPerPercent: 10_000
+    )
+    #expect(nearlyFull.headroomMinutes! < nearlyEmpty.headroomMinutes!)
+}

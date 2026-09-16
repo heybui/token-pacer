@@ -37,19 +37,16 @@ enum SnapshotBuilder {
         events: [UsageEvent],
         ceiling: Ceiling,
         at now: Date,
-        weights: TokenWeights = .default
+        weights: TokenWeights = .default,
+        weightedPerPercent: Double? = nil
     ) -> UsageSnapshot {
         let windows = WindowCalculator.windows(from: events, weights: weights)
         let current = WindowCalculator.current(in: windows, at: now)
-        let burn = BurnRateCalculator.rate(
-            events: events, window: current, ceiling: ceiling, at: now, weights: weights
-        )
 
         var snapshot = UsageSnapshot(source: source)
         snapshot.sessionTokens = current?.counts.total ?? 0
         snapshot.isActive = current != nil
         snapshot.lastActivity = windows.last?.lastActivity
-        snapshot.burn = burn
         snapshot.planType = limits?.planType
 
         // A reading whose own window has already reset describes a window that no
@@ -72,6 +69,15 @@ enum SnapshotBuilder {
             snapshot.weeklyPercent = secondary.usedPercent
             snapshot.weeklyResetsAt = secondary.resetsAt
         }
+
+        // Burn is computed last so headroom agrees with the percentage on screen
+        // and with the reset the user is reading next to it.
+        snapshot.burn = BurnRateCalculator.rate(
+            events: events, window: current, ceiling: ceiling, at: now, weights: weights,
+            currentPercent: snapshot.sessionPercent,
+            weightedPerPercent: weightedPerPercent,
+            windowEndsAt: snapshot.resetsAt
+        )
         return snapshot
     }
 }

@@ -107,7 +107,8 @@ final class UsageStore {
                     events: merged,
                     ceiling: ceiling,
                     at: now,
-                    weights: weights
+                    weights: weights,
+                    weightedPerPercent: trackers[source.id]?.calibration.weightedPerPercent
                 )
                 errors[source.id] = Self.simulatedError
             } catch {

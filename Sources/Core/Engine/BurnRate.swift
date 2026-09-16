@@ -15,13 +15,22 @@ struct BurnRate: Equatable, Sendable {
 enum BurnRateCalculator {
     static let sample: TimeInterval = 30 * 60
 
+    /// - Parameters:
+    ///   - currentPercent: the figure actually on screen, authoritative when the
+    ///     endpoint supplied it. Headroom must agree with what the user is reading.
+    ///   - weightedPerPercent: the calibrated conversion, when two anchors have
+    ///     measured it. Beats the inferred ceiling whenever it exists.
+    ///   - windowEndsAt: headroom can never outlast the window; at reset it refills.
     static func rate(
         events: [UsageEvent],
         window: SessionWindow?,
         ceiling: Ceiling,
         at now: Date,
         weights: TokenWeights = .default,
-        sample: TimeInterval = sample
+        sample: TimeInterval = sample,
+        currentPercent: Double? = nil,
+        weightedPerPercent: Double? = nil,
+        windowEndsAt: Date? = nil
     ) -> BurnRate {
         let cutoff = now.addingTimeInterval(-sample)
         let recent = events.filter { $0.timestamp > cutoff && $0.timestamp <= now }
@@ -33,16 +42,34 @@ enum BurnRateCalculator {
         let elapsed = max(60, min(sample, now.timeIntervalSince(recent[0].timestamp)))
         let perHour = weighted / elapsed * 3600
 
-        guard let ceilingTokens = ceiling.weightedTokens, ceilingTokens > 0, perHour > 0 else {
+        // A calibrated conversion is measured against the real limit; the ceiling
+        // is only ever inferred from log volume.
+        let perPercent = weightedPerPercent ?? ceiling.weightedTokens.map { $0 / 100 }
+        guard let perPercent, perPercent > 0, perHour > 0 else {
             return BurnRate(weightedPerHour: perHour, percentPerHour: nil, headroomMinutes: nil)
         }
 
-        let used = window?.weighted ?? 0
-        let remaining = max(0, ceilingTokens - used)
+        let percentPerHour = perHour / perPercent
+        let used = currentPercent ?? ceiling.percent(of: window?.weighted ?? 0) ?? 0
+        let remainingPercent = max(0, 100 - used)
+        let minutesToEmpty = remainingPercent / percentPerHour * 60
+
+        // Past the reset the window refills, so "you run out in N minutes" is only
+        // true while N fits inside the window. Otherwise there is no headroom
+        // figure to give — you simply do not run out this time.
+        if let windowEndsAt {
+            let minutesToReset = windowEndsAt.timeIntervalSince(now) / 60
+            guard minutesToEmpty < minutesToReset else {
+                return BurnRate(
+                    weightedPerHour: perHour, percentPerHour: percentPerHour, headroomMinutes: nil
+                )
+            }
+        }
+
         return BurnRate(
             weightedPerHour: perHour,
-            percentPerHour: perHour / ceilingTokens * 100,
-            headroomMinutes: Int((remaining / perHour * 60).rounded())
+            percentPerHour: percentPerHour,
+            headroomMinutes: Int(minutesToEmpty.rounded())
         )
     }
 }
