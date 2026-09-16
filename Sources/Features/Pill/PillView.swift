@@ -3,6 +3,9 @@ import SwiftUI
 struct PillView: View {
     let state: PillState
     let snapshot: UsageSnapshot?
+    /// Non-nil when the last refresh failed. The figure stays; it is marked
+    /// unverified rather than hidden.
+    var attention: String?
     /// Nil until the first poll lands. On a cold start that reads hundreds of
     /// megabytes it is several seconds, and a fake 0% would be a lie.
     var isLoading: Bool { snapshot == nil }
@@ -63,7 +66,9 @@ struct PillView: View {
 
             Spacer(minLength: 12)
 
-            if let snapshot, snapshot.isActive {
+            if let attention {
+                AttentionBadge(message: attention, size: 10)
+            } else if let snapshot, snapshot.isActive {
                 Circle().fill(tone).frame(width: 5, height: 5)
             }
             Text(Format.countdown(to: snapshot?.resetsAt))
@@ -91,9 +96,16 @@ struct PillView: View {
                         .font(.system(size: 11.5, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.5))
                 }
-                Text(detailLine)
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.42))
+                HStack(spacing: 6) {
+                    if let attention {
+                        AttentionBadge(message: attention, size: 10)
+                    }
+                    Text(detailLine)
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundStyle(attention == nil ? .white.opacity(0.42) : Tokens.amber.opacity(0.9))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
         }
         .padding(.top, 26)
@@ -107,6 +119,7 @@ struct PillView: View {
     }
 
     private var detailLine: String {
+        if let attention { return attention }
         guard let snapshot else { return "reading logs…" }
         let origin = switch snapshot.origin {
         case .authoritative: "reported"

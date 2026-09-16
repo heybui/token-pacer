@@ -54,7 +54,18 @@ final class UsageStore {
         pump = nil
     }
 
+    /// Debug hook: `BURNTRACKER_SIMULATE_ERROR=1` forces the attention state so the
+    /// degraded UI can be checked without waiting for a real failure.
+    private static var simulatedError: String? {
+        ProcessInfo.processInfo.environment["BURNTRACKER_SIMULATE_ERROR"].map {
+            $0 == "1" ? "usage request failed" : $0
+        }
+    }
+
     func refresh(now: Date = Date()) async {
+        if let simulated = Self.simulatedError {
+            for id in SourceID.allCases { errors[id] = simulated }
+        }
         for source in sources {
             do {
                 let fresh = try await source.poll()
@@ -78,7 +89,7 @@ final class UsageStore {
                     at: now,
                     weights: weights
                 )
-                errors[source.id] = nil
+                errors[source.id] = Self.simulatedError
             } catch {
                 // A missing log directory just means that CLI isn't installed.
                 errors[source.id] = error.localizedDescription
