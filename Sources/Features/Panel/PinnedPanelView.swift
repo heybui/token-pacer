@@ -157,9 +157,13 @@ struct PinnedPanelView: View {
     /// Takes whatever height the sections above leave, so the 30-day list fills
     /// the panel instead of scrolling inside a 118pt window with dead space below.
     private var footer: some View {
-        history
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(maxHeight: .infinity, alignment: .top)
+        HStack(alignment: .top, spacing: 26) {
+            history.frame(maxWidth: .infinity, alignment: .leading)
+            if let spend = snapshot?.spend {
+                SpendCell(spend: spend).frame(width: 260)
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var historyRows: [DayUsage] {
@@ -286,5 +290,33 @@ private struct HistoryRow: View {
                 .foregroundStyle(.white.opacity(0.52))
         }
         .font(Typography.mono(11))
+    }
+}
+
+/// Only drawn for accounts that buy usage past the plan. The budget is the
+/// account's own monthly limit, not a preference we invented.
+private struct SpendCell: View {
+    let spend: Spend
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Extra usage · month to date")
+                .font(Typography.sans(11))
+                .foregroundStyle(.white.opacity(0.4))
+            OdometerText(text: Format.money(spend.used), size: 22, color: .white)
+            if let limit = spend.limit {
+                Text("of \(Format.money(limit)) budget")
+                    .font(Typography.sans(11.5))
+                    .foregroundStyle(.white.opacity(0.44))
+            }
+            CapBar(
+                percent: spend.percent,
+                tone: Tokens.tone(spend.percent ?? 0),
+                height: 7, trackOpacity: 0.12
+            )
+            Text(Format.projection(used: spend.used))
+                .font(Typography.mono(10.5))
+                .foregroundStyle(.white.opacity(0.4))
+        }
     }
 }

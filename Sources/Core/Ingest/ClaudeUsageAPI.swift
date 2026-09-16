@@ -13,7 +13,7 @@ struct UsageLimitsResponse: Sendable, Equatable {
     }
 
     var windows: [String: Window] = [:]
-    var extraUsage: ExtraUsage?
+    var spend: Spend?
 
     static let sessionKey = "five_hour"
     static let weeklyKey = "seven_day"
@@ -28,7 +28,7 @@ struct UsageLimitsResponse: Sendable, Equatable {
 
     /// Empty means the account is not a managed OAuth subscriber, or the token
     /// lacks `user:profile`. Not an error — just nothing to show.
-    var isEmpty: Bool { windows.isEmpty && extraUsage == nil }
+    var isEmpty: Bool { windows.isEmpty && spend == nil }
 
     func anchor(_ key: String = sessionKey, observedAt: Date) -> LimitsAnchor? {
         windows[key].map {
@@ -47,7 +47,8 @@ struct UsageLimitsResponse: Sendable, Equatable {
                                 resetsAt: $0.resetsAt ?? observedAt)
             },
             planType: nil,
-            observedAt: observedAt
+            observedAt: observedAt,
+            spend: spend
         )
     }
 }
@@ -65,24 +66,68 @@ extension UsageLimitsResponse: Decodable {
         let resets_at: String?
     }
 
+    /// `spend` states money properly. `extra_usage` is the older shape, carrying
+    /// the same figures with the exponent under a different name.
+    private struct RawMoney: Decodable {
+        let amount_minor: Int?
+        let currency: String?
+        let exponent: Int?
+
+        var money: Money? {
+            amount_minor.map {
+                Money(amountMinor: $0, currency: currency ?? "USD", exponent: exponent ?? 2)
+            }
+        }
+    }
+
+    private struct RawSpend: Decodable {
+        let used: RawMoney?
+        let limit: RawMoney?
+        let percent: Double?
+        let enabled: Bool?
+    }
+
     private struct RawExtra: Decodable {
         let is_enabled: Bool?
-        let monthly_limit: Double?
-        let used_credits: Double?
+        let monthly_limit: Int?
+        let used_credits: Int?
         let utilization: Double?
+        let currency: String?
+        let decimal_places: Int?
+
+        var spend: Spend? {
+            guard let used_credits else { return nil }
+            let currency = currency ?? "USD"
+            let exponent = decimal_places ?? 2
+            return Spend(
+                used: Money(amountMinor: used_credits, currency: currency, exponent: exponent),
+                limit: monthly_limit.map {
+                    Money(amountMinor: $0, currency: currency, exponent: exponent)
+                },
+                percent: utilization,
+                isEnabled: is_enabled ?? false
+            )
+        }
     }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: AnyKey.self)
         for key in container.allKeys {
-            if key.stringValue == "extra_usage" {
-                if let raw = try? container.decode(RawExtra.self, forKey: key) {
-                    extraUsage = ExtraUsage(
-                        isEnabled: raw.is_enabled ?? false,
-                        monthlyLimit: raw.monthly_limit,
-                        usedCredits: raw.used_credits,
-                        utilization: raw.utilization
+            // `spend` wins when both are present: it is explicit about the
+            // currency and the exponent rather than implying them.
+            if key.stringValue == "spend" {
+                if let raw = try? container.decode(RawSpend.self, forKey: key),
+                   let used = raw.used?.money {
+                    spend = Spend(
+                        used: used, limit: raw.limit?.money,
+                        percent: raw.percent, isEnabled: raw.enabled ?? true
                     )
+                }
+                continue
+            }
+            if key.stringValue == "extra_usage" {
+                if let raw = try? container.decode(RawExtra.self, forKey: key), spend == nil {
+                    spend = raw.spend
                 }
                 continue
             }

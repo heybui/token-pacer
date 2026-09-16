@@ -43,15 +43,52 @@ private func api(
     #expect(response.windows["seven_day_fable"]?.utilization == 0)
 }
 
-@Test func decodesExtraUsageCredits() async throws {
+/// Verbatim from Claude Code's own cache. The figures are minor units: 1199 with
+/// exponent 2 is S$11.99, not S$1199.
+@Test func decodesSpendAsMinorUnitsInItsOwnCurrency() async throws {
     let body = """
-    {"extra_usage":{"is_enabled":true,"monthly_limit":300,"used_credits":176,"utilization":58.7}}
+    {"spend":{"used":{"amount_minor":1199,"currency":"SGD","exponent":2},
+              "limit":{"amount_minor":1200,"currency":"SGD","exponent":2},
+              "percent":100,"enabled":true}}
     """
-    let response = try await api(body: body).fetch()
-    let extra = try #require(response.extraUsage)
-    #expect(extra.isEnabled)
-    #expect(extra.monthlyLimit == 300)
-    #expect(extra.usedCredits == 176)
+    let spend = try #require(await api(body: body).fetch().spend)
+    #expect(spend.used.amount == Decimal(string: "11.99"))
+    #expect(spend.used.currency == "SGD")
+    #expect(spend.limit?.amount == Decimal(12))
+    #expect(spend.isEnabled)
+}
+
+/// The older shape says the same thing with different names — same account, same
+/// response, so a client that reads only one of the two is a version behind.
+@Test func fallsBackToExtraUsageWhenSpendIsAbsent() async throws {
+    let body = """
+    {"extra_usage":{"is_enabled":true,"monthly_limit":1200,"used_credits":1199,
+                    "utilization":99.92,"currency":"SGD","decimal_places":2}}
+    """
+    let spend = try #require(await api(body: body).fetch().spend)
+    #expect(spend.used.amount == Decimal(string: "11.99"))
+    #expect(spend.used.currency == "SGD")
+    #expect(spend.percent == 99.92)
+}
+
+/// Both are present on a live response; the explicit one wins.
+@Test func spendWinsOverExtraUsage() async throws {
+    let body = """
+    {"spend":{"used":{"amount_minor":500,"currency":"USD","exponent":2},"enabled":true},
+     "extra_usage":{"is_enabled":true,"used_credits":9999,"currency":"SGD","decimal_places":2}}
+    """
+    let spend = try #require(await api(body: body).fetch().spend)
+    #expect(spend.used.amountMinor == 500)
+    #expect(spend.used.currency == "USD")
+}
+
+/// A zero-exponent currency has no minor unit at all — 1199 yen is 1199 yen.
+@Test func currenciesWithoutMinorUnitsAreNotDivided() async throws {
+    let body = """
+    {"spend":{"used":{"amount_minor":1199,"currency":"JPY","exponent":0},"enabled":true}}
+    """
+    let spend = try #require(await api(body: body).fetch().spend)
+    #expect(spend.used.amount == Decimal(1199))
 }
 
 /// API-key users get `{}`. That is an empty result, not a failure.

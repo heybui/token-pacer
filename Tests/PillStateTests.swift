@@ -154,11 +154,14 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 @Test func spendProjectionScalesTheMonthElapsed() {
     var utc = Calendar(identifier: .gregorian)
     utc.timeZone = TimeZone(identifier: "UTC")!
-    // 15 January, $150 spent: half the month gone, $310 for a 31-day month.
+    // 15 January, S$11.99 spent: half the month gone, S$24.78 for a 31-day month.
     let midJanuary = utc.date(from: DateComponents(year: 2026, month: 1, day: 15))!
-    #expect(Format.projection(used: 150, now: midJanuary, calendar: utc)
-        == "projected $310 by month end")
-    #expect(Format.projection(used: 0, now: midJanuary, calendar: utc)
+    let spent = Money(amountMinor: 1199, currency: "SGD", exponent: 2)
+
+    let projected = Format.projection(used: spent, now: midJanuary, calendar: utc)
+    #expect(projected.contains("24"))          // 1199 / 15 × 31 = 2478 minor units
+    #expect(projected.contains("SGD"))         // never assumed to be dollars
+    #expect(Format.projection(used: nil, now: midJanuary, calendar: utc)
         == "no spend yet this month")
 }
 

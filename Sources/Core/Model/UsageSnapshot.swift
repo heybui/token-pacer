@@ -34,6 +34,8 @@ struct UsageSnapshot: Equatable, Sendable {
     var planType: String?
     /// Sparkline, splits and history. Only the pinned panel reads it.
     var panel: PanelData = .empty
+    /// Nil unless the account buys usage past its plan.
+    var spend: Spend?
 
     static func empty(_ source: SourceID) -> UsageSnapshot { UsageSnapshot(source: source) }
 }
@@ -64,6 +66,7 @@ enum SnapshotBuilder {
         snapshot.isBurning = snapshot.lastActivity
             .map { now.timeIntervalSince($0) < Self.burningWindow } ?? false
         snapshot.planType = limits?.planType
+        snapshot.spend = limits?.spend.flatMap { $0.isEnabled ? $0 : nil }
 
         // A reading whose own window has already reset describes a window that no
         // longer exists; it is not "0% used", it is out of date.

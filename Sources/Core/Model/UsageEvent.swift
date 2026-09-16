@@ -43,13 +43,26 @@ struct RateLimitWindow: Equatable, Sendable {
     }
 }
 
-/// Pay-as-you-go credits spent past the plan's limits. Absent for accounts that
-/// have never enabled extra usage, which is most of them.
-struct ExtraUsage: Equatable, Sendable {
-    let isEnabled: Bool
-    let monthlyLimit: Double?
-    let usedCredits: Double?
-    let utilization: Double?
+/// An amount exactly as the endpoint states it: minor units plus the exponent to
+/// shift by, in a named currency. `1199` with exponent 2 in SGD is S$11.99 —
+/// reading the minor units as whole currency is a factor of 100 out, and the
+/// currency is not always dollars.
+struct Money: Equatable, Sendable {
+    var amountMinor: Int
+    var currency: String
+    var exponent: Int
+
+    var amount: Decimal { Decimal(amountMinor) / pow(10, exponent) }
+}
+
+/// Pay-as-you-go spend past the plan's limits. Absent for accounts that never
+/// enabled extra usage, which is most of them.
+struct Spend: Equatable, Sendable {
+    var used: Money
+    var limit: Money?
+    /// The endpoint's own figure; it disagrees with used/limit by a rounding step.
+    var percent: Double?
+    var isEnabled: Bool
 }
 
 struct RateLimits: Equatable, Sendable {
@@ -59,6 +72,7 @@ struct RateLimits: Equatable, Sendable {
     let secondary: RateLimitWindow?
     let planType: String?
     let observedAt: Date
+    var spend: Spend?
 }
 
 struct SourceSnapshot: Sendable {

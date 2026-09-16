@@ -34,19 +34,25 @@ enum Format {
             + String(repeating: "░", count: count - filled)
     }
 
-    static func dollars(_ value: Double?) -> String {
-        value.map { "$\(Int($0.rounded()))" } ?? "—"
+    /// The endpoint names its currency, so the figure is never assumed to be
+    /// dollars — and never printed straight from the minor units.
+    static func money(_ money: Money?) -> String {
+        guard let money else { return "—" }
+        return money.amount.formatted(.currency(code: money.currency))
     }
 
     /// Straight-line: spend so far over the month elapsed. Says "projected"
     /// because a quiet week would make a liar of it.
-    static func projection(used: Double?, now: Date = Date(), calendar: Calendar = .current) -> String {
-        guard let used, used > 0,
+    static func projection(used: Money?, now: Date = Date(), calendar: Calendar = .current) -> String {
+        guard let used, used.amountMinor > 0,
               let month = calendar.range(of: .day, in: .month, for: now)
         else { return "no spend yet this month" }
         let elapsed = max(1, calendar.component(.day, from: now))
-        let projected = used / Double(elapsed) * Double(month.count)
-        return "projected \(dollars(projected)) by month end"
+        var projected = used
+        projected.amountMinor = Int(
+            (Double(used.amountMinor) / Double(elapsed) * Double(month.count)).rounded()
+        )
+        return "projected \(self.money(projected)) by month end"
     }
 
     /// What "Copy usage summary" puts on the clipboard: two lines, no jargon,

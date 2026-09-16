@@ -113,6 +113,24 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
     #expect(snapshot.planType == "plus")
 }
 
+/// The panel's spend cell is drawn only when there is spend, and an account that
+/// never enabled extra usage still reports the block with `enabled: false`.
+@Test func disabledSpendNeverReachesTheSnapshot() {
+    func snapshot(_ spend: Spend?) -> UsageSnapshot {
+        SnapshotBuilder.build(
+            source: .claude,
+            limits: RateLimits(primary: nil, secondary: nil, planType: nil,
+                               observedAt: t0, spend: spend),
+            events: [event(0)], ceiling: .unknown, at: t0.addingTimeInterval(60)
+        )
+    }
+    let money = Money(amountMinor: 1199, currency: "SGD", exponent: 2)
+    let spending = Spend(used: money, limit: nil, percent: 99, isEnabled: true)
+    #expect(snapshot(spending).spend == spending)
+    #expect(snapshot(Spend(used: money, limit: nil, percent: 0, isEnabled: false)).spend == nil)
+    #expect(snapshot(nil).spend == nil)
+}
+
 /// A reading whose window already reset describes a window that no longer exists.
 @Test func staleAuthoritativeLimitsAreDiscarded() {
     let stale = RateLimits(
