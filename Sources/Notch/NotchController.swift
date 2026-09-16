@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 final class NotchController {
     private let model = PillModel()
+    private let store = UsageStore()
     private let panel: NotchPanel
     private let host: PassthroughHostingView<PillRootView>
     private var observers: [NSObjectProtocol] = []
@@ -12,7 +13,7 @@ final class NotchController {
     init() {
         let size = PillState.hostSize
         panel = NotchPanel(contentRect: NSRect(origin: .zero, size: size))
-        host = PassthroughHostingView(rootView: PillRootView(model: model))
+        host = PassthroughHostingView(rootView: PillRootView(model: model, store: store))
         host.frame = NSRect(origin: .zero, size: size)
         panel.contentView = host
 
@@ -22,6 +23,7 @@ final class NotchController {
         observe()
         reanchor()
         panel.orderFrontRegardless()
+        store.start()
     }
 
     private func observe() {
