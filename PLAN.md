@@ -262,8 +262,8 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 0 | Notch panel: borderless `NSPanel`, `LSUIElement`, click passthrough, re-anchoring | ✅ done |
 | 1 | `JSONLReader` + both sources + window/ceiling/burn engine, `--probe` | ✅ done |
 | 1.5 | **Live limits** — OAuth usage endpoint, Keychain, calibration, 10-min activity-gated polling, attention badge, single-instance guard | ✅ done (unplanned; see §0) |
-| 2 | Design system + the remaining pill states + spring morph | 🔨 **in progress** |
-| 3 | Warning auto-expand, pinned panel, context menu | ⬜ not started |
+| 2 | Design system + the remaining pill states + spring morph | ✅ done |
+| 3 | Warning auto-expand, pinned panel, context menu | 🔨 **in progress** |
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ⬜ not started |
 | 5 | Source switcher in the pill + prefs (Claude / Codex / combined) | ⬜ not started |
 | 6 | Notarized DMG, Sparkle feed, Homebrew cask | ⬜ not started |
@@ -272,7 +272,17 @@ Phase 1.5 was not in the original plan. It exists because the limits source was 
 version inferred a ceiling from log volume, and the endpoint that publishes the real figures was
 found later. It absorbed most of the time since phase 1.
 
-### What phase 2 still needs
+### What phase 3 still owes
+
+- **⌘⇧B** — the design's global shortcut for the panel. Needs a real hotkey
+  registration, which belongs with Preferences in phase 4.
+- **`BucketArchive`** — the panel reads 30 days of events straight out of memory,
+  which works but does nothing for the 8s cold start. Persistence is still owed.
+- **By surface** — the design's third split. Nothing local can tell claude.ai from
+  the web app, so it splits by CLI instead; revisit if the endpoint ever says.
+- **Pause across relaunch** — pausing stops the poll now, but not past a restart.
+
+### What phase 2 needed
 
 Two of eight states render distinctly today — `collapsed` and `hover`. Everything else falls through
 to `collapsed`.
