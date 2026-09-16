@@ -41,16 +41,36 @@ struct UsageSnapshot: Equatable, Sendable {
 }
 
 enum SnapshotBuilder {
-    /// How recently the logs must have grown to count as still burning. Matched
-    /// to the poll interval: the dot is lit by the tick that reads the line and
-    /// goes out on the next quiet one.
+    /// Is anything happening *right now*?
+    ///
+    /// Token records are written when an exchange completes, so they answer
+    /// "was anything happening a moment ago". While the model is thinking — the
+    /// stretch where a still dot is most misleading — nothing is logged at all,
+    /// and the answer has to come from the shape of the newest line instead.
+    static func isBurning(activity: LogActivity?, lastEvent: Date?, at now: Date) -> Bool {
+        if let activity, activity.isAwaitingResponse {
+            return now.timeIntervalSince(activity.lastLineAt) < inFlightWindow
+        }
+        let newest = [activity?.lastLineAt, lastEvent].compactMap(\.self).max()
+        return newest.map { now.timeIntervalSince($0) < burningWindow } ?? false
+    }
+
+    /// How recently the logs must have grown to count as still burning, once a
+    /// turn has finished. Matched to the poll interval: the dot is lit by the
+    /// tick that reads the line and goes out on the next quiet one.
     static let burningWindow: TimeInterval = 5
+
+    /// A turn in flight keeps the dot lit without any tokens being logged — the
+    /// record only lands when the exchange completes. Capped, because a crashed
+    /// CLI leaves its last line looking like a turn that never ended.
+    static let inFlightWindow: TimeInterval = 15 * 60
 
     /// Authoritative limits win when present and fresh; otherwise infer.
     static func build(
         source: SourceID,
         limits: RateLimits?,
         events: [UsageEvent],
+        activity: LogActivity? = nil,
         ceiling: Ceiling,
         at now: Date,
         weights: TokenWeights = .default,
@@ -63,8 +83,7 @@ enum SnapshotBuilder {
         snapshot.sessionTokens = current?.counts.total ?? 0
         snapshot.isActive = current != nil
         snapshot.lastActivity = windows.last?.lastActivity
-        snapshot.isBurning = snapshot.lastActivity
-            .map { now.timeIntervalSince($0) < Self.burningWindow } ?? false
+        snapshot.isBurning = Self.isBurning(activity: activity, lastEvent: snapshot.lastActivity, at: now)
         snapshot.planType = limits?.planType
         snapshot.spend = limits?.spend.flatMap { $0.isEnabled ? $0 : nil }
 

@@ -24,6 +24,9 @@ final class UsageStore {
     /// limits in its logs, so it never issues a request.
     private var trackers: [SourceID: LiveLimitsTracker] = [:]
     private var liveLimits: [SourceID: RateLimits] = [:]
+    /// Last known state of each source's newest log line. A poll that reads no
+    /// new lines says nothing about activity, so the previous answer stands.
+    private var activities: [SourceID: LogActivity] = [:]
     /// Sources whose limits endpoint returned something retrying cannot fix.
     private var limitsDisabled: Set<SourceID> = []
     /// Exposed: an unconfident ceiling is why the pill shows raw tokens instead
@@ -172,6 +175,7 @@ final class UsageStore {
                 merged.removeAll { $0.timestamp < now.addingTimeInterval(-Self.retention) }
                 merged.sort { $0.timestamp < $1.timestamp }
                 events[source.id] = merged
+                if let activity = fresh.activity { activities[source.id] = activity }
 
                 let windows = WindowCalculator.windows(from: merged, weights: weights)
                 let ceiling = CeilingEstimator.estimate(
@@ -187,6 +191,7 @@ final class UsageStore {
                     // the endpoint anchored, extrapolated to now.
                     limits: fresh.limits ?? currentLimits(for: source.id, at: now),
                     events: merged,
+                    activity: fresh.activity ?? activities[source.id],
                     ceiling: ceiling,
                     at: now,
                     weights: weights,

@@ -87,4 +87,6 @@ struct SourceSnapshot: Sendable {
     let events: [UsageEvent]
     /// Non-nil only for sources that publish their own limits.
     let limits: RateLimits?
+    /// What the newest log line says about right now — drives the activity dot.
+    var activity: LogActivity?
 }

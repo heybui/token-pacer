@@ -28,7 +28,7 @@ actor ClaudeCodeSource: UsageSource {
 
     func poll() throws -> SourceSnapshot {
         let events = try scanner.scan(root: root, since: cutoff, decode: Self.decode)
-        return SourceSnapshot(source: .claude, events: events, limits: nil)
+        return SourceSnapshot(source: .claude, events: events, limits: nil, activity: scanner.activity)
     }
 
     static func decode(_ line: Data, file: URL) -> [UsageEvent] {

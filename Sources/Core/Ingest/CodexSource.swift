@@ -36,7 +36,11 @@ actor CodexSource: UsageSource {
         var local = scanner
         let events = try local.scan(root: root, since: cutoff) { self.decode($0, file: $1) }
         scanner = local
-        return SourceSnapshot(source: .codex, events: events, limits: latestLimits)
+        // Codex has no equivalent of Claude's `user` line to mark a turn in
+        // flight, so its dot still follows logged tokens alone.
+        return SourceSnapshot(
+            source: .codex, events: events, limits: latestLimits, activity: scanner.activity
+        )
     }
 
     private static let interesting = [
