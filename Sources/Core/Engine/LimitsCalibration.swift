@@ -1,7 +1,7 @@
 import Foundation
 
 /// A reading straight from the usage endpoint.
-struct LimitsAnchor: Equatable, Sendable {
+struct LimitsAnchor: Equatable, Sendable, Codable {
     let utilization: Double     // 0–100, as published
     let observedAt: Date
     let resetsAt: Date?
@@ -13,7 +13,11 @@ struct LimitsAnchor: Equatable, Sendable {
 /// This is the number `CeilingEstimator` tries to guess from log volume alone.
 /// With anchors it stops being a guess: two readings and the tokens between them
 /// measure it directly.
-struct LimitsCalibration: Equatable, Sendable {
+struct LimitsCalibration: Equatable, Sendable, Codable {
+    /// `smoothing` is a constant of the algorithm, not state: it must come from
+    /// the code that is running, never from a file an older build wrote.
+    enum CodingKeys: String, CodingKey { case weightedPerPercent, samples }
+
     private(set) var weightedPerPercent: Double?
     private(set) var samples: Int = 0
 

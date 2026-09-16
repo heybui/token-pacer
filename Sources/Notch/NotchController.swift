@@ -32,7 +32,11 @@ final class NotchController {
         observe()
         reanchor()
         panel.orderFrontRegardless()
-        store.start()
+
+        // Restored from the archive, so a paused app comes back paused rather
+        // than quietly resuming on the next launch.
+        model.setPaused(store.isPaused)
+        if !store.isPaused { store.start() }
     }
 
     private func observe() {

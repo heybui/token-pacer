@@ -6,7 +6,15 @@ import Foundation
 /// Activity gating lives here. `weightedSinceAnchor` is the evidence: it only
 /// grows when local logs record tokens, so an idle machine can never satisfy the
 /// policy and never issues a request.
-struct LiveLimitsTracker: Sendable {
+struct LiveLimitsTracker: Sendable, Codable {
+    /// `weightedSinceAnchor` is deliberately not archived: on a cold start the
+    /// sources replay every retained event, so the count is rebuilt from the logs
+    /// that land after the anchor rather than carried over and counted twice.
+    /// `policy` is configuration, not state.
+    enum CodingKeys: String, CodingKey {
+        case anchor, calibration, lastCallAt, lastConfirmed, consecutiveFailures
+    }
+
     private(set) var anchor: LimitsAnchor?
     private(set) var calibration = LimitsCalibration()
     /// Weighted tokens logged since the anchor. Doubles as the activity signal and

@@ -41,17 +41,38 @@ final class UsageStore {
     /// `usageAPI` is injected rather than defaulted: it is backed by the Keychain,
     /// which lives outside Core.
     private let usageAPI: ClaudeUsageAPI?
+    private let archive: Archive?
+
+    /// Survives relaunch, so "tracking is off" stays off.
+    private(set) var isPaused: Bool
 
     init(
         sources: [any UsageSource] = [ClaudeCodeSource(), CodexSource()],
         weights: TokenWeights = .default,
         interval: TimeInterval = 5,
-        usageAPI: ClaudeUsageAPI? = nil
+        usageAPI: ClaudeUsageAPI? = nil,
+        archive: Archive? = .default
     ) {
         self.sources = sources
         self.weights = weights
         self.interval = interval
         self.usageAPI = usageAPI
+        self.archive = archive
+
+        let restored = archive?.load()
+        self.trackers = restored?.trackers ?? [:]
+        self.isPaused = restored?.isPaused ?? false
+    }
+
+    func setPaused(_ paused: Bool) {
+        guard paused != isPaused else { return }
+        isPaused = paused
+        paused ? stop() : start()
+        persist()
+    }
+
+    private func persist() {
+        archive?.save(ArchivedState(trackers: trackers, isPaused: isPaused))
     }
 
     func start() {
@@ -97,11 +118,7 @@ final class UsageStore {
                 )
                 ceilings[source.id] = ceiling
 
-                await refreshLimits(
-                    for: source.id,
-                    weightedDelta: fresh.events.reduce(0) { $0 + $1.counts.weighted(weights) },
-                    now: now
-                )
+                await refreshLimits(for: source.id, events: fresh.events, now: now)
 
                 snapshots[source.id] = SnapshotBuilder.build(
                     source: source.id,
@@ -129,11 +146,19 @@ final class UsageStore {
     }
 
     /// Asks the usage endpoint only when the tracker says it is worth it.
-    private func refreshLimits(for id: SourceID, weightedDelta: Double, now: Date) async {
+    private func refreshLimits(for id: SourceID, events: [UsageEvent], now: Date) async {
         guard id == .claude, !limitsDisabled.contains(id), let usageAPI else { return }
 
         var tracker = trackers[id] ?? LiveLimitsTracker()
-        tracker.record(weighted: weightedDelta)
+        // Only what the anchor has not already seen. A cold start replays every
+        // retained event, and counting 90 days of history as usage since the last
+        // reading would teach calibration a conversion out by orders of magnitude.
+        let since = tracker.anchor?.observedAt ?? .distantPast
+        tracker.record(
+            weighted: events.lazy
+                .filter { $0.timestamp > since }
+                .reduce(0) { $0 + $1.counts.weighted(weights) }
+        )
         defer { trackers[id] = tracker }
 
         let waited = Int(now.timeIntervalSince(tracker.lastCallAt ?? now))
@@ -159,12 +184,16 @@ final class UsageStore {
             tracker.anchored(anchor, at: now)
             liveLimits[id] = response.rateLimits(observedAt: now)
             errors[id] = Self.simulatedError
+            trackers[id] = tracker
+            persist()
 
             let windows = response.windows.keys.sorted().joined(separator: ",")
             let perPercent = Int(tracker.calibration.weightedPerPercent ?? 0)
             Log.usage.info("ok \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms session=\(anchor.utilization, privacy: .public)% weekly=\(response.weekly?.utilization ?? -1, privacy: .public)% windows=[\(windows, privacy: .public)] perPercent=\(perPercent, privacy: .public) samples=\(tracker.calibration.samples, privacy: .public)")
         } catch {
             tracker.failed(at: now)
+            trackers[id] = tracker
+            persist()
             let failure = error as? UsageAPIError
             if failure?.isFatal == true { limitsDisabled.insert(id) }
             errors[id] = failure?.message ?? error.localizedDescription

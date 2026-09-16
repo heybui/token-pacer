@@ -26,10 +26,10 @@ struct PillRootView: View {
     }
 
     /// Pausing stops the polling as well as the display: "tracking is off, not
-    /// idle". Nothing is read, so nothing can alert.
+    /// idle". Nothing is read, so nothing can alert, and it survives a relaunch.
     private func setPaused(_ paused: Bool) {
         model.setPaused(paused)
-        paused ? store.stop() : store.start()
+        store.setPaused(paused)
     }
 
     var body: some View {

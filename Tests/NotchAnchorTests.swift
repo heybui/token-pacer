@@ -68,7 +68,7 @@ private let external = ScreenMetrics(
 /// its drop clips it — silently, because the rows simply are not drawn.
 @MainActor
 @Test func theHostReservesRoomForEveryMenuItem() {
-    let items = PillRootView(model: PillModel(), store: UsageStore()).menuItems
+    let items = PillRootView(model: PillModel(), store: UsageStore(archive: nil)).menuItems
     let needed = PillState.pinned.size.height
         + PillState.menuGap + PillState.menuHeight(items: items.count)
 
