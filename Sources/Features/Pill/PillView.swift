@@ -13,6 +13,7 @@ struct PillView: View {
     var isMenuOpen = false
     var menuItems: [NotchMenuItem] = []
     var onCloseMenu: () -> Void = {}
+    var onHoverChange: (Bool) -> Void = { _ in }
     /// Nil until the first poll lands. On a cold start that reads hundreds of
     /// megabytes it is several seconds, and a fake 0% would be a lie.
     var isLoading: Bool { snapshot == nil }
@@ -38,10 +39,17 @@ struct PillView: View {
                 NotchMenuView(items: menuItems, onDismiss: onCloseMenu)
                     .padding(.top, PillState.menuGap)
             }
-            Spacer(minLength: 0)
         }
-        .frame(width: PillState.hostSize.width, height: PillState.hostSize.height)
+        // Tracked on the shell and its menu, never on the host. `.onHover`
+        // installs an AppKit tracking area, and a tracking area ignores the
+        // hitTest that makes the rest of the host click-through — so hovering
+        // anywhere in the top half of the screen used to expand the pill.
+        .onHover(perform: onHoverChange)
         .animation(.easeOut(duration: 0.16), value: isMenuOpen)
+        .frame(
+            width: PillState.hostSize.width, height: PillState.hostSize.height,
+            alignment: .top
+        )
     }
 
     private var shell: some View {

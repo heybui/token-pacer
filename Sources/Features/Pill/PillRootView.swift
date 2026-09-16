@@ -42,14 +42,10 @@ struct PillRootView: View {
             onClose: { model.setPinned(false) },
             isMenuOpen: model.isMenuOpen,
             menuItems: menuItems,
-            onCloseMenu: { model.closeMenu() }
+            onCloseMenu: { model.closeMenu() },
+            onHoverChange: { model.setPointerInside($0) }
         )
             .onAppear { model.menuHeight = PillState.menuHeight(items: menuItems.count) }
-            .onHover { inside in
-                // Only fires inside the shell rect, which is how we know
-                // PassthroughHostingView is letting the rest of the panel through.
-                model.setPointerInside(inside)
-            }
             .onChange(of: store.snapshot) { _, snapshot in
                 model.update(snapshot: snapshot)
             }
