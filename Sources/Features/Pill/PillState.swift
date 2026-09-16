@@ -25,7 +25,16 @@ enum PillState: String, CaseIterable, Sendable {
 
     var opacity: Double { self == .ghost ? 0.45 : 1 }
 
-    /// Largest shell plus room for the context menu below it. The panel is fixed at this
-    /// size forever; only the content morphs.
-    static let hostSize = CGSize(width: 792, height: 580)
+    /// The shell casts its own shadow, so its geometry belongs here with the rest.
+    static let shadowRadius: CGFloat = 31
+    static let shadowOffsetY: CGFloat = 22
+
+    /// A hosting view clips to its bounds, so the host has to clear the largest
+    /// shell by the shadow's whole reach — otherwise the blur ends in a hard
+    /// rectangle around the pinned panel. Derived, never typed in: the margin and
+    /// the blur that needs it cannot drift apart.
+    static let hostSize = CGSize(
+        width: PillState.pinned.size.width + shadowRadius * 2 * 2,
+        height: PillState.pinned.size.height + shadowOffsetY + shadowRadius * 2
+    )
 }

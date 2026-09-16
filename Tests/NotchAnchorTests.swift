@@ -53,3 +53,13 @@ private let external = ScreenMetrics(
         #expect(frame.maxY == builtIn.frame.maxY)
     }
 }
+
+/// The hosting view clips to its bounds, so a host that only just contains the
+/// pinned panel cuts its shadow off in a hard rectangle.
+@Test func theHostClearsTheLargestShellByTheWholeShadow() {
+    let panel = PillState.pinned.size
+    let reach = PillState.shadowRadius * 2
+
+    #expect(PillState.hostSize.width - panel.width >= reach * 2)
+    #expect(PillState.hostSize.height - panel.height >= reach + PillState.shadowOffsetY)
+}

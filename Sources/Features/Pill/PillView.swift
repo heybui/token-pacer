@@ -54,7 +54,10 @@ struct PillView: View {
             // bounds, so the square corners show through where the rounded ones
             // cut away. Flattening first makes the shadow follow the real shape.
             .compositingGroup()
-            .shadow(color: .black.opacity(0.66), radius: 31, y: 22)
+            .shadow(
+                color: .black.opacity(0.66),
+                radius: PillState.shadowRadius, y: PillState.shadowOffsetY
+            )
             .opacity(state.opacity)
             .animation(Tokens.spring, value: state)
             // The panel has its own controls; a tap anywhere inside it would
