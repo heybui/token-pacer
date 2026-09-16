@@ -257,17 +257,49 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 
 ## 3. Phases
 
-| # | Deliverable | Why this order |
+| # | Deliverable | Status |
 |---|---|---|
-| 0 | Xcode project, `LSUIElement`, empty black pill pinned to the notch, survives display change / full-screen / space switch | Hardest unknown first. If notch anchoring is wrong, everything else is wasted. |
-| 1 | ✅ `JSONLReader` + **both** sources + engine + 29 tests on sanitised real fixtures. `--probe` prints a % per source. | Data correctness before pixels; two sources validated the seam. |
-| 2 | Design system + `dormant / ghost / collapsed / exhausted / paused` + spring morph | Ships something usable. |
-| 3 | Hover card, warning auto-expand, pinned panel, context menu | The rest of the design surface. |
-| 4 | Preferences, notifications (full-screen fallback only), launch at login, pause-survives-relaunch | Product polish. |
-| 5 | Source switcher in the pill + prefs (Claude / Codex / combined) | Sources already exist; this is just presentation. |
-| 6 | Notarized DMG, Sparkle feed, Homebrew cask, MIT licence | Ship. |
+| 0 | Notch panel: borderless `NSPanel`, `LSUIElement`, click passthrough, re-anchoring | ✅ done |
+| 1 | `JSONLReader` + both sources + window/ceiling/burn engine, `--probe` | ✅ done |
+| 1.5 | **Live limits** — OAuth usage endpoint, Keychain, calibration, 10-min activity-gated polling, attention badge, single-instance guard | ✅ done (unplanned; see §0) |
+| 2 | Design system + the remaining pill states + spring morph | 🔨 **in progress** |
+| 3 | Warning auto-expand, pinned panel, context menu | ⬜ not started |
+| 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ⬜ not started |
+| 5 | Source switcher in the pill + prefs (Claude / Codex / combined) | ⬜ not started |
+| 6 | Notarized DMG, Sparkle feed, Homebrew cask | ⬜ not started |
 
-Phase 0 + 1 are the risk. 2–6 are execution.
+Phase 1.5 was not in the original plan. It exists because the limits source was wrong: the first
+version inferred a ceiling from log volume, and the endpoint that publishes the real figures was
+found later. It absorbed most of the time since phase 1.
+
+### What phase 2 still needs
+
+Two of eight states render distinctly today — `collapsed` and `hover`. Everything else falls through
+to `collapsed`.
+
+- **States**: `dormant`, `ghost`, `exhausted`, `paused` (`warning` and `pinned` are phase 3).
+- **`OdometerText`** — digit strips with the roll and blur, used at five sizes. The single most
+  visible missing piece; every figure is plain text today.
+- **Instrument Sans** — decided, not bundled. The pill is on the system font, so metrics differ from
+  the design at 11–13px.
+- **`CapBar`** — the weekly bar. It now has a real data source (`seven_day`), which it did not when
+  phase 2 was written.
+- **Pulsing activity dot** — static today; the design pulses it at 2.6s.
+- **Reduce Motion** — honoured for the dot, deliberately ignored for the shell morph.
+
+### Verified on hardware
+
+- Live endpoint request succeeds; hover reads `reported`, matching Claude Code's own `/usage` panel.
+- Single instance enforced, including a raw binary launched past LaunchServices.
+- Shadow follows the clipped shape; headroom no longer outlasts its window.
+
+### Still unverified
+
+- **Notch hardware.** Every run so far has been on an external display with no notch, so the
+  no-notch fallback is what has been exercised. The notch path has unit tests only.
+- **Menu-bar click passthrough** and full-screen / space-switch behaviour.
+- **Calibration over time** — `weightedPerPercent` needs two anchors 10 minutes apart; no session has
+  yet been observed running long enough to confirm the figure it settles on.
 
 ## 4. Deliberate simplifications
 
