@@ -2,19 +2,21 @@ import SwiftUI
 
 /// A highlight that runs the shell's outline while tokens are flowing.
 ///
-/// The same signal as the activity dot, on the same 2.6s cycle, so the two beat
-/// together rather than against each other — one is legible from across the room,
-/// the other from arm's length.
+/// Measured in points, not in fractions of the path. The shell morphs from a
+/// 226×36 pill to a 404×98 card — more than double the outline — so a tail of
+/// "18% of the path" was half the pill and the length of a finger on the card,
+/// and it crawled on one and raced on the other. A fixed length at a fixed speed
+/// looks like the same light on every state.
 struct ChasingBorder<S: InsettableShape>: View {
     let shape: S
     var tone: Color
     var isRunning: Bool
     var lineWidth: CGFloat = 1.5
-    /// Fraction of the outline lit at once. Long enough to read as motion on a
-    /// 226pt pill, short enough not to become a plain border on a 404pt card.
-    var length: Double = 0.2
-    /// `PulsingDot`'s full cycle.
-    var duration: Double = 2.6
+    /// Length of the lit arc, in points.
+    var tail: Double = 104
+    /// Points per second. 2.6s round the collapsed pill — `PulsingDot`'s cycle,
+    /// which is where the pairing was set.
+    var speed: Double = 200
 
     /// The tail is drawn as this many arcs of falling opacity and width.
     ///
@@ -22,35 +24,48 @@ struct ChasingBorder<S: InsettableShape>: View {
     /// view, so the head vanished down the left and right edges and the light
     /// appeared to run along the top and bottom only. Opacity has to follow the
     /// path, and the path is the only thing that knows where it goes.
-    private let segments = 18
+    private let segments = 24
 
     var body: some View {
-        // Driven by the clock, not by animating a `phase` of state. `trim` takes
-        // the *wrapped* position, and 0 and 1 wrap to the same place — so
-        // animating phase 0→1 interpolated every arc from where it was to where
-        // it already was, and the light sat still.
-        TimelineView(.animation(paused: !isRunning)) { timeline in
-            let phase = timeline.date.timeIntervalSinceReferenceDate
-                .truncatingRemainder(dividingBy: duration) / duration
-            ZStack {
-                ForEach(0..<segments, id: \.self) { index in
-                    // 0 at the end of the tail, 1 at the head.
-                    let t = Double(index) / Double(segments - 1)
-                    let step = length / Double(segments)
-                    let start = phase - length * (1 - t)
-                    arc(
-                        // Overlapped: exact joins leave hairline gaps that strobe
-                        // as the arc moves.
-                        from: start, to: start + step * 1.8,
-                        // Squared rather than linear, so the tail dissolves into
-                        // the ring instead of ending on a visible step.
-                        opacity: t * t,
-                        width: lineWidth * (0.5 + 0.5 * t)
-                    )
+        GeometryReader { geometry in
+            // Straight-edge estimate: a couple of percent long on a rounded
+            // shape, which is a speed knob, not geometry.
+            let perimeter = max(1, 2 * (geometry.size.width + geometry.size.height))
+            let length = min(0.5, tail / perimeter)
+            let duration = perimeter / speed
+
+            // Driven by the clock, not by animating a `phase` of state. `trim`
+            // takes the *wrapped* position, and 0 and 1 wrap to the same place —
+            // so animating phase 0→1 interpolated every arc from where it was to
+            // where it already was, and the light sat still.
+            TimelineView(.animation(paused: !isRunning)) { timeline in
+                let phase = timeline.date.timeIntervalSinceReferenceDate
+                    .truncatingRemainder(dividingBy: duration) / duration
+                ZStack {
+                    ForEach(0..<segments, id: \.self) { index in
+                        // 0 at the end of the tail, 1 at the head.
+                        let t = Double(index) / Double(segments - 1)
+                        let step = length / Double(segments)
+                        let start = phase - length * (1 - t)
+                        arc(
+                            // Overlapped: exact joins leave hairline gaps that
+                            // strobe as the arc moves.
+                            from: start, to: start + step * 1.8,
+                            // Cubed, not linear: the tail has to dissolve into the
+                            // ring rather than end on a step, and the eye finds a
+                            // linear ramp's shoulder every time.
+                            opacity: t * t * t,
+                            width: lineWidth * (0.35 + 0.65 * t)
+                        )
+                    }
+                    // The head alone, blurred. Gives the light a source instead of
+                    // a leading edge — a shadow under the whole tail just smears it.
+                    arc(from: phase - length / Double(segments), to: phase,
+                        opacity: 0.9, width: lineWidth)
+                        .blur(radius: 2.5)
                 }
             }
         }
-        .shadow(color: tone.opacity(0.45), radius: 3)
         .opacity(isRunning ? 1 : 0)
         .animation(.easeOut(duration: 0.3), value: isRunning)
     }
