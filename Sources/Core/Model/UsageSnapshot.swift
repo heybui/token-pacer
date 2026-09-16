@@ -41,8 +41,10 @@ struct UsageSnapshot: Equatable, Sendable {
 }
 
 enum SnapshotBuilder {
-    /// How recently the logs must have grown to count as still burning.
-    static let burningWindow: TimeInterval = 60
+    /// How recently the logs must have grown to count as still burning. Matched
+    /// to the poll interval: the dot is lit by the tick that reads the line and
+    /// goes out on the next quiet one.
+    static let burningWindow: TimeInterval = 5
 
     /// Authoritative limits win when present and fresh; otherwise infer.
     static func build(

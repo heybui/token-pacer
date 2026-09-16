@@ -290,12 +290,12 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
     let now = t0.addingTimeInterval(600)
     let inside = SnapshotBuilder.build(
         source: .claude, limits: nil,
-        events: [event((600 - SnapshotBuilder.burningWindow + 5) / 3600)],
+        events: [event((600 - SnapshotBuilder.burningWindow + 1) / 3600)],
         ceiling: .unknown, at: now
     )
     let outside = SnapshotBuilder.build(
         source: .claude, limits: nil,
-        events: [event((600 - SnapshotBuilder.burningWindow - 5) / 3600)],
+        events: [event((600 - SnapshotBuilder.burningWindow - 1) / 3600)],
         ceiling: .unknown, at: now
     )
     #expect(inside.isBurning)
