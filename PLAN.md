@@ -148,7 +148,7 @@ Sources/
     Preferences/       PreferencesWindow.swift · PreferencesView.swift
   Core/
     Model/             UsageEvent.swift · UsageBucket.swift · UsageSnapshot.swift · SourceID.swift
-    Sources/           UsageSource.swift · ClaudeCodeSource.swift · CodexSource.swift · JSONLCursor.swift
+    Ingest/            UsageSource.swift · ClaudeCodeSource.swift · CodexSource.swift · JSONLReader.swift
     Engine/            WindowCalculator.swift · CeilingEstimator.swift · BurnRate.swift · Aggregator.swift · TokenWeights.swift
     Store/             UsageStore.swift · BucketArchive.swift
     Services/          Notifier.swift · LaunchAtLogin.swift · Preferences.swift · FullScreenDetector.swift
@@ -166,7 +166,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | # | Deliverable | Why this order |
 |---|---|---|
 | 0 | Xcode project, `LSUIElement`, empty black pill pinned to the notch, survives display change / full-screen / space switch | Hardest unknown first. If notch anchoring is wrong, everything else is wasted. |
-| 1 | `JSONLCursor` + **both** sources + engine + tests on real fixtures. Prints a % per source to the console. | Data correctness before pixels; two sources validate the seam. |
+| 1 | ✅ `JSONLReader` + **both** sources + engine + 29 tests on sanitised real fixtures. `--probe` prints a % per source. | Data correctness before pixels; two sources validated the seam. |
 | 2 | Design system + `dormant / ghost / collapsed / exhausted / paused` + spring morph | Ships something usable. |
 | 3 | Hover card, warning auto-expand, pinned panel, context menu | The rest of the design surface. |
 | 4 | Preferences, notifications (full-screen fallback only), launch at login, pause-survives-relaunch | Product polish. |
@@ -181,6 +181,13 @@ Phase 0 + 1 are the risk. 2–6 are execution.
 - 5-minute buckets, not raw event persistence — caps disk and memory regardless of usage volume.
 - Full-screen detection by menu-bar visibility (`screen.visibleFrame.maxY == screen.frame.maxY`) rather than window enumeration — no Screen Recording permission needed. `ponytail:` heuristic; upgrade to `CGWindowListCopyWindowInfo` only if it misfires.
 - No network, no credentials, no Keychain — the app only ever reads local files. (API spend gauge cut.)
+
+## 4.1 Measured on real logs (2026-09-16)
+
+`--probe` against this machine: Claude 10,618 events / 49 completed windows, Codex 4,315 events / 23 windows.
+
+- **Cold start reads 707MB** (309MB `~/.claude` + 398MB `~/.codex`) in ~8s at 100% CPU. It is I/O bound, not decode bound — adding a byte prefilter before `JSONDecoder` changed nothing. Incremental polls after that are nearly free, since cursors only read appended bytes. **The fix is persistence, not parsing:** `BucketArchive` in phase 3 must save cursors *and* aggregates so a relaunch never re-reads history. Until then, the first snapshot lands ~8s after launch and the pill must show a loading state rather than a fake 0%.
+- **Outliers dominate the inferred ceiling.** Max-observed put Claude's ceiling at 32.4M weighted tokens, so a normal window reads ~4%. One unusually heavy day permanently flattens every later reading. Candidate fixes: a high percentile (p95) of completed windows instead of the max, or the max of the trailing N windows so the ceiling can decay. Needs a decision before the percentage is trustworthy.
 
 ## 5. Standing risks
 
