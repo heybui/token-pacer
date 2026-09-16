@@ -33,14 +33,6 @@ struct PreferencesView: View {
                 row("Hide pill when dormant") {
                     Toggle("", isOn: $preferences.hideWhenDormant).labelsHidden()
                 }
-                row("Open panel") {
-                    Text("⌘⇧B")
-                        .font(Typography.mono(11.5))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 5))
-                }
             }
 
             HStack(alignment: .bottom, spacing: 16) {

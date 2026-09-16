@@ -279,8 +279,10 @@ found later. It absorbed most of the time since phase 1.
 
 ### Carried out of phase 3
 
-- **⌘⇧B** — the design's global shortcut for the panel. Needs a real hotkey
-  registration, which belongs with Preferences in phase 4.
+- **⌘⇧B — cut.** The design's global shortcut for the panel. A system-wide hotkey
+  needs a Carbon registration (the `NSEvent` route would demand Accessibility
+  permission for one shortcut), and the pill is a click away. Out of scope by
+  decision, not by oversight; the row is gone from Preferences with it.
 - ~~**Nothing survives a relaunch.**~~ ✅ fixed: one archive, two files — `state.json` for the
   limits state, `events.json` for events and cursors. What it closed:
   - Calibration accumulates across launches, so `weightedPerPercent` is finally
