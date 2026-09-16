@@ -77,6 +77,10 @@ struct LiveLimitsTracker: Sendable {
         if let extrapolated = calibration.extrapolate(
             from: anchor, weightedSince: weightedSinceAnchor, at: now
         ) { return extrapolated }
-        return calibration.hasReset(anchor, at: now) ? nil : anchor.utilization
+
+        // Past the reset the window is empty. That needs no calibration — and it
+        // is a far better answer than falling back to a ceiling guessed from log
+        // volume. Any work done since re-anchors on the next poll anyway.
+        return calibration.hasReset(anchor, at: now) ? 0 : anchor.utilization
     }
 }

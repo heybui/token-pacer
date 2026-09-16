@@ -20,6 +20,27 @@ struct RateLimitWindow: Equatable, Sendable {
     let usedPercent: Double
     let windowMinutes: Int
     let resetsAt: Date
+
+    /// Advance a window whose reset has already passed to the next one, carrying a
+    /// freshly measured figure.
+    ///
+    /// Without this a reading goes stale the instant the window rolls over, and
+    /// the app falls back to inference even though it knows the window just
+    /// emptied. Skips whole periods, so being away for a day lands on the right one.
+    func rolled(to now: Date, usedPercent: Double) -> RateLimitWindow {
+        guard resetsAt <= now, windowMinutes > 0 else {
+            return RateLimitWindow(
+                usedPercent: usedPercent, windowMinutes: windowMinutes, resetsAt: resetsAt
+            )
+        }
+        let length = TimeInterval(windowMinutes * 60)
+        let periods = (now.timeIntervalSince(resetsAt) / length).rounded(.down) + 1
+        return RateLimitWindow(
+            usedPercent: usedPercent,
+            windowMinutes: windowMinutes,
+            resetsAt: resetsAt.addingTimeInterval(periods * length)
+        )
+    }
 }
 
 struct RateLimits: Equatable, Sendable {

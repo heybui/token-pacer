@@ -303,3 +303,68 @@ private func state(
     }
     #expect(calls == 12)                        // 120 minutes / 10
 }
+
+// MARK: - surviving a window reset
+
+@Test func aRolledWindowLandsOnTheNextReset() {
+    let window = RateLimitWindow(usedPercent: 88, windowMinutes: 300, resetsAt: at(0))
+    let rolled = window.rolled(to: at(10), usedPercent: 0)
+    #expect(rolled.resetsAt == at(300))
+    #expect(rolled.usedPercent == 0)
+}
+
+/// Away for a day, the window has rolled many times. Land on the current one,
+/// not the one that followed the last reading.
+@Test func rollingSkipsWholePeriods() {
+    let window = RateLimitWindow(usedPercent: 88, windowMinutes: 300, resetsAt: at(0))
+    let rolled = window.rolled(to: at(1_000), usedPercent: 0)
+    #expect(rolled.resetsAt > at(1_000))
+    #expect(rolled.resetsAt == at(1_200))     // 0 + 4 × 300
+}
+
+@Test func aWindowThatHasNotResetIsLeftAlone() {
+    let window = RateLimitWindow(usedPercent: 40, windowMinutes: 300, resetsAt: at(300))
+    let rolled = window.rolled(to: at(10), usedPercent: 42)
+    #expect(rolled.resetsAt == at(300))
+    #expect(rolled.usedPercent == 42)         // the fresher figure still lands
+}
+
+/// The window emptying is knowable without any calibration, and is a far better
+/// answer than a ceiling guessed from log volume.
+@Test func anUncalibratedTrackerReportsZeroPastTheReset() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 88, observedAt: at(0), resetsAt: at(300)), at: at(0))
+    #expect(tracker.utilization(at: at(100)) == 88)
+    #expect(tracker.utilization(at: at(301)) == 0)
+}
+
+/// The whole point: a reset must not drop the source back to inference.
+@Test func theReportedFigureSurvivesAReset() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 88, observedAt: at(0), resetsAt: at(300)), at: at(0))
+
+    let anchored = RateLimitWindow(usedPercent: 88, windowMinutes: 300, resetsAt: at(300))
+    let now = at(310)
+    let live = try! #require(tracker.utilization(at: now))
+    let carried = anchored.rolled(to: now, usedPercent: live)
+
+    let snapshot = SnapshotBuilder.build(
+        source: .claude,
+        limits: RateLimits(primary: carried, secondary: nil, planType: nil, observedAt: at(0)),
+        events: [], ceiling: Ceiling(weightedTokens: 1_000_000, observedWindows: 9), at: now
+    )
+    #expect(snapshot.origin == .authoritative)
+    #expect(snapshot.sessionPercent == 0)
+    #expect(snapshot.resetsAt == at(600))
+}
+
+@Test func theSnapshotCarriesWhenTheFigureWasConfirmed() {
+    let limits = RateLimits(
+        primary: RateLimitWindow(usedPercent: 22, windowMinutes: 300, resetsAt: at(300)),
+        secondary: nil, planType: nil, observedAt: at(0)
+    )
+    let snapshot = SnapshotBuilder.build(
+        source: .claude, limits: limits, events: [], ceiling: .unknown, at: at(6)
+    )
+    #expect(snapshot.confirmedAt == at(0))
+}

@@ -173,11 +173,9 @@ final class UsageStore {
         else { return anchored }
 
         return RateLimits(
-            primary: RateLimitWindow(
-                usedPercent: live,
-                windowMinutes: primary.windowMinutes,
-                resetsAt: primary.resetsAt
-            ),
+            // Rolled forward when the window has already reset, so a figure the
+            // tracker knows is current is not thrown away as stale.
+            primary: primary.rolled(to: now, usedPercent: live),
             secondary: anchored.secondary,
             planType: anchored.planType,
             observedAt: anchored.observedAt
