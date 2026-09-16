@@ -6,8 +6,6 @@ enum RefreshReason: Equatable, Sendable {
     case wake
     /// The routine re-anchor, no sooner than `floor`.
     case scheduled
-    /// The window just rolled over; one call re-anchors at the new baseline.
-    case afterReset
     /// The extrapolation is about to cross a threshold the user gets alerted on.
     /// Worth confirming before firing: a false 90% warning is the worst failure.
     case confirmThreshold(Double)
@@ -28,7 +26,6 @@ struct LimitsRefreshPolicy: Sendable {
         var lastConfirmedUtilization: Double?
         var hasNewActivity: Bool
         var estimate: Double?
-        var anchorResetsAt: Date?
         var didLaunchFetch: Bool
         var didWake: Bool
     }
@@ -39,13 +36,9 @@ struct LimitsRefreshPolicy: Sendable {
 
         let since = state.lastCallAt.map { now.timeIntervalSince($0) } ?? .infinity
 
-        // A reset is a known, free event: the number changed without any tokens
-        // being spent, so re-anchor even though nothing was logged.
-        if let resetsAt = state.anchorResetsAt, now >= resetsAt, since >= confirmFloor {
-            return .afterReset
-        }
-
-        // Everything below needs local evidence that the number could have moved.
+        // Local evidence that the number could have moved is required for every
+        // request. A reset needs no call: `resets_at` is already known, and the
+        // extrapolation restarts from zero on its own.
         guard state.hasNewActivity else { return nil }
 
         if let crossed = crossedThreshold(state), since >= confirmFloor {

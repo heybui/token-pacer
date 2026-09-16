@@ -101,12 +101,12 @@ private func at(_ minutes: Double) -> Date { t0.addingTimeInterval(minutes * 60)
 
 private func state(
     lastCall: Date?, activity: Bool = true, estimate: Double? = nil,
-    confirmed: Double? = nil, resetsAt: Date? = nil,
+    confirmed: Double? = nil,
     launched: Bool = true, woke: Bool = false
 ) -> LimitsRefreshPolicy.State {
     .init(
         lastCallAt: lastCall, lastConfirmedUtilization: confirmed, hasNewActivity: activity,
-        estimate: estimate, anchorResetsAt: resetsAt, didLaunchFetch: launched, didWake: woke
+        estimate: estimate, didLaunchFetch: launched, didWake: woke
     )
 }
 
@@ -153,14 +153,12 @@ private func state(
     #expect(reason == nil)
 }
 
-/// The window rolling over changes the number with no tokens spent, so this is the
-/// one case that re-anchors without local activity.
-@Test func aResetReanchorsEvenWithoutActivity() {
+/// A reset needs no request: `resets_at` is known and the extrapolation restarts
+/// from zero locally, so an idle machine stays silent straight through a rollover.
+@Test func aResetDoesNotEarnARequestWhileIdle() {
     let policy = LimitsRefreshPolicy()
-    let reason = policy.reason(
-        at: at(10), state: state(lastCall: at(0), activity: false, resetsAt: at(5))
-    )
-    #expect(reason == .afterReset)
+    let reason = policy.reason(at: at(10), state: state(lastCall: at(0), activity: false))
+    #expect(reason == nil)
 }
 
 @Test func aHeavyEightHourDayStaysUnderFiftyCalls() {
@@ -176,4 +174,98 @@ private func state(
         }
     }
     #expect(calls <= 48)
+}
+
+// MARK: - activity gating
+
+@Test func anIdleMachineNeverRequests() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
+
+    // Hours pass with no local tokens. Utilization cannot have moved.
+    for hour in 1...8 {
+        #expect(tracker.refreshReason(at: at(Double(hour) * 60)) == nil)
+    }
+    #expect(tracker.hasNewActivity == false)
+}
+
+@Test func activityAfterTheFloorEarnsARequest() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
+
+    #expect(tracker.refreshReason(at: at(30)) == nil)   // idle, well past the floor
+    tracker.record(weighted: 250_000)
+    #expect(tracker.hasNewActivity)
+    #expect(tracker.refreshReason(at: at(30)) == .scheduled)
+}
+
+@Test func activityInsideTheFloorStillWaits() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
+    tracker.record(weighted: 250_000)
+    #expect(tracker.refreshReason(at: at(5)) == nil)
+    #expect(tracker.refreshReason(at: at(10)) == .scheduled)
+}
+
+@Test func anchoringCalibratesAndClearsTheActivitySignal() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 10, observedAt: at(0), resetsAt: at(300)), at: at(0))
+    tracker.record(weighted: 1_000_000)
+    tracker.anchored(LimitsAnchor(utilization: 20, observedAt: at(10), resetsAt: at(300)), at: at(10))
+
+    #expect(tracker.calibration.weightedPerPercent == 100_000)
+    #expect(tracker.hasNewActivity == false)
+    #expect(tracker.lastConfirmed == 20)
+}
+
+@Test func theFigureMovesBetweenAnchorsWithoutRequesting() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 10, observedAt: at(0), resetsAt: at(300)), at: at(0))
+    tracker.record(weighted: 1_000_000)
+    tracker.anchored(LimitsAnchor(utilization: 20, observedAt: at(10), resetsAt: at(300)), at: at(10))
+
+    tracker.record(weighted: 300_000)          // 3 points at 100k/point
+    #expect(tracker.utilization(at: at(12)) == 23)
+    #expect(tracker.refreshReason(at: at(12)) == nil)   // still inside the floor
+}
+
+@Test func failuresBackOffInsteadOfRetryingEveryTick() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
+    tracker.record(weighted: 250_000)
+
+    tracker.failed(at: at(10))
+    #expect(tracker.refreshReason(at: at(25)) == nil)   // 20 min floor after one failure
+    #expect(tracker.refreshReason(at: at(30)) == .scheduled)
+
+    tracker.failed(at: at(30))
+    tracker.failed(at: at(70))
+    #expect(tracker.consecutiveFailures == 3)
+    // Doubling is capped at an hour, so this is 60 min after the last attempt.
+    #expect(tracker.refreshReason(at: at(120)) == nil)
+    #expect(tracker.refreshReason(at: at(130)) == .scheduled)
+}
+
+@Test func aSuccessfulAnchorClearsTheBackoff() {
+    var tracker = LiveLimitsTracker()
+    tracker.record(weighted: 100)
+    tracker.failed(at: at(0))
+    tracker.failed(at: at(60))
+    #expect(tracker.consecutiveFailures == 2)
+
+    tracker.anchored(LimitsAnchor(utilization: 5, observedAt: at(90), resetsAt: at(300)), at: at(90))
+    #expect(tracker.consecutiveFailures == 0)
+}
+
+@Test func nothingIsShownBeforeTheFirstReading() {
+    let tracker = LiveLimitsTracker()
+    #expect(tracker.utilization(at: at(0)) == nil)
+}
+
+@Test func anUncalibratedTrackerStillShowsTheAnchor() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 42, observedAt: at(0), resetsAt: at(300)), at: at(0))
+    tracker.record(weighted: 500_000)
+    // No second anchor yet, so no conversion exists; the last known truth stands.
+    #expect(tracker.utilization(at: at(5)) == 42)
 }

@@ -54,8 +54,8 @@ undocumented endpoint is how an account or IP earns a block. Rules, enforced in 
    Pairs that span a reset, or that saw no local tokens, teach nothing and are discarded. Accuracy
    between anchors is bounded by usage this machine cannot see — other devices, claude.ai, the web
    app — which the next anchor corrects.
-4. **Schedule around `resets_at`.** Utilization only falls at reset, so fetch once shortly after it
-   rather than repeatedly before it.
+4. **A reset costs no request.** `resets_at` is already known and the extrapolation restarts from
+   zero on its own, so an idle machine stays silent straight through a rollover.
 5. **Backoff by status.** 429/5xx → exponential backoff with jitter, honouring `Retry-After`.
    401 → stop and fall back to inference (a token problem; retrying cannot fix it).
    403 → stop for the session, do not retry.
