@@ -29,12 +29,30 @@ enum PillState: String, CaseIterable, Sendable {
     static let shadowRadius: CGFloat = 31
     static let shadowOffsetY: CGFloat = 22
 
+    /// How far the shadow reaches past the shell it is cast from.
+    static let shadowReach: CGFloat = shadowRadius * 2
+
     /// A hosting view clips to its bounds, so the host has to clear the largest
     /// shell by the shadow's whole reach — otherwise the blur ends in a hard
-    /// rectangle around the pinned panel. Derived, never typed in: the margin and
-    /// the blur that needs it cannot drift apart.
+    /// rectangle around the pinned panel — and by the menu's drop, which opens
+    /// under the panel as readily as under the pill. Derived, never typed in:
+    /// the margin and the things needing it cannot drift apart.
     static let hostSize = CGSize(
-        width: PillState.pinned.size.width + shadowRadius * 2 * 2,
-        height: PillState.pinned.size.height + shadowOffsetY + shadowRadius * 2
+        width: max(PillState.pinned.size.width, menuWidth) + shadowReach * 2,
+        height: PillState.pinned.size.height + menuDrop + shadowOffsetY + shadowReach
     )
+
+    /// Room for the menu below the tallest shell. `PillModel.menuHeight` carries
+    /// the real figure at runtime; this reserves for the list the app builds.
+    static let menuDrop = menuGap + menuHeight(items: 6)
+
+    /// The context menu's own geometry, from the same design board.
+    static let menuGap: CGFloat = 6
+    static let menuWidth: CGFloat = 212
+    static let menuRowHeight: CGFloat = 25
+    static let menuPadding: CGFloat = 5
+
+    static func menuHeight(items: Int) -> CGFloat {
+        CGFloat(items) * menuRowHeight + menuPadding * 2
+    }
 }

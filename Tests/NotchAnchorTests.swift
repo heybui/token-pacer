@@ -63,3 +63,15 @@ private let external = ScreenMetrics(
     #expect(PillState.hostSize.width - panel.width >= reach * 2)
     #expect(PillState.hostSize.height - panel.height >= reach + PillState.shadowOffsetY)
 }
+
+/// The menu opens under the pinned panel too, and a host that does not reserve
+/// its drop clips it — silently, because the rows simply are not drawn.
+@MainActor
+@Test func theHostReservesRoomForEveryMenuItem() {
+    let items = PillRootView(model: PillModel(), store: UsageStore()).menuItems
+    let needed = PillState.pinned.size.height
+        + PillState.menuGap + PillState.menuHeight(items: items.count)
+
+    #expect(PillState.hostSize.height >= needed)
+    #expect(PillState.hostSize.width >= PillState.menuWidth)
+}

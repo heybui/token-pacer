@@ -7,7 +7,7 @@ struct PillRootView: View {
 
     /// Preferences and updates are phases 4 and 6; the items are shown greyed
     /// rather than left out, so the menu keeps its shape.
-    private var menuItems: [NotchMenuItem] {
+    var menuItems: [NotchMenuItem] {
         [
             NotchMenuItem(title: "Preferences…", key: "⌘,", isEnabled: false),
             NotchMenuItem(title: model.inputs.isPaused ? "Resume tracking" : "Pause tracking") {
@@ -44,7 +44,7 @@ struct PillRootView: View {
             menuItems: menuItems,
             onCloseMenu: { model.closeMenu() }
         )
-            .onAppear { model.menuHeight = NotchMenuView.height(items: menuItems.count) }
+            .onAppear { model.menuHeight = PillState.menuHeight(items: menuItems.count) }
             .onHover { inside in
                 // Only fires inside the shell rect, which is how we know
                 // PassthroughHostingView is letting the rest of the panel through.

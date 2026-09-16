@@ -17,23 +17,14 @@ struct NotchMenuView: View {
     let items: [NotchMenuItem]
     let onDismiss: () -> Void
 
-    /// Height is needed by the host before the menu draws, to know how far the
-    /// clickable area now reaches. Kept in step with the padding below.
-    static let width: CGFloat = 212
-    static let rowHeight: CGFloat = 25
-    static let padding: CGFloat = 5
-    static func height(items: Int) -> CGFloat {
-        CGFloat(items) * rowHeight + padding * 2
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             ForEach(items) { item in
                 MenuRow(item: item, onDismiss: onDismiss)
             }
         }
-        .padding(Self.padding)
-        .frame(width: Self.width)
+        .padding(PillState.menuPadding)
+        .frame(width: PillState.menuWidth)
         .background(Tokens.menuSurface, in: RoundedRectangle(cornerRadius: 9))
         .overlay {
             RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
@@ -62,7 +53,7 @@ private struct MenuRow: View {
         .font(Typography.sans(12.5))
         .foregroundStyle(.white.opacity(item.isEnabled ? 0.9 : 0.35))
         .padding(.horizontal, 9)
-        .frame(height: NotchMenuView.rowHeight)
+        .frame(height: PillState.menuRowHeight)
         .background(
             RoundedRectangle(cornerRadius: 5)
                 .fill(.white.opacity(isHovering && item.isEnabled ? 0.12 : 0))

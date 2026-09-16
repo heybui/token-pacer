@@ -20,15 +20,13 @@ final class PillModel {
         let shell = state.size
         guard isMenuOpen else { return shell }
         return CGSize(
-            width: max(shell.width, NotchMenuView.width),
-            height: shell.height + Self.menuGap + menuHeight
+            width: max(shell.width, PillState.menuWidth),
+            height: shell.height + PillState.menuGap + menuHeight
         )
     }
 
     /// Esc closes both, and neither can hear it without the keyboard.
     var wantsKeyboard: Bool { state == .pinned || isMenuOpen }
-
-    static let menuGap: CGFloat = 6
 
     /// Recomputed whenever anything feeding the decision changes.
     func update(snapshot: UsageSnapshot?, at now: Date = Date()) {
@@ -53,11 +51,9 @@ final class PillModel {
 
     func togglePinned(at now: Date = Date()) { setPinned(!inputs.isPinned, at: now) }
 
-    /// Right-click opens it; the panel has its own controls and no room below.
-    func toggleMenu() {
-        guard state != .pinned else { return }
-        isMenuOpen.toggle()
-    }
+    /// Right-click opens it in every state, the panel included — pausing or
+    /// copying should not cost you the panel you just opened.
+    func toggleMenu() { isMenuOpen.toggle() }
 
     func closeMenu() { isMenuOpen = false }
 

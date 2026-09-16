@@ -36,7 +36,7 @@ struct PillView: View {
             shell
             if isMenuOpen {
                 NotchMenuView(items: menuItems, onDismiss: onCloseMenu)
-                    .padding(.top, PillModel.menuGap)
+                    .padding(.top, PillState.menuGap)
             }
             Spacer(minLength: 0)
         }

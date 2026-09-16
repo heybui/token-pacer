@@ -170,7 +170,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 @MainActor
 @Test func theMenuEnlargesTheClickableArea() {
     let model = PillModel()
-    model.menuHeight = NotchMenuView.height(items: 6)
+    model.menuHeight = PillState.menuHeight(items: 6)
     model.update(snapshot: snapshot(), at: now)
     #expect(model.liveSize == PillState.collapsed.size)
 
@@ -180,7 +180,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     // the height grows here.
     #expect(model.liveSize.width == PillState.collapsed.size.width)
     #expect(model.liveSize.height
-        == PillState.collapsed.size.height + PillModel.menuGap + model.menuHeight)
+        == PillState.collapsed.size.height + PillState.menuGap + model.menuHeight)
 }
 
 @MainActor
@@ -195,15 +195,18 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(!model.isMenuOpen)
 }
 
-/// The panel fills the shell and has its own controls; there is no room below it
-/// inside the host, and nothing the menu would add.
+/// Pausing or quitting from the panel should not cost you the panel, so the menu
+/// opens over it too — and the host reserves the drop for it.
 @MainActor
-@Test func thePinnedPanelHasNoContextMenu() {
+@Test func theMenuOpensOverThePinnedPanelToo() {
     let model = PillModel()
+    model.menuHeight = PillState.menuHeight(items: 6)
     model.update(snapshot: snapshot(), at: now)
     model.setPinned(true, at: now)
     model.toggleMenu()
-    #expect(!model.isMenuOpen)
+
+    #expect(model.isMenuOpen)
+    #expect(model.liveSize.height <= PillState.hostSize.height)
 }
 
 @Test func theCopiedSummaryReadsAsASentence() {
