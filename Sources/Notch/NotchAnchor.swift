@@ -23,6 +23,14 @@ enum NotchAnchor {
         return width > 0 ? width : nil
     }
 
+    /// The screen the pill belongs on. A notch, when the Mac has one — that is
+    /// the whole product, and `NSScreen.main` is the screen holding the key
+    /// window, which for an app with no windows is whatever was focused last.
+    /// Clamshell or a desktop Mac falls back to the main screen.
+    static func preferred(from screens: [ScreenMetrics], main: ScreenMetrics?) -> ScreenMetrics? {
+        screens.first { notchWidth($0) != nil } ?? main ?? screens.first
+    }
+
     /// Fixed-size host frame in global screen coordinates: top-centred, top edge
     /// flush with the top of the screen so the shell grows downward out of the notch.
     static func hostFrame(for m: ScreenMetrics, size: CGSize) -> CGRect {

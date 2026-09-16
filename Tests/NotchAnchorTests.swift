@@ -75,3 +75,23 @@ private let external = ScreenMetrics(
     #expect(PillState.hostSize.height >= needed)
     #expect(PillState.hostSize.width >= PillState.menuWidth)
 }
+
+/// With an external display attached, the pill belongs in the notch — that is
+/// the product. `NSScreen.main` is the screen holding the key window, which for
+/// an app with no windows is wherever the user last clicked.
+@Test func theNotchedScreenWinsOverTheFocusedOne() {
+    let external = ScreenMetrics(
+        frame: CGRect(x: 0, y: 0, width: 2560, height: 1440), safeAreaTop: 0,
+        auxiliaryTopLeft: nil, auxiliaryTopRight: nil
+    )
+    let laptop = ScreenMetrics(
+        frame: CGRect(x: 0, y: -1000, width: 1512, height: 982), safeAreaTop: 37,
+        auxiliaryTopLeft: CGRect(x: 0, y: 0, width: 640, height: 37),
+        auxiliaryTopRight: CGRect(x: 872, y: 0, width: 640, height: 37)
+    )
+
+    #expect(NotchAnchor.preferred(from: [external, laptop], main: external) == laptop)
+    // Lid closed: no notch anywhere, so the focused screen is the right answer.
+    #expect(NotchAnchor.preferred(from: [external], main: external) == external)
+    #expect(NotchAnchor.preferred(from: [], main: nil) == nil)
+}

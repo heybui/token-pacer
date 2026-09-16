@@ -87,8 +87,9 @@ final class NotchController {
     }
 
     private func reanchor() {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-        let metrics = screen.metrics
+        guard let metrics = NotchAnchor.preferred(
+            from: NSScreen.screens.map(\.metrics), main: NSScreen.main?.metrics
+        ) else { return }
         panel.setFrame(NotchAnchor.hostFrame(for: metrics, size: PillState.hostSize), display: true)
         model.hasNotch = NotchAnchor.notchWidth(metrics) != nil
         panel.orderFrontRegardless()
