@@ -2,29 +2,93 @@
 
 macOS notch usage tracker. Design source: `design/Burn Tracker.dc.html`.
 
-## 0. Ground truth (verified on this machine, 2026-09-16)
+## 0. Ground truth (corrected 2026-09-16)
+
+### Limits come from an API, not the logs
+
+Claude Code reads its own usage from an authenticated endpoint. This is the source of truth for every percentage; the earlier plan inferred a ceiling from log volume because this endpoint had not been found, which was wrong.
+
+```
+GET https://api.anthropic.com/api/oauth/usage
+Authorization: Bearer <accessToken>      # Keychain service "Claude Code-credentials" → claudeAiOauth.accessToken
+anthropic-beta: oauth-2025-04-20
+```
+
+Response (verbatim from Claude Code's `src/services/api/usage.ts`):
+
+```ts
+type RateLimit = { utilization: number | null,  // percentage 0–100
+                   resets_at:   string | null } // ISO 8601
+type Utilization = {
+  five_hour?, seven_day?, seven_day_oauth_apps?, seven_day_opus?, seven_day_sonnet?,
+  extra_usage?: { is_enabled, monthly_limit, used_credits, utilization }
+}
+```
+
+Gating: returns `{}` unless the session is a managed OAuth subscriber holding the `user:profile` scope. API-key users get nothing, so the log-derived fallback still has to exist.
+
+Codex needs no network at all — its rollout logs already carry `rate_limits` with `used_percent`, `window_minutes` and `resets_at`.
+
+### Network policy — the endpoint is undocumented, treat it as a guest
+
+The 5s tick stays **local only**. Log reading is free; the network call is not, and hammering an
+undocumented endpoint is how an account or IP earns a block. Rules, enforced in one place:
+
+1. **Activity-gated.** A call is only made when local logs show new token events since the last one.
+   Utilization cannot move without them. An idle machine makes **zero** requests.
+2. **Hard floor of 60s between calls**, with jitter so installs don't synchronise. A heavy 8-hour day
+   is ≤480 calls worst case, and far fewer in practice; an idle day is 0.
+3. **Anchor + interpolate.** The API result is an anchor: utilization *u* at time *T*. Between calls
+   the pill extrapolates from local weighted-token deltas since *T*. The UI still moves every 5s
+   while the network is touched at most once a minute.
+4. **Schedule around `resets_at`.** Utilization only falls at reset, so fetch once shortly after it
+   rather than repeatedly before it.
+5. **Backoff by status.** 429/5xx → exponential backoff with jitter, honouring `Retry-After`.
+   401 → stop and fall back to inference (a token problem; retrying cannot fix it).
+   403 → stop for the session, do not retry.
+6. **One in-flight request**, coalesced. No concurrency, no retry storms.
+7. **Sleep-aware.** No polling while the display is asleep; one fetch on wake.
+8. **Serve stale on failure** with an age indicator. Never spin trying to refresh.
+
+Failure is never fatal: `CeilingEstimator` remains the fallback, so the app degrades to log-only
+rather than breaking. The live source is a Preferences toggle (default on) so it can be turned off
+outright.
+
+Standing caveat: this endpoint is community-discovered, not a published API. It may change or be
+restricted without notice. The requests are the user's own token against the same endpoint their own
+client calls, which is the defensible position — but the fallback path is what makes it safe to ship.
+
+### What each layer is actually for
+
+| Value | Source |
+|---|---|
+| 5-hour %, 7-day %, per-model weekly %, reset times | **Claude: OAuth usage endpoint. Codex: rollout logs.** |
+| Monthly credit spend | `extra_usage` — free, no Console admin key |
+| Burn rate, sparkline, headroom | Log token counts (the API gives no rate of change) |
+| Splits by model / project / surface | Log token counts (the API gives no attribution) |
+| 30-day history | Log token counts |
+| Fallback % for API-key users | `CeilingEstimator` over observed windows |
+
+So log parsing stays — it answers everything the endpoint cannot — but it stops being the source of the headline number.
+
+### Log formats (verified on this machine)
 
 | | Claude Code | Codex |
 |---|---|---|
 | Logs | `~/.claude/projects/<slug>/<uuid>.jsonl` | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` |
-| Usage record | line `type:"assistant"` → `message.usage` | line `type:"token_usage_record"` → `payload.usage` |
+| Usage record | `type:"assistant"` → `message.usage` | `type:"token_usage_record"` → `payload.usage` |
 | Fields | `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` | `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` |
 | Dedupe key | `message.id` + `requestId` | `response_id` |
-| Context | `cwd`, `sessionId`, `message.model`, `timestamp`, `gitBranch` | `session_meta.payload.cwd`, `model_provider`, `cli_version` |
-| **Authoritative limits** | **none found** — must infer | **present**: `payload.rate_limits` = `{primary:{used_percent, window_minutes:300, resets_at}, secondary:{…,window_minutes:10080}, plan_type}` |
+| Context | `cwd`, `sessionId`, `message.model`, `timestamp` | `session_meta.payload.cwd`, `turn_context.cwd` |
+| Nesting trap | cache counts are **separate from** `input_tokens` | `cached_input_tokens` is **inside** `input_tokens`; `reasoning_output_tokens` is inside `output_tokens` |
 
-Consequences:
-- Claude's 5-hour % is **inferred** (ccusage approach) — exactly what the design's `limits` build note already specifies. Show raw tokens until a full window is observed.
-- Codex is the *easier* source, not the harder one. `used_percent` / `resets_at` / weekly `secondary` come free. The "future extension" is ~80 lines.
-- So the source seam must carry **both** an authoritative and an inferred snapshot origin. That is the one real abstraction in this app; everything else is one implementation.
-
-Toolchain: Xcode 27, Swift 6.4. **Deployment target macOS 15+** (drops availability branches for `@Observable`, `UnevenRoundedRectangle`, modern spring APIs).
+Toolchain: Xcode 27, Swift 6.4. **Deployment target macOS 15+**.
 
 ## 0.1 Decisions taken
 
 - **Codex ships in phase 1**, not phase 5 — two conformances prove the seam instead of guessing it, and Codex's authoritative `used_percent` is a free correctness check on Claude's inferred one.
 - **macOS 15+**.
-- **API spend gauge cut entirely** — the card is removed from the pinned panel. No Keychain, no Console admin key, no network. The app is 100% local.
+- **API spend gauge**: cut as a *Console Admin API* feature, but `extra_usage` on the OAuth endpoint returns monthly credit spend for free. Revisit — it now costs nothing.
 - **Instrument Sans bundled** (OFL) + SF Mono for numerics, matching the design's metrics exactly.
 
 ## 1. Architecture
