@@ -20,9 +20,7 @@ struct UsageRing: View {
                 .stroke(tone, style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
                 .rotationEffect(.degrees(-90))
             if let label {
-                Text(label)
-                    .font(.system(size: labelSize, weight: .medium, design: .monospaced))
-                    .foregroundStyle(tone)
+                OdometerText(text: label, size: labelSize, color: tone)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)   // "8.00M" is wider than "45%"
                     .frame(width: size - lineWidth * 2 - 4)
