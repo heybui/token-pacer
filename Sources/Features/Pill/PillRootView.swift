@@ -53,5 +53,8 @@ struct PillRootView: View {
             .onChange(of: store.snapshot) { _, snapshot in
                 model.update(snapshot: snapshot)
             }
+            // The shell is black in every state, so its contents are never styled
+            // for a light desktop.
+            .environment(\.colorScheme, .dark)
     }
 }

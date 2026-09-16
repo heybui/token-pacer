@@ -12,6 +12,11 @@ enum Tokens {
         pct >= critAt ? red : pct >= warnAt ? amber : green
     }
 
+    /// The context menu's own surface. Not `.regularMaterial`: a system material
+    /// follows the desktop appearance, and in light mode the design's white text
+    /// lands on a white sheet.
+    static let menuSurface = Color(hex: 0x1e1e22).opacity(0.97)
+
     static let shellRingIdle = Color.white.opacity(0.06)
     static let shellRingOpen = Color.white.opacity(0.13)
 

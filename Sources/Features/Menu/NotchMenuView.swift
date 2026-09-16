@@ -34,7 +34,7 @@ struct NotchMenuView: View {
         }
         .padding(Self.padding)
         .frame(width: Self.width)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 9))
+        .background(Tokens.menuSurface, in: RoundedRectangle(cornerRadius: 9))
         .overlay {
             RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
         }
