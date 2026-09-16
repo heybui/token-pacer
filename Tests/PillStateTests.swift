@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import BurnTracker
 
@@ -249,4 +250,14 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     // …and gone once the hold expires, without waiting for the 5s poll.
     try? await Task.sleep(for: .seconds(PillStateResolver.ghostFade + 0.2))
     #expect(model.state == .dormant)
+}
+
+/// The tail runs behind the head, so its position is negative for part of every
+/// lap. A plain `truncatingRemainder` keeps the sign, and `trim(from:to:)` with a
+/// negative bound draws nothing — the tail would vanish once per cycle.
+@MainActor
+@Test func theTailWrapsRoundThePathRatherThanGoingNegative() {
+    #expect(ChasingBorder<Circle>.wrapped(-0.25) == 0.75)
+    #expect(ChasingBorder<Circle>.wrapped(1.25) == 0.25)
+    #expect(ChasingBorder<Circle>.wrapped(0.5) == 0.5)
 }
