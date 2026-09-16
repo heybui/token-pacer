@@ -268,7 +268,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 1 | `JSONLReader` + both sources + window/ceiling/burn engine, `--probe` | ✅ done |
 | 1.5 | **Live limits** — OAuth usage endpoint, Keychain, calibration, 10-min activity-gated polling, attention badge, single-instance guard | ✅ done (unplanned; see §0) |
 | 2 | Design system + the remaining pill states + spring morph | ✅ done |
-| 3 | Warning auto-expand, pinned panel, context menu | 🔨 **in progress** |
+| 3 | Warning auto-expand, pinned panel, context menu | ✅ done |
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ⬜ not started |
 | 5 | Source switcher in the pill + prefs (Claude / Codex / combined) | ⬜ not started |
 | 6 | Notarized DMG, Sparkle feed, Homebrew cask | ⬜ not started |
@@ -277,15 +277,26 @@ Phase 1.5 was not in the original plan. It exists because the limits source was 
 version inferred a ceiling from log volume, and the endpoint that publishes the real figures was
 found later. It absorbed most of the time since phase 1.
 
-### What phase 3 still owes
+### Carried out of phase 3
 
 - **⌘⇧B** — the design's global shortcut for the panel. Needs a real hotkey
   registration, which belongs with Preferences in phase 4.
-- **`BucketArchive`** — the panel reads 30 days of events straight out of memory,
-  which works but does nothing for the 8s cold start. Persistence is still owed.
+- **Nothing survives a relaunch.** One gap, three symptoms, and phase 4 should fix
+  them together rather than one at a time:
+  - **Calibration never accumulates.** `LiveLimitsTracker` lives in memory, so
+    every launch starts from zero anchors — during development, where a rebuild
+    kills the app every few minutes, `weightedPerPercent` can never be measured.
+    `samples=0` on every run so far is this, not a bug in the calibration.
+  - **A relaunch jumps the 10-minute floor**, because `lastCallAt` goes with it.
+    Politeness to an undocumented endpoint should not depend on uptime.
+  - **Pause, and the 8s cold start** — `BucketArchive` was always the answer to
+    §4.1, and it is the same piece of work: one archive holding cursors,
+    aggregates, calibration, the last call time and the paused flag.
 - **By surface** — the design's third split. Nothing local can tell claude.ai from
   the web app, so it splits by CLI instead; revisit if the endpoint ever says.
-- **Pause across relaunch** — pausing stops the poll now, but not past a restart.
+- **History is relative.** The grid shades each day against the busiest in range;
+  there is no daily cap to be a percentage of. Worth revisiting if the endpoint
+  ever publishes one.
 
 ### Standing design decisions
 
@@ -305,6 +316,12 @@ found later. It absorbed most of the time since phase 1.
 - Context menu on right-click — and the reason it first rendered white-on-white: `.regularMaterial`
   follows the desktop appearance. Nothing in this app may track the system scheme.
 - `make app` signs with a real identity, so the Keychain grant survives a rebuild.
+- The pinned panel and its context menu, on screen, against live figures.
+- Four bugs only the hardware could show: the host clipped the shell's shadow; the shadow reverted
+  to a bounding box because a ScrollView cannot be rasterised into a compositing group; `.onHover`
+  installed a tracking area over the whole host, which ignores the hitTest that makes the rest
+  click-through, so most of the upper screen expanded the pill; and spend read minor units as whole
+  currency — S$11.99 shown as $1199.
 
 ### Still unverified
 
@@ -314,9 +331,8 @@ found later. It absorbed most of the time since phase 1.
 - **Calibration over time** — `weightedPerPercent` needs two anchors 10 minutes apart; every run so
   far still logs `perPercent=0 samples=0`, so the conversion has never actually been measured. Until
   it is, headroom rests on the inferred ceiling, and §4.1's outlier problem is still live.
-- **The pinned panel on screen.** It compiles, it is covered by tests at the data layer, and it has
-  never been looked at: the ring, the sparkline and the history strip are unproven at real sizes.
 - **The warning state on screen** — it needs a window past 90% to appear, which no run has reached.
+  Every other state has now been seen.
 
 ## 4. Deliberate simplifications
 
