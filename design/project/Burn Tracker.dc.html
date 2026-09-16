@@ -8,6 +8,7 @@
 <body>
 <x-dc>
 <helmet>
+<link rel="icon" type="image/png" href="icons/opaque/icon_32x32.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
@@ -218,10 +219,11 @@
   <div style="max-width: 1120px; margin: 0 auto; padding: 56px 28px 72px; display: flex; flex-direction: column; gap: 56px;">
 
     <div style="display: flex; align-items: flex-start; gap: 18px;">
-      <div style="width: 44px; height: 44px; border-radius: 11px; background: #131418; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center; flex: 0 0 auto;">
-        <div style="width: 26px; height: 11px; border-radius: 99px; box-shadow: inset 0 0 0 1.5px #3ec98a; padding: 1.5px; display: flex;">
-          <div style="width: 11px; height: 100%; border-radius: 99px; background: #3ec98a;"></div>
-        </div>
+      <div style="position: relative; width: 44px; height: 44px; border-radius: 10px; background: #1d1f26; overflow: hidden; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.07);">
+        <div style="position: absolute; inset: 0; background: radial-gradient(circle at 50% 64%, rgba(62,201,138,.53), transparent 66%);"></div>
+        <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 50%; background: #3ec98a;"></div>
+        <div style="position: absolute; left: 0; right: 0; bottom: 50%; height: 1px; background: #93ebc0;"></div>
+        <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 55%; height: 17%; border-radius: 0 0 4px 4px; background: #0f1014;"></div>
       </div>
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <h1 style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -.015em;">Burn Tracker</h1>
@@ -264,11 +266,14 @@
         <div style="display: flex; flex-direction: column; gap: 12px;">
           <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">90% banner · full-screen fallback only</span>
           <div style="width: 100%; max-width: 372px; padding: 14px 16px; border-radius: 16px; background: rgba(38,38,42,.92); backdrop-filter: blur(30px); box-shadow: 0 18px 46px rgba(0,0,0,.5), inset 0 0 0 .5px rgba(255,255,255,.1); display: flex; gap: 13px; align-items: flex-start;">
-            <div style="position: relative; width: 38px; height: 38px; border-radius: 9px; background: #0e0f12; display: flex; align-items: center; justify-content: center; flex: 0 0 auto;">
-              <div style="width: 22px; height: 10px; border-radius: 99px; box-shadow: inset 0 0 0 1.4px #e8b33c; padding: 1.4px; display: flex;">
-                <div style="width: 85%; height: 100%; border-radius: 99px; background: #e8b33c;"></div>
+            <div style="position: relative; flex: 0 0 auto;">
+              <div style="position: relative; width: 38px; height: 38px; border-radius: 9px; background: #1d1f26; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,.07);">
+                <div style="position: absolute; inset: 0; background: radial-gradient(circle at 50% 88%, rgba(240,145,58,.53), transparent 66%);"></div>
+                <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 24%; background: #f0913a;"></div>
+                <div style="position: absolute; left: 0; right: 0; bottom: 24%; height: 1px; background: #f8c08a;"></div>
+                <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 55%; height: 17%; border-radius: 0 0 3px 3px; background: #0f1014;"></div>
               </div>
-              <div style="position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: #e8b33c; box-shadow: 0 0 0 2px rgba(38,38,42,.92);"></div>
+              <div style="position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: #f0913a; box-shadow: 0 0 0 2px rgba(38,38,42,.92);"></div>
             </div>
             <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
               <span style="font-size: 13px; font-weight: 600; color: #fff;">Running low</span>
@@ -294,10 +299,9 @@
               <div style="width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.16);"></div>
               <div style="width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.16);"></div>
               <div style="flex: 1 1 auto;"></div>
-              <div style="width: 18px; height: 18px; border-radius: 5px; background: #0e0f12; display: flex; align-items: center; justify-content: center;">
-                <div style="width: 11px; height: 5px; border-radius: 99px; box-shadow: inset 0 0 0 1px #3ec98a; padding: .8px; display: flex;">
-                  <div style="width: 50%; height: 100%; border-radius: 99px; background: #3ec98a;"></div>
-                </div>
+              <div style="position: relative; width: 18px; height: 18px; border-radius: 4px; background: #1d1f26; overflow: hidden; box-shadow: inset 0 0 0 .5px rgba(255,255,255,.1);">
+                <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 50%; background: #3ec98a;"></div>
+                <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 55%; height: 17%; border-radius: 0 0 2px 2px; background: #0f1014;"></div>
               </div>
             </div>
             <div style="padding: 20px 20px 22px; display: flex; flex-direction: column; gap: 22px;">

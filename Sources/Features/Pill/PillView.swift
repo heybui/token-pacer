@@ -112,8 +112,9 @@ struct PillView: View {
 
             if let attention {
                 AttentionBadge(message: attention, size: 10)
-            } else if let snapshot, snapshot.isActive {
-                Circle().fill(tone).frame(width: 5, height: 5)
+            } else if !isGhost {
+                // Always present; it pulses only while the logs are growing.
+                PulsingDot(color: tone, isPulsing: snapshot?.isBurning == true)
             }
             if isGhost {
                 Text("week")

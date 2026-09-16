@@ -244,3 +244,50 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
     )
     #expect(nearlyFull.headroomMinutes! < nearlyEmpty.headroomMinutes!)
 }
+
+// MARK: - the activity dot
+
+/// The dot answers "is anything happening right now", which is not the same
+/// question as "is a window open" — a window stays open for hours after you stop.
+@Test func burningFollowsRecentLogGrowthNotTheOpenWindow() {
+    let now = t0.addingTimeInterval(3 * 3600)      // three hours into the window
+    let stale = SnapshotBuilder.build(
+        source: .claude, limits: nil, events: [event(0)], ceiling: .unknown, at: now
+    )
+    #expect(stale.isActive)              // the 5-hour window is still open
+    #expect(stale.isBurning == false)    // but nothing has been logged for hours
+}
+
+@Test func freshLogLinesLightTheDot() {
+    let now = t0.addingTimeInterval(600)
+    let justNow = SnapshotBuilder.build(
+        source: .claude, limits: nil,
+        events: [event(600.0 / 3600)],   // logged seconds ago
+        ceiling: .unknown, at: now
+    )
+    #expect(justNow.isBurning)
+}
+
+@Test func theDotGoesOutAfterTheBurningWindow() {
+    let now = t0.addingTimeInterval(600)
+    let inside = SnapshotBuilder.build(
+        source: .claude, limits: nil,
+        events: [event((600 - SnapshotBuilder.burningWindow + 5) / 3600)],
+        ceiling: .unknown, at: now
+    )
+    let outside = SnapshotBuilder.build(
+        source: .claude, limits: nil,
+        events: [event((600 - SnapshotBuilder.burningWindow - 5) / 3600)],
+        ceiling: .unknown, at: now
+    )
+    #expect(inside.isBurning)
+    #expect(outside.isBurning == false)
+}
+
+@Test func nothingLoggedIsNotBurning() {
+    let empty = SnapshotBuilder.build(
+        source: .claude, limits: nil, events: [], ceiling: .unknown, at: t0
+    )
+    #expect(empty.isBurning == false)
+    #expect(empty.lastActivity == nil)
+}

@@ -22,7 +22,11 @@ struct UsageSnapshot: Equatable, Sendable {
     var weeklyPercent: Double?
     var weeklyResetsAt: Date?
     var burn: BurnRate = .idle
+    /// A 5-hour window is open. True for hours at a time.
     var isActive: Bool = false
+    /// Tokens are flowing *now* — the logs grew within `burningWindow`. This is
+    /// what the activity dot follows; `isActive` stays true long after work stops.
+    var isBurning: Bool = false
     /// When the authoritative figure was last confirmed. Between anchors the
     /// number on screen is that reading plus local token flow, not a fresh read.
     var confirmedAt: Date?
@@ -33,6 +37,9 @@ struct UsageSnapshot: Equatable, Sendable {
 }
 
 enum SnapshotBuilder {
+    /// How recently the logs must have grown to count as still burning.
+    static let burningWindow: TimeInterval = 60
+
     /// Authoritative limits win when present and fresh; otherwise infer.
     static func build(
         source: SourceID,
@@ -50,6 +57,8 @@ enum SnapshotBuilder {
         snapshot.sessionTokens = current?.counts.total ?? 0
         snapshot.isActive = current != nil
         snapshot.lastActivity = windows.last?.lastActivity
+        snapshot.isBurning = snapshot.lastActivity
+            .map { now.timeIntervalSince($0) < Self.burningWindow } ?? false
         snapshot.planType = limits?.planType
 
         // A reading whose own window has already reset describes a window that no

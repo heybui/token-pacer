@@ -284,8 +284,9 @@ to `collapsed`.
   the design at 11–13px.
 - **`CapBar`** — the weekly bar. It now has a real data source (`seven_day`), which it did not when
   phase 2 was written.
-- **Pulsing activity dot** — static today; the design pulses it at 2.6s.
-- **Reduce Motion** — honoured for the dot, deliberately ignored for the shell morph.
+- ~~**Pulsing activity dot**~~ ✅ — 2.6s, driven by log growth within the last 60s rather than by the
+  open window, which stays true for hours after work stops.
+- **Reduce Motion** — deliberately not implemented, for the dot or the shell morph.
 
 ### Verified on hardware
 
