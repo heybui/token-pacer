@@ -269,3 +269,37 @@ private func state(
     // No second anchor yet, so no conversion exists; the last known truth stands.
     #expect(tracker.utilization(at: at(5)) == 42)
 }
+
+/// Resuming after a quiet spell anchors on the next tick, not 10 minutes later:
+/// the floor is time since the last *call*, and that is already long past.
+@Test func firstActivityAfterAQuietSpellAnchorsImmediately() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
+
+    // An hour of nothing.
+    #expect(tracker.refreshReason(at: at(60)) == nil)
+
+    // The first logged tokens after that are anchored at once.
+    tracker.record(weighted: 120_000)
+    #expect(tracker.refreshReason(at: at(60)) == .scheduled)
+}
+
+/// While work continues, the floor throttles to one call per 10 minutes even
+/// though every 5s tick sees fresh tokens.
+@Test func continuousWorkIsThrottledToOneCallPerFloor() {
+    var tracker = LiveLimitsTracker()
+    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
+
+    var calls = 0
+    for tick in 1...120 {                       // two hours, a tick a minute
+        let now = at(Double(tick))
+        tracker.record(weighted: 50_000)        // always busy
+        if tracker.refreshReason(at: now) != nil {
+            calls += 1
+            tracker.anchored(
+                LimitsAnchor(utilization: 30, observedAt: now, resetsAt: at(300)), at: now
+            )
+        }
+    }
+    #expect(calls == 12)                        // 120 minutes / 10
+}

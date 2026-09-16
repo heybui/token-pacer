@@ -5,7 +5,9 @@ import Foundation
 /// a live machine without launching any UI.
 enum Probe {
     static func run() async {
-        let store = await UsageStore()
+        let store = await UsageStore(
+            usageAPI: ClaudeUsageAPI(token: ClaudeCredentials.tokenProvider)
+        )
         await store.refresh()
 
         for id in SourceID.allCases {

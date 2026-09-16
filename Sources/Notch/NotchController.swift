@@ -5,7 +5,9 @@ import SwiftUI
 @MainActor
 final class NotchController {
     private let model = PillModel()
-    private let store = UsageStore()
+    private let store = UsageStore(
+        usageAPI: ClaudeUsageAPI(token: ClaudeCredentials.tokenProvider)
+    )
     private let panel: NotchPanel
     private let host: PassthroughHostingView<PillRootView>
     private var observers: [NSObjectProtocol] = []

@@ -27,6 +27,23 @@ type Utilization = {
 
 Gating: returns `{}` unless the session is a managed OAuth subscriber holding the `user:profile` scope. API-key users get nothing, so the log-derived fallback still has to exist.
 
+**Keychain access is a user-visible cost.** The item belongs to Claude Code, so macOS prompts the
+first time Burn Tracker reads it — *"BurnTracker wants to use the 'Claude Code-credentials' keychain
+item"* — and the ACL is keyed to the code signature. Consequences:
+
+- **Ad-hoc signing re-prompts on every rebuild.** During development that is constant. A stable
+  Developer ID makes it a single "Always Allow".
+- **No file fallback on macOS.** `~/.claude/.credentials.json` does not exist here; the Keychain is
+  the only source. The file path is still read for installs that have one.
+- **Denial must not be terminal.** A denied prompt, a missing sign-in and an expired token all
+  resolve without any action from this app, so they back off rather than disabling live limits.
+  Only `403` — a scope or plan refusal — stops us asking for good.
+- **The token is read, never refreshed.** The blob carries a refresh token, but spending it rotates
+  the pair and could sign Claude Code itself out. When the token is expired we wait for Claude Code
+  to renew it.
+- Worth evaluating: `claude setup-token` mints a long-lived token intended for external tooling,
+  which would sidestep the Keychain prompt entirely — if it is accepted by this endpoint.
+
 Codex needs no network at all — its rollout logs already carry `rate_limits` with `used_percent`, `window_minutes` and `resets_at`.
 
 ### Network policy — the endpoint is undocumented, treat it as a guest
