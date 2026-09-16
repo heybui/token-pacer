@@ -12,13 +12,6 @@ struct UsageLimitsResponse: Sendable, Equatable {
         let resetsAt: Date?
     }
 
-    struct ExtraUsage: Sendable, Equatable {
-        let isEnabled: Bool
-        let monthlyLimit: Double?
-        let usedCredits: Double?
-        let utilization: Double?
-    }
-
     var windows: [String: Window] = [:]
     var extraUsage: ExtraUsage?
 
@@ -54,7 +47,8 @@ struct UsageLimitsResponse: Sendable, Equatable {
                                 resetsAt: $0.resetsAt ?? observedAt)
             },
             planType: nil,
-            observedAt: observedAt
+            observedAt: observedAt,
+            extra: extraUsage
         )
     }
 }

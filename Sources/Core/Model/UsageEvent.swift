@@ -43,6 +43,15 @@ struct RateLimitWindow: Equatable, Sendable {
     }
 }
 
+/// Pay-as-you-go credits spent past the plan's limits. Absent for accounts that
+/// have never enabled extra usage, which is most of them.
+struct ExtraUsage: Equatable, Sendable {
+    let isEnabled: Bool
+    let monthlyLimit: Double?
+    let usedCredits: Double?
+    let utilization: Double?
+}
+
 struct RateLimits: Equatable, Sendable {
     /// The short window — 300 minutes, the design's "5-hour".
     let primary: RateLimitWindow?
@@ -50,6 +59,7 @@ struct RateLimits: Equatable, Sendable {
     let secondary: RateLimitWindow?
     let planType: String?
     let observedAt: Date
+    var extra: ExtraUsage?
 }
 
 struct SourceSnapshot: Sendable {
