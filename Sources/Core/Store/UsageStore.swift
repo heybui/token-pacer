@@ -6,7 +6,8 @@ import Observation
 @Observable
 final class UsageStore {
     private(set) var snapshots: [SourceID: UsageSnapshot] = [:]
-    private(set) var lastError: String?
+    /// Keyed by source: a healthy source must not erase a broken one's error.
+    private(set) var errors: [SourceID: String] = [:]
     var activeSource: SourceID = .claude
 
     var snapshot: UsageSnapshot? { snapshots[activeSource] }
@@ -77,10 +78,10 @@ final class UsageStore {
                     at: now,
                     weights: weights
                 )
-                lastError = nil
+                errors[source.id] = nil
             } catch {
                 // A missing log directory just means that CLI isn't installed.
-                lastError = "\(source.id.rawValue): \(error.localizedDescription)"
+                errors[source.id] = error.localizedDescription
             }
         }
     }

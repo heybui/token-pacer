@@ -29,7 +29,9 @@ enum Probe {
               ceiling   \(ceiling.weightedTokens.map { String(format: "%.0f", $0) } ?? "unknown") weighted over \(ceiling.observedWindows) completed windows
             """)
         }
-        if let error = await store.lastError { print("error: \(error)") }
+        for (id, message) in await store.errors {
+            print("error \(id.rawValue): \(message)")
+        }
     }
 
     private static func format(_ date: Date) -> String {
