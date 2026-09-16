@@ -7,6 +7,10 @@ struct UsageRing: View {
     let tone: Color
     var size: CGFloat
     var lineWidth: CGFloat
+    /// Sits in the ring's hole. The design carries it on every ring big enough to
+    /// hold it — the 17px pill ring is not, so its figure sits alongside instead.
+    var label: String?
+    var labelSize: CGFloat = 11
 
     var body: some View {
         ZStack {
@@ -15,6 +19,14 @@ struct UsageRing: View {
                 .trim(from: 0, to: (percent ?? 0) / 100)
                 .stroke(tone, style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
                 .rotationEffect(.degrees(-90))
+            if let label {
+                Text(label)
+                    .font(.system(size: labelSize, weight: .medium, design: .monospaced))
+                    .foregroundStyle(tone)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)   // "8.00M" is wider than "45%"
+                    .frame(width: size - lineWidth * 2 - 4)
+            }
         }
         .frame(width: size, height: size)
         .animation(.easeOut(duration: 0.6), value: percent ?? -1)

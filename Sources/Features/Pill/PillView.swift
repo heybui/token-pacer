@@ -76,7 +76,11 @@ struct PillView: View {
 
     private var hoverCard: some View {
         HStack(spacing: 15) {
-            UsageRing(percent: snapshot?.sessionPercent, tone: tone, size: 46, lineWidth: 6)
+            UsageRing(
+                percent: snapshot?.sessionPercent, tone: tone,
+                size: 46, lineWidth: 6,
+                label: isLoading ? nil : headline
+            )
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(statusLine)
