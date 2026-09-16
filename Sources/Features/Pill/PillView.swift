@@ -6,6 +6,10 @@ struct PillView: View {
     /// Non-nil when the last refresh failed. The figure stays; it is marked
     /// unverified rather than hidden.
     var attention: String?
+    /// Cross-source split, drawn only by the pinned panel.
+    var bySource: [UsageSplit] = []
+    var onTogglePinned: () -> Void = {}
+    var onClose: () -> Void = {}
     /// Nil until the first poll lands. On a cold start that reads hundreds of
     /// megabytes it is several seconds, and a fake 0% would be a lie.
     var isLoading: Bool { snapshot == nil }
@@ -45,6 +49,9 @@ struct PillView: View {
             .shadow(color: .black.opacity(0.66), radius: 31, y: 22)
             .opacity(state.opacity)
             .animation(Tokens.spring, value: state)
+            // The panel has its own controls; a tap anywhere inside it would
+            // fight them. Only the small states pin.
+            .onTapGesture { if state != .pinned { onTogglePinned() } }
     }
 
     private var shape: UnevenRoundedRectangle {
@@ -62,6 +69,10 @@ struct PillView: View {
         case .exhausted: exhaustedPill
         case .warning: warningCard
         case .hover: hoverCard
+        case .pinned:
+            PinnedPanelView(
+                snapshot: snapshot, bySource: bySource, attention: attention, onClose: onClose
+            )
         default: collapsed
         }
     }

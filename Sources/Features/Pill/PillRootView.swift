@@ -8,7 +8,10 @@ struct PillRootView: View {
         PillView(
             state: model.state,
             snapshot: store.snapshot,
-            attention: store.errors[store.activeSource]
+            attention: store.errors[store.activeSource],
+            bySource: store.bySource,
+            onTogglePinned: { model.togglePinned() },
+            onClose: { model.setPinned(false) }
         )
             .onHover { inside in
                 // Only fires inside the shell rect, which is how we know

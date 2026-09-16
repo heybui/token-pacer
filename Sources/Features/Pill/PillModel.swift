@@ -23,6 +23,16 @@ final class PillModel {
         state = PillStateResolver.resolve(inputs, at: now)
     }
 
+    /// Clicking the pill pins the panel; ✕ and Esc let it go. Seeing the panel
+    /// acknowledges a warning, exactly as hovering does.
+    func setPinned(_ pinned: Bool, at now: Date = Date()) {
+        inputs.isPinned = pinned
+        if pinned { inputs.warningAcknowledged = true }
+        update(snapshot: inputs.snapshot, at: now)
+    }
+
+    func togglePinned(at now: Date = Date()) { setPinned(!inputs.isPinned, at: now) }
+
     func setPointerInside(_ inside: Bool, at now: Date = Date()) {
         inputs.pointerInside = inside
         update(snapshot: inputs.snapshot, at: now)

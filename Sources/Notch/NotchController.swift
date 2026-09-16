@@ -11,6 +11,9 @@ final class NotchController {
     private let panel: NotchPanel
     private let host: PassthroughHostingView<PillRootView>
     private var observers: [NSObjectProtocol] = []
+    /// Live only while the panel is pinned — Esc has to close it, and nothing
+    /// else in this app takes the keyboard.
+    private var escapeMonitor: Any?
 
     init() {
         let size = PillState.hostSize
@@ -19,7 +22,10 @@ final class NotchController {
         host.frame = NSRect(origin: .zero, size: size)
         panel.contentView = host
 
-        model.onStateChange = { [weak self] state in self?.host.liveSize = state.size }
+        model.onStateChange = { [weak self] state in
+            self?.host.liveSize = state.size
+            self?.setKeyboardActive(state == .pinned)
+        }
         host.liveSize = model.state.size
 
         observe()
@@ -41,6 +47,27 @@ final class NotchController {
             forName: NSWorkspace.activeSpaceDidChangeNotification,
             object: nil, queue: .main
         ) { [weak self] _ in MainActor.assumeIsolated { self?.reanchor() } })
+    }
+
+    /// A non-activating panel never sees a keystroke unless it is key, and it
+    /// cannot become key while another app is frontmost. Activating is the cost
+    /// of Esc; focus goes back the moment the panel closes.
+    private func setKeyboardActive(_ active: Bool) {
+        guard active != (escapeMonitor != nil) else { return }
+        if active {
+            NSApp.activate()
+            panel.makeKeyAndOrderFront(nil)
+            escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard event.keyCode == 53 else { return event }   // Esc
+                self?.model.setPinned(false)
+                return nil
+            }
+        } else {
+            escapeMonitor.map(NSEvent.removeMonitor)
+            escapeMonitor = nil
+            NSApp.deactivate()
+            panel.orderFrontRegardless()
+        }
     }
 
     private func reanchor() {

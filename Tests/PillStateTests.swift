@@ -118,3 +118,50 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     model.update(snapshot: snapshot(percent: 95), at: now)    // and filled again
     #expect(model.state == .warning)
 }
+
+/// "Stays expanded until you mouse over it once" — opening the panel counts too,
+/// otherwise the warning re-fires the moment the panel closes.
+@MainActor
+@Test func pinningAcknowledgesTheWarningLikeHoverDoes() {
+    let model = PillModel()
+    model.update(snapshot: snapshot(percent: 95), at: now)
+    #expect(model.state == .warning)
+
+    model.setPinned(true, at: now)
+    #expect(model.state == .pinned)
+
+    model.setPinned(false, at: now)
+    #expect(model.state == .collapsed)
+}
+
+// MARK: - panel formatting
+
+@Test func historyBlocksFillProportionally() {
+    #expect(Format.blocks(0) == "░░░░░░░░░░")
+    #expect(Format.blocks(100) == "██████████")
+    #expect(Format.blocks(64) == "██████░░░░")
+    // Never overruns, whatever the input.
+    #expect(Format.blocks(140).count == 10)
+    #expect(Format.blocks(-5) == "░░░░░░░░░░")
+}
+
+@Test func historyLabelsNameTheDayThenCountBack() {
+    var utc = Calendar(identifier: .gregorian)
+    utc.timeZone = TimeZone(identifier: "UTC")!
+    let yesterday = now.addingTimeInterval(-24 * 3600)
+
+    #expect(Format.historyLabel(now, compact: false, from: now, calendar: utc) == "today")
+    #expect(Format.historyLabel(yesterday, compact: false, from: now, calendar: utc) == "D-01")
+    #expect(Format.historyLabel(yesterday, compact: true, from: now, calendar: utc).count == 3)
+}
+
+@Test func spendProjectionScalesTheMonthElapsed() {
+    var utc = Calendar(identifier: .gregorian)
+    utc.timeZone = TimeZone(identifier: "UTC")!
+    // 15 January, $150 spent: half the month gone, $310 for a 31-day month.
+    let midJanuary = utc.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+    #expect(Format.projection(used: 150, now: midJanuary, calendar: utc)
+        == "projected $310 by month end")
+    #expect(Format.projection(used: 0, now: midJanuary, calendar: utc)
+        == "no spend yet this month")
+}

@@ -43,6 +43,44 @@ enum Format {
         value.map { "\(Int($0.rounded()))%" } ?? "--"
     }
 
+    /// "Mon 09:00" — the weekly cap resets on a schedule, so name the day.
+    static func weekday(_ date: Date) -> String {
+        date.formatted(.dateTime.weekday(.abbreviated).hour(.twoDigits(amPM: .omitted)).minute())
+    }
+
+    /// Weekday for the 7-day strip, countdown-style for the 30-day one, where
+    /// seven repeating weekday names would tell you nothing.
+    static func historyLabel(_ day: Date, compact: Bool, from now: Date = Date(),
+                             calendar: Calendar = .current) -> String {
+        if compact { return day.formatted(.dateTime.weekday(.abbreviated)) }
+        let days = calendar.dateComponents(
+            [.day], from: calendar.startOfDay(for: day), to: calendar.startOfDay(for: now)
+        ).day ?? 0
+        return days == 0 ? "today" : "D-\(String(format: "%02d", days))"
+    }
+
+    /// The design's ten-block bar, drawn in monospace text rather than geometry.
+    static func blocks(_ percent: Double, count: Int = 10) -> String {
+        let filled = min(count, max(0, Int((percent / 100 * Double(count)).rounded())))
+        return String(repeating: "█", count: filled)
+            + String(repeating: "░", count: count - filled)
+    }
+
+    static func dollars(_ value: Double?) -> String {
+        value.map { "$\(Int($0.rounded()))" } ?? "—"
+    }
+
+    /// Straight-line: spend so far over the month elapsed. Says "projected"
+    /// because a quiet week would make a liar of it.
+    static func projection(used: Double?, now: Date = Date(), calendar: Calendar = .current) -> String {
+        guard let used, used > 0,
+              let month = calendar.range(of: .day, in: .month, for: now)
+        else { return "no spend yet this month" }
+        let elapsed = max(1, calendar.component(.day, from: now))
+        let projected = used / Double(elapsed) * Double(month.count)
+        return "projected \(dollars(projected)) by month end"
+    }
+
     /// Shown instead of a percentage until a ceiling has been observed.
     static func tokens(_ count: Int) -> String {
         switch count {
