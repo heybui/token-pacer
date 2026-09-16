@@ -5,6 +5,12 @@ if CommandLine.arguments.contains("--probe") {
     exit(0)
 }
 
+// One pill in the notch, always. A second copy would draw over the first.
+guard SingleInstance.acquire() else {
+    FileHandle.standardError.write(Data("Burn Tracker is already running.\n".utf8))
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
