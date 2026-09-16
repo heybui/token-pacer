@@ -37,8 +37,12 @@ struct PillView: View {
             .background(.black, in: shape)
             .overlay { shape.strokeBorder(state == .collapsed ? Tokens.shellRingIdle : Tokens.shellRingOpen, lineWidth: 1) }
             .clipShape(shape)
-            .opacity(state.opacity)
+            // Without this the shadow is cast from the unclipped rectangular
+            // bounds, so the square corners show through where the rounded ones
+            // cut away. Flattening first makes the shadow follow the real shape.
+            .compositingGroup()
             .shadow(color: .black.opacity(0.66), radius: 31, y: 22)
+            .opacity(state.opacity)
             .animation(Tokens.spring, value: state)
     }
 
