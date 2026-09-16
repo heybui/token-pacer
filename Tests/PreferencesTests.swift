@@ -50,7 +50,8 @@ private func defaults() -> UserDefaults {
     #expect(Preferences(store: store).isDefault)
 }
 
-/// A hand-edited plist must not be able to invert the scale.
+/// The scale clamps as you drag, but the stored values are the last line of
+/// defence — a hand-edited plist must not be able to invert the rule.
 @MainActor
 @Test func invertedThresholdsAreClampedNotObeyed() {
     let preferences = Preferences(store: defaults())

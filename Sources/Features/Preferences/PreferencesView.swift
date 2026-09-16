@@ -11,14 +11,7 @@ struct PreferencesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             group("Alerts") {
-                row("Warn at") {
-                    ThresholdSlider(value: $preferences.warnAt, range: 50...95,
-                                    tone: Tokens.amber)
-                }
-                row("Critical at") {
-                    ThresholdSlider(value: $preferences.criticalAt, range: 60...100,
-                                    tone: Tokens.red)
-                }
+                ThresholdScale(warn: $preferences.warnAt, critical: $preferences.criticalAt)
                 row("Sound on threshold") {
                     Toggle("", isOn: $preferences.soundOnThreshold).labelsHidden()
                 }
@@ -90,21 +83,114 @@ struct PreferencesView: View {
     }
 }
 
-/// A slider that shows the figure it is setting; a bare handle says nothing.
-private struct ThresholdSlider: View {
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    let tone: Color
+/// Both thresholds on the one scale they actually divide.
+///
+/// Two separate sliders made the user hold the rule in their head and could be
+/// set to contradict each other. One 0–100 track, coloured green/amber/red by the
+/// handles themselves, *is* the rule — and warn simply cannot pass critical,
+/// because the drag clamps rather than the settings correcting it afterwards.
+private struct ThresholdScale: View {
+    @Binding var warn: Double
+    @Binding var critical: Double
+
+    /// One point apart at the closest: a zero-width amber band is a rule with a
+    /// step in it that nobody can see.
+    private let minimumGap: Double = 1
+    private let track: CGFloat = 8
+    private let knob: CGFloat = 16
+
+    private enum Handle { case warn, critical }
+    @State private var dragging: Handle?
 
     var body: some View {
-        HStack(spacing: 12) {
-            Slider(value: $value, in: range, step: 1)
-                .frame(width: 170)
-                .tint(tone)
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(spacing: 0) {
+                legend("Warn", warn, Tokens.amber)
+                Spacer(minLength: 12)
+                legend("Critical", critical, Tokens.red)
+            }
+
+            GeometryReader { geometry in
+                let width = geometry.size.width
+
+                ZStack(alignment: .leading) {
+                    HStack(spacing: 0) {
+                        Tokens.green.frame(width: x(warn, in: width))
+                        Tokens.amber.frame(width: x(critical - warn, in: width))
+                        Tokens.red
+                    }
+                    .frame(height: track)
+                    .clipShape(Capsule())
+
+                    handle(at: warn, in: width)
+                    handle(at: critical, in: width)
+                }
+                .frame(height: knob, alignment: .center)
+                .contentShape(Rectangle())
+                .gesture(drag(in: width))
+            }
+            .frame(height: knob)
+
+            HStack {
+                Text("0%")
+                Spacer()
+                Text("100%")
+            }
+            .font(Typography.mono(9.5))
+            .foregroundStyle(.white.opacity(0.3))
+        }
+        // VoiceOver gets two ordinary sliders; the painted track is for the eye.
+        .accessibilityRepresentation {
+            VStack {
+                Slider(value: $warn, in: 0...max(0, critical - minimumGap), step: 1) {
+                    Text("Warn at")
+                }
+                Slider(value: $critical, in: min(100, warn + minimumGap)...100, step: 1) {
+                    Text("Critical at")
+                }
+            }
+        }
+    }
+
+    private func legend(_ title: String, _ value: Double, _ tone: Color) -> some View {
+        HStack(spacing: 7) {
+            Text(title)
+                .font(Typography.sans(12.5))
+                .foregroundStyle(.white.opacity(0.85))
             Text("\(Int(value))%")
                 .font(Typography.mono(11.5))
                 .foregroundStyle(tone)
-                .frame(width: 34, alignment: .trailing)
         }
+    }
+
+    private func handle(at value: Double, in width: CGFloat) -> some View {
+        Circle()
+            .fill(.white)
+            .overlay { Circle().strokeBorder(.black.opacity(0.25), lineWidth: 0.5) }
+            .frame(width: knob, height: knob)
+            .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
+            .offset(x: x(value, in: width) - knob / 2)
+    }
+
+    private func x(_ value: Double, in width: CGFloat) -> CGFloat {
+        width * min(1, max(0, value / 100))
+    }
+
+    /// Whichever handle is nearer takes the drag, so the whole track is a target
+    /// rather than two 16pt circles.
+    private func drag(in width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { gesture in
+                let percent = min(100, max(0, Double(gesture.location.x / width) * 100)).rounded()
+                let handle = dragging
+                    ?? (abs(percent - warn) <= abs(percent - critical) ? .warn : .critical)
+                dragging = handle
+
+                switch handle {
+                case .warn: warn = min(percent, critical - minimumGap)
+                case .critical: critical = max(percent, warn + minimumGap)
+                }
+            }
+            .onEnded { _ in dragging = nil }
     }
 }
