@@ -195,14 +195,19 @@ struct PillView: View {
                         .font(Typography.sans(13, .semibold))
                         .foregroundStyle(.white)
                     Spacer(minLength: 14)
-                    HStack(spacing: 4) {
-                        OdometerText(
-                            text: Format.countdown(to: snapshot?.resetsAt),
-                            size: 11.5, color: .white.opacity(0.5), weight: .regular
-                        )
-                        Text("left")
-                            .font(Typography.mono(11.5))
-                            .foregroundStyle(.white.opacity(0.5))
+                    HStack(spacing: 7) {
+                        // Carried over from the collapsed pill: the countdown keeps
+                        // its activity dot when the shell grows.
+                        PulsingDot(color: tone, isPulsing: snapshot?.isBurning == true)
+                        HStack(spacing: 4) {
+                            OdometerText(
+                                text: Format.countdown(to: snapshot?.resetsAt),
+                                size: 11.5, color: .white.opacity(0.5), weight: .regular
+                            )
+                            Text("left")
+                                .font(Typography.mono(11.5))
+                                .foregroundStyle(.white.opacity(0.5))
+                        }
                     }
                 }
 
