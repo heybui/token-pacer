@@ -269,7 +269,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 1.5 | **Live limits** — OAuth usage endpoint, Keychain, calibration, 10-min activity-gated polling, attention badge, single-instance guard | ✅ done (unplanned; see §0) |
 | 2 | Design system + the remaining pill states + spring morph | ✅ done |
 | 3 | Warning auto-expand, pinned panel, context menu | ✅ done |
-| 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ⬜ not started |
+| 4 | Preferences, notifications, launch at login, pause-survives-relaunch | 🔨 persistence done; prefs, notifications, launch-at-login left |
 | 5 | Source switcher in the pill + prefs (Claude / Codex / combined) | ⬜ not started |
 | 6 | Notarized DMG, Sparkle feed, Homebrew cask | ⬜ not started |
 
@@ -281,17 +281,20 @@ found later. It absorbed most of the time since phase 1.
 
 - **⌘⇧B** — the design's global shortcut for the panel. Needs a real hotkey
   registration, which belongs with Preferences in phase 4.
-- **Nothing survives a relaunch.** One gap, three symptoms, and phase 4 should fix
-  them together rather than one at a time:
-  - **Calibration never accumulates.** `LiveLimitsTracker` lives in memory, so
-    every launch starts from zero anchors — during development, where a rebuild
-    kills the app every few minutes, `weightedPerPercent` can never be measured.
-    `samples=0` on every run so far is this, not a bug in the calibration.
-  - **A relaunch jumps the 10-minute floor**, because `lastCallAt` goes with it.
-    Politeness to an undocumented endpoint should not depend on uptime.
-  - **Pause, and the 8s cold start** — `BucketArchive` was always the answer to
-    §4.1, and it is the same piece of work: one archive holding cursors,
-    aggregates, calibration, the last call time and the paused flag.
+- ~~**Nothing survives a relaunch.**~~ ✅ fixed: one archive, two files — `state.json` for the
+  limits state, `events.json` for events and cursors. What it closed:
+  - Calibration accumulates across launches, so `weightedPerPercent` is finally
+    reachable — `samples=0` on every earlier run was the tracker restarting, not
+    the calibration failing.
+  - The 10-minute floor survives, so a relaunch no longer jumps the queue.
+  - Pause survives.
+  - The cold start: 4171ms → 305ms (§4.1).
+  - It also uncovered a latent bug worth remembering: a cold start replays every
+    retained event, and counting that as "usage since the anchor"
+    (`weighted=527694804` in the log) would have taught calibration a conversion
+    out by orders of magnitude the moment two anchors survived together. Only
+    events newer than the anchor count, and the running total is deliberately
+    not archived.
 - **By surface** — the design's third split. Nothing local can tell claude.ai from
   the web app, so it splits by CLI instead; revisit if the endpoint ever says.
 - **History is relative.** The grid shades each day against the busiest in range;
@@ -350,7 +353,13 @@ found later. It absorbed most of the time since phase 1.
 
 `--probe` against this machine: Claude 10,618 events / 49 completed windows, Codex 4,315 events / 23 windows.
 
-- **Cold start reads 707MB** (309MB `~/.claude` + 398MB `~/.codex`) in ~8s at 100% CPU. It is I/O bound, not decode bound — adding a byte prefilter before `JSONDecoder` changed nothing. Incremental polls after that are nearly free, since cursors only read appended bytes. **The fix is persistence, not parsing:** `BucketArchive` in phase 3 must save cursors *and* aggregates so a relaunch never re-reads history. Until then, the first snapshot lands ~8s after launch and the pill must show a loading state rather than a fake 0%.
+- ~~**Cold start reads 707MB**~~ ✅ fixed in phase 4. It was I/O bound, not decode bound — a byte
+  prefilter before `JSONDecoder` changed nothing — so the fix was persistence, not parsing. The
+  archive keeps the events *and* each file's byte offset, so only appended bytes are read.
+  Measured on this machine, 714MB across 544 files: **4171ms over 17,354 events → 305ms**, of which
+  114ms is reading the 4.5MB archive. Raw events rather than the planned buckets, so windows, burn
+  rate, splits and the ceiling keep their exact fidelity and nothing downstream changed.
+  The loading state stays: the first read is still not instant, and a fake 0% would still be a lie.
 - **Outliers dominate the inferred ceiling.** Max-observed put Claude's ceiling at 32.4M weighted tokens, so a normal window reads ~4%. One unusually heavy day permanently flattens every later reading. Candidate fixes: a high percentile (p95) of completed windows instead of the max, or the max of the trailing N windows so the ceiling can decay. Needs a decision before the percentage is trustworthy.
 
 ## 5. Standing risks
