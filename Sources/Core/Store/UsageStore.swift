@@ -126,24 +126,41 @@ final class UsageStore {
         tracker.record(weighted: weightedDelta)
         defer { trackers[id] = tracker }
 
-        guard tracker.refreshReason(at: now) != nil else { return }
+        let waited = Int(now.timeIntervalSince(tracker.lastCallAt ?? now))
+        guard let reason = tracker.refreshReason(at: now) else {
+            Log.usage.debug("skip \(id.rawValue, privacy: .public) activity=\(tracker.hasNewActivity, privacy: .public) waited=\(waited, privacy: .public)s")
+            return
+        }
+
+        Log.usage.info("request \(id.rawValue, privacy: .public) reason=\(String(describing: reason), privacy: .public) waited=\(waited, privacy: .public)s weighted=\(Int(tracker.weightedSinceAnchor), privacy: .public)")
+        let started = Date()
 
         do {
             let response = try await usageAPI.fetch()
+            let ms = Int(Date().timeIntervalSince(started) * 1000)
+
             guard let anchor = response.anchor(observedAt: now) else {
                 // `{}` means this account has nothing to report — an API key, or a
                 // token without `user:profile`. Stop asking; inference takes over.
+                Log.usage.notice("empty \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms, falling back to inference")
                 limitsDisabled.insert(id)
                 return
             }
             tracker.anchored(anchor, at: now)
             liveLimits[id] = response.rateLimits(observedAt: now)
             errors[id] = Self.simulatedError
+
+            let windows = response.windows.keys.sorted().joined(separator: ",")
+            let perPercent = Int(tracker.calibration.weightedPerPercent ?? 0)
+            Log.usage.info("ok \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms session=\(anchor.utilization, privacy: .public)% weekly=\(response.weekly?.utilization ?? -1, privacy: .public)% windows=[\(windows, privacy: .public)] perPercent=\(perPercent, privacy: .public) samples=\(tracker.calibration.samples, privacy: .public)")
         } catch {
             tracker.failed(at: now)
             let failure = error as? UsageAPIError
             if failure?.isFatal == true { limitsDisabled.insert(id) }
             errors[id] = failure?.message ?? error.localizedDescription
+
+            let ms = Int(Date().timeIntervalSince(started) * 1000)
+            Log.usage.error("failed \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms error=\(String(describing: failure), privacy: .public) fatal=\(failure?.isFatal == true, privacy: .public) failures=\(tracker.consecutiveFailures, privacy: .public)")
         }
     }
 

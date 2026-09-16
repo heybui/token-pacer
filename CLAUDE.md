@@ -21,6 +21,7 @@ macOS notch usage tracker. See `PLAN.md` for architecture and phases.
 
 ## Code
 
-- `Sources/Core/` imports Foundation only — no SwiftUI, no AppKit. That constraint is what keeps the engine testable and the usage sources swappable.
+- `Sources/Core/` imports Foundation and `os` only — no SwiftUI, no AppKit. That constraint is what keeps the engine testable and the usage sources swappable; `os.Logger` is infrastructure, not a UI framework, so it does not break it.
+- Logging is `os.Logger` via `Log`, never `print`: a bundled app launched from Finder has nowhere to send stdout. Mark safe values `.public` — `os_log` redacts dynamic values otherwise — and never log a token.
 - Design tokens and the tone rule (green <75, amber 75–90, red >90) live in `DesignSystem/Tokens.swift`. One place, no exceptions.
 - Shell dimensions come from the design board and belong in `PillState`, never inline in a view.
