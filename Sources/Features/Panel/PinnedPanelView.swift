@@ -166,47 +166,23 @@ struct PinnedPanelView: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    private var historyRows: [DayUsage] {
-        showAllHistory ? panel.history : Array(panel.history.suffix(7))
-    }
-
     private var history: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(historyLabel)
-                    .font(Typography.sans(11))
-                    .foregroundStyle(.white.opacity(0.4))
-                Spacer(minLength: 0)
-                Button(showAllHistory ? "Show 7" : "Show all 30") {
-                    showAllHistory.toggle()
-                }
-                .buttonStyle(.plain)
-                .font(Typography.sans(10.5))
-                .foregroundStyle(Tokens.amber)
-            }
-            ScrollView(showAllHistory ? .vertical : []) {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(historyRows) { day in
-                        HistoryRow(day: day, label: Format.historyLabel(day.day, compact: !showAllHistory))
-                    }
-                }
-            }
-            // A scroller bar over a black panel reads as damage; the rows that
-            // run past the edge are the affordance.
-            .scrollIndicators(.hidden)
-            .frame(maxHeight: .infinity, alignment: .top)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(historyLabel)
+                .font(Typography.sans(11))
+                .foregroundStyle(.white.opacity(0.4))
+            HistoryHeatmap(days: panel.history)
         }
     }
 
-    /// The share is of the busiest day in range, so the average is only ever a
-    /// relative figure — it says how even the fortnight was, not how full it was.
+    /// The grid is relative to the busiest day in range: no daily cap exists to
+    /// be a percentage of, so the darkest square is the peak, not "full".
     private var historyLabel: String {
         let rows = panel.history
-        guard !rows.isEmpty else { return "No history yet" }
-        let average = Int((rows.map(\.percent).reduce(0, +) / Double(rows.count)).rounded())
-        return showAllHistory
-            ? "Last 30 days · avg \(average)% of peak"
-            : "Last 7 days · 30-day avg \(average)% of peak"
+        guard let peak = rows.max(by: { $0.weighted < $1.weighted }), peak.weighted > 0 else {
+            return "No history yet"
+        }
+        return "Last \(rows.count) days · busiest \(Format.day(peak.day))"
     }
 }
 
@@ -274,22 +250,107 @@ private struct SplitColumn: View {
     }
 }
 
-private struct HistoryRow: View {
-    let day: DayUsage
-    let label: String
+/// A calendar grid rather than a list: one square per day, one column per week.
+/// A quarter fits in the space seven rows took, and the shape of a fortnight is
+/// visible at a glance where a list only ever showed the last seven days.
+private struct HistoryHeatmap: View {
+    let days: [DayUsage]
+    var cell: CGFloat = 15
+    var gap: CGFloat = 4
+
+    private var calendar: Calendar { .current }
+
+    private struct Week: Identifiable {
+        let id: Date
+        /// Seven slots from the week's first day; nil where the range starts or
+        /// ends mid-week.
+        let days: [DayUsage?]
+    }
+
+    private var weeks: [Week] {
+        let grouped = Dictionary(grouping: days) { weekStart(of: $0.day) }
+        return grouped.keys.sorted().map { start in
+            let week = grouped[start] ?? []
+            return Week(id: start, days: (0..<7).map { row in
+                week.first { self.row(of: $0.day) == row }
+            })
+        }
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text(label)
-                .foregroundStyle(.white.opacity(0.38))
-                .frame(width: 48, alignment: .leading)
-            Text(Format.blocks(day.percent))
-                .tracking(0.55)
-                .foregroundStyle(Tokens.tone(day.percent))
-            Text(Format.percent(day.percent))
-                .foregroundStyle(.white.opacity(0.52))
+        HStack(alignment: .top, spacing: gap) {
+            weekdayLabels
+            VStack(alignment: .leading, spacing: 4) {
+                monthLabels
+                HStack(spacing: gap) {
+                    ForEach(weeks) { week in
+                        VStack(spacing: gap) {
+                            ForEach(Array(week.days.enumerated()), id: \.offset) { _, day in
+                                square(day)
+                            }
+                        }
+                    }
+                }
+            }
         }
-        .font(Typography.mono(11))
+    }
+
+    private func square(_ day: DayUsage?) -> some View {
+        RoundedRectangle(cornerRadius: 3)
+            .fill(fill(day))
+            .frame(width: cell, height: cell)
+            .help(day.map { "\(Format.day($0.day)) · \(Format.percent($0.percent)) of peak" } ?? "")
+    }
+
+    /// Empty days keep the track colour: a quiet day is not a faint busy one.
+    private func fill(_ day: DayUsage?) -> Color {
+        guard let day, day.percent > 0 else { return .white.opacity(0.06) }
+        return Tokens.tone(day.percent).opacity(0.35 + 0.65 * min(1, day.percent / 100))
+    }
+
+    private var weekdayLabels: some View {
+        VStack(spacing: gap) {
+            ForEach(0..<7, id: \.self) { row in
+                Text(row % 2 == 1 ? weekdayName(row) : "")
+                    .font(Typography.mono(9))
+                    .foregroundStyle(.white.opacity(0.3))
+                    .frame(width: 22, height: cell, alignment: .leading)
+            }
+        }
+        // Clears the month strip above the grid.
+        .padding(.top, 15)
+    }
+
+    /// Named where the month turns, so thirteen identical columns can be placed.
+    private var monthLabels: some View {
+        HStack(spacing: gap) {
+            ForEach(Array(weeks.enumerated()), id: \.element.id) { index, week in
+                Text(startsNewMonth(index) ? week.id.formatted(.dateTime.month(.abbreviated)) : "")
+                    .font(Typography.mono(9))
+                    .foregroundStyle(.white.opacity(0.3))
+                    .fixedSize()
+                    .frame(width: cell, height: 11, alignment: .leading)
+            }
+        }
+    }
+
+    private func startsNewMonth(_ index: Int) -> Bool {
+        guard index > 0 else { return true }
+        return calendar.component(.month, from: weeks[index].id)
+            != calendar.component(.month, from: weeks[index - 1].id)
+    }
+
+    private func weekdayName(_ row: Int) -> String {
+        let index = (calendar.firstWeekday - 1 + row) % 7
+        return String(calendar.shortWeekdaySymbols[index].prefix(3))
+    }
+
+    private func weekStart(of date: Date) -> Date {
+        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+    }
+
+    private func row(of date: Date) -> Int {
+        (calendar.component(.weekday, from: date) - calendar.firstWeekday + 7) % 7
     }
 }
 
@@ -303,9 +364,14 @@ private struct SpendCell: View {
             Text("Extra usage · month to date")
                 .font(Typography.sans(11))
                 .foregroundStyle(.white.opacity(0.4))
-            OdometerText(text: Format.money(spend.used), size: 22, color: .white)
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Text(spend.used.currency)
+                    .font(Typography.mono(11))
+                    .foregroundStyle(.white.opacity(0.5))
+                OdometerText(text: Format.amount(spend.used), size: 22, color: .white)
+            }
             if let limit = spend.limit {
-                Text("of \(Format.money(limit)) budget")
+                Text("of \(Format.amount(limit)) budget")
                     .font(Typography.sans(11.5))
                     .foregroundStyle(.white.opacity(0.44))
             }

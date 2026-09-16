@@ -42,13 +42,15 @@ enum Aggregator {
     static let bucketSeconds: TimeInterval = 300
     /// The design's three rows per split.
     static let splitRows = 3
+    /// A calendar grid makes a quarter legible in the space a week's list took.
+    static let historyDays = 90
 
     static func panel(
         events: [UsageEvent],
         window: SessionWindow?,
         at now: Date,
         weights: TokenWeights = .default,
-        historyDays: Int = 30,
+        historyDays: Int = historyDays,
         calendar: Calendar = .current
     ) -> PanelData {
         // Splits describe the window on screen. With no window open there is

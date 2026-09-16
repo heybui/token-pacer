@@ -35,8 +35,8 @@ final class UsageStore {
     private(set) var bySource: [UsageSplit] = []
     private var pump: Task<Void, Never>?
 
-    /// Raw events are kept only long enough to serve the 30-day history.
-    private static let retention: TimeInterval = 30 * 24 * 3600
+    /// Raw events are kept only long enough to serve the history grid.
+    private static let retention = TimeInterval(Aggregator.historyDays) * 24 * 3600
 
     /// `usageAPI` is injected rather than defaulted: it is backed by the Keychain,
     /// which lives outside Core.

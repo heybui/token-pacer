@@ -19,26 +19,17 @@ enum Format {
         date.formatted(.dateTime.weekday(.abbreviated).hour(.twoDigits(amPM: .omitted)).minute())
     }
 
-    /// Weekday over a week, where every name is distinct; the date itself over a
-    /// month, where seven repeating weekday names would tell you nothing.
-    static func historyLabel(_ day: Date, compact: Bool) -> String {
-        compact
-            ? day.formatted(.dateTime.weekday(.abbreviated))
-            : day.formatted(.dateTime.month(.abbreviated).day(.twoDigits))
+    /// "Sep 03" — one day of the history grid.
+    static func day(_ date: Date) -> String {
+        date.formatted(.dateTime.month(.abbreviated).day(.twoDigits))
     }
 
-    /// The design's ten-block bar, drawn in monospace text rather than geometry.
-    static func blocks(_ percent: Double, count: Int = 10) -> String {
-        let filled = min(count, max(0, Int((percent / 100 * Double(count)).rounded())))
-        return String(repeating: "█", count: filled)
-            + String(repeating: "░", count: count - filled)
-    }
-
-    /// The endpoint names its currency, so the figure is never assumed to be
-    /// dollars — and never printed straight from the minor units.
-    static func money(_ money: Money?) -> String {
+    /// The amount alone, at the currency's own precision. The code is shown once
+    /// beside it rather than repeated on every figure, where a mono space makes
+    /// "SGD  11,99" read as two separate numbers.
+    static func amount(_ money: Money?) -> String {
         guard let money else { return "—" }
-        return money.amount.formatted(.currency(code: money.currency))
+        return money.amount.formatted(.number.precision(.fractionLength(money.exponent)))
     }
 
     /// Straight-line: spend so far over the month elapsed. Says "projected"
@@ -52,7 +43,7 @@ enum Format {
         projected.amountMinor = Int(
             (Double(used.amountMinor) / Double(elapsed) * Double(month.count)).rounded()
         )
-        return "projected \(self.money(projected)) by month end"
+        return "projected \(amount(projected)) by month end"
     }
 
     /// What "Copy usage summary" puts on the clipboard: two lines, no jargon,

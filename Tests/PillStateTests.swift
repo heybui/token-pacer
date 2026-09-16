@@ -136,19 +136,14 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 
 // MARK: - panel formatting
 
-@Test func historyBlocksFillProportionally() {
-    #expect(Format.blocks(0) == "░░░░░░░░░░")
-    #expect(Format.blocks(100) == "██████████")
-    #expect(Format.blocks(64) == "██████░░░░")
-    // Never overruns, whatever the input.
-    #expect(Format.blocks(140).count == 10)
-    #expect(Format.blocks(-5) == "░░░░░░░░░░")
-}
-
-@Test func historyLabelsNameTheWeekdayOverAWeekAndTheDateOverAMonth() {
-    // A month of "Mon, Tue, Wed…" repeats four times over and says nothing.
-    #expect(Format.historyLabel(now, compact: true).count == 3)
-    #expect(Format.historyLabel(now, compact: false).contains { $0.isNumber })
+/// The exponent is the currency's, not two by convention: 1199 yen is 1199 yen.
+@Test func amountsAreShownAtTheirCurrencysPrecision() {
+    #expect(Format.amount(Money(amountMinor: 1199, currency: "SGD", exponent: 2))
+        .contains("11"))
+    #expect(Format.amount(Money(amountMinor: 1199, currency: "JPY", exponent: 0))
+        == "1.199" || Format.amount(Money(amountMinor: 1199, currency: "JPY", exponent: 0))
+        == "1,199")
+    #expect(Format.amount(nil) == "—")
 }
 
 @Test func spendProjectionScalesTheMonthElapsed() {
@@ -159,8 +154,9 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     let spent = Money(amountMinor: 1199, currency: "SGD", exponent: 2)
 
     let projected = Format.projection(used: spent, now: midJanuary, calendar: utc)
-    #expect(projected.contains("24"))          // 1199 / 15 × 31 = 2478 minor units
-    #expect(projected.contains("SGD"))         // never assumed to be dollars
+    // 1199 / 15 × 31 = 2478 minor units, shown at the currency's precision.
+    #expect(projected.contains("24"))
+    #expect(projected.hasPrefix("projected"))
     #expect(Format.projection(used: nil, now: midJanuary, calendar: utc)
         == "no spend yet this month")
 }
