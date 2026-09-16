@@ -230,6 +230,22 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
     #expect(headroom > 0 && headroom < 300)
 }
 
+/// What the probe showed on a live machine: 0.3% used, a fresh window, and
+/// "~269 min headroom" — a half-hour burst projected across nearly five hours.
+/// It fitted inside the window, so the only guard let it through.
+@Test func headroomIsNotProjectedBeyondItsOwnSample() {
+    let now = t0.addingTimeInterval(600)
+    // The probe's figures: ~4.25M weighted/hr against a calibrated 190k a point.
+    let events = [event(0.49, output: 212_500), event(0.01, output: 212_500)]
+    let rate = BurnRateCalculator.rate(
+        events: events, window: nil, ceiling: .unknown, at: now,
+        currentPercent: 0.3, weightedPerPercent: 190_000,
+        windowEndsAt: now.addingTimeInterval(298 * 60)   // room to spare
+    )
+    #expect(rate.headroomMinutes == nil)
+    #expect(rate.percentPerHour != nil)
+}
+
 /// The calibrated conversion is measured against the real limit; the ceiling is
 /// only ever inferred. When both exist the calibration wins.
 @Test func calibrationBeatsTheInferredCeiling() {

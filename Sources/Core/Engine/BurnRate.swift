@@ -15,6 +15,14 @@ struct BurnRate: Equatable, Sendable {
 enum BurnRateCalculator {
     static let sample: TimeInterval = 30 * 60
 
+    /// How far a rate measured over `sample` may be projected.
+    ///
+    /// Four times the sample. Past that the figure is arithmetic rather than
+    /// information: at 0.3% used it reported 269 minutes — a half-hour burst
+    /// extrapolated across nearly the whole window, which no session sustains.
+    /// Headroom is for the stretch where it changes what you do next.
+    static let horizon: TimeInterval = 4 * sample
+
     /// - Parameters:
     ///   - currentPercent: the figure actually on screen, authoritative when the
     ///     endpoint supplied it. Headroom must agree with what the user is reading.
@@ -57,13 +65,11 @@ enum BurnRateCalculator {
         // Past the reset the window refills, so "you run out in N minutes" is only
         // true while N fits inside the window. Otherwise there is no headroom
         // figure to give — you simply do not run out this time.
-        if let windowEndsAt {
-            let minutesToReset = windowEndsAt.timeIntervalSince(now) / 60
-            guard minutesToEmpty < minutesToReset else {
-                return BurnRate(
-                    weightedPerHour: perHour, percentPerHour: percentPerHour, headroomMinutes: nil
-                )
-            }
+        let ceilingOnAnswer = min(horizon / 60, windowEndsAt.map { $0.timeIntervalSince(now) / 60 } ?? .infinity)
+        guard minutesToEmpty < ceilingOnAnswer else {
+            return BurnRate(
+                weightedPerHour: perHour, percentPerHour: percentPerHour, headroomMinutes: nil
+            )
         }
 
         return BurnRate(
