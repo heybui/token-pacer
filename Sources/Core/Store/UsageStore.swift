@@ -29,6 +29,10 @@ final class UsageStore {
     /// Exposed: an unconfident ceiling is why the pill shows raw tokens instead
     /// of a percentage.
     private(set) var ceilings: [SourceID: Ceiling] = [:]
+    /// Which CLI the tokens went through, across every source. The per-source
+    /// splits live on the snapshot; this one is the only figure that needs all
+    /// of them at once.
+    private(set) var bySource: [UsageSplit] = []
     private var pump: Task<Void, Never>?
 
     /// Raw events are kept only long enough to serve the 30-day history.
@@ -116,6 +120,12 @@ final class UsageStore {
                 errors[source.id] = error.localizedDescription
             }
         }
+
+        // One 5-hour slice across sources: their windows start independently, so
+        // the clock is the only span both can be measured over.
+        let recent = events.values.flatMap { $0 }
+            .filter { $0.timestamp > now.addingTimeInterval(-5 * 3600) }
+        bySource = Aggregator.shares(recent, weights: weights) { $0.source.displayName }
     }
 
     /// Asks the usage endpoint only when the tracker says it is worth it.

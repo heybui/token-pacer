@@ -32,6 +32,8 @@ struct UsageSnapshot: Equatable, Sendable {
     var confirmedAt: Date?
     var lastActivity: Date?
     var planType: String?
+    /// Sparkline, splits and history. Only the pinned panel reads it.
+    var panel: PanelData = .empty
 
     static func empty(_ source: SourceID) -> UsageSnapshot { UsageSnapshot(source: source) }
 }
@@ -82,6 +84,10 @@ enum SnapshotBuilder {
             snapshot.weeklyPercent = secondary.usedPercent
             snapshot.weeklyResetsAt = secondary.resetsAt
         }
+
+        snapshot.panel = Aggregator.panel(
+            events: events, window: current, at: now, weights: weights
+        )
 
         // Burn is computed last so headroom agrees with the percentage on screen
         // and with the reset the user is reading next to it.

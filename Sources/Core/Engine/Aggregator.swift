@@ -1,0 +1,145 @@
+import Foundation
+
+/// One row of a split — a name and its share of the slice, 0–100.
+struct UsageSplit: Equatable, Sendable, Identifiable {
+    let name: String
+    let share: Double
+    var id: String { name }
+}
+
+/// One calendar day of the history strip.
+struct DayUsage: Equatable, Sendable, Identifiable {
+    let day: Date
+    let weighted: Double
+    /// Share of the busiest day in range, 0–100. A daily cap does not exist —
+    /// roughly five windows fit in a day — so the strip is relative, not absolute.
+    let percent: Double
+    var id: Date { day }
+}
+
+/// Everything the pinned panel draws that the headline figures don't already carry.
+struct PanelData: Equatable, Sendable {
+    /// Weighted tokens per 5-minute bucket, oldest first, scaled 0–1 against the
+    /// tallest bucket. Ready to multiply by a bar height.
+    var sparkline: [Double] = []
+    var byModel: [UsageSplit] = []
+    var byProject: [UsageSplit] = []
+    var history: [DayUsage] = []
+
+    static let empty = PanelData()
+}
+
+/// Folds raw events into the shapes the panel reads. Pure: no I/O, no `Date()`.
+///
+/// The plan called for persisted 5-minute buckets; the store already retains 30
+/// days of events in memory for exactly this range, so the buckets are computed
+/// on the way past instead of being stored twice.
+/// ponytail: one pass per refresh over ~10k events. Persist buckets when the
+/// cold-start read is fixed, not before.
+enum Aggregator {
+    /// 26 bars, as the design draws.
+    static let bucketCount = 26
+    static let bucketSeconds: TimeInterval = 300
+    /// The design's three rows per split.
+    static let splitRows = 3
+
+    static func panel(
+        events: [UsageEvent],
+        window: SessionWindow?,
+        at now: Date,
+        weights: TokenWeights = .default,
+        historyDays: Int = 30,
+        calendar: Calendar = .current
+    ) -> PanelData {
+        // Splits describe the window on screen. With no window open there is
+        // nothing to attribute, and last window's breakdown would be a lie.
+        let inWindow = window.map { window in
+            events.filter { $0.timestamp >= window.start && $0.timestamp < window.end }
+        } ?? []
+
+        return PanelData(
+            sparkline: sparkline(events: events, at: now, weights: weights),
+            byModel: shares(inWindow, weights: weights) { Self.displayModel($0.model) },
+            byProject: shares(inWindow, weights: weights) { $0.project ?? "—" },
+            history: history(events: events, at: now, days: historyDays,
+                             weights: weights, calendar: calendar)
+        )
+    }
+
+    static func sparkline(
+        events: [UsageEvent], at now: Date, weights: TokenWeights = .default
+    ) -> [Double] {
+        var buckets = [Double](repeating: 0, count: bucketCount)
+        let span = Double(bucketCount) * bucketSeconds
+        for event in events {
+            let age = now.timeIntervalSince(event.timestamp)
+            guard age >= 0, age < span else { continue }
+            // Index 0 is the oldest bucket, the last is the one in progress.
+            let index = bucketCount - 1 - Int(age / bucketSeconds)
+            buckets[index] += event.counts.weighted(weights)
+        }
+        guard let peak = buckets.max(), peak > 0 else { return buckets }
+        return buckets.map { $0 / peak }
+    }
+
+    /// Top rows by weighted share. The tail is dropped rather than lumped into
+    /// "other": three named rows is what the design has room for.
+    static func shares(
+        _ events: [UsageEvent],
+        weights: TokenWeights = .default,
+        limit: Int = splitRows,
+        by key: (UsageEvent) -> String
+    ) -> [UsageSplit] {
+        var totals: [String: Double] = [:]
+        for event in events {
+            totals[key(event), default: 0] += event.counts.weighted(weights)
+        }
+        let sum = totals.values.reduce(0, +)
+        guard sum > 0 else { return [] }
+        return totals
+            .map { UsageSplit(name: $0.key, share: $0.value / sum * 100) }
+            // Name breaks the tie so equal shares don't reorder on every refresh.
+            .sorted { $0.share == $1.share ? $0.name < $1.name : $0.share > $1.share }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    static func history(
+        events: [UsageEvent],
+        at now: Date,
+        days: Int,
+        weights: TokenWeights = .default,
+        calendar: Calendar = .current
+    ) -> [DayUsage] {
+        var totals: [Date: Double] = [:]
+        for event in events {
+            totals[calendar.startOfDay(for: event.timestamp), default: 0]
+                += event.counts.weighted(weights)
+        }
+        let today = calendar.startOfDay(for: now)
+        // Quiet days are rows too — a gap in the strip is information.
+        let span = (0..<days).reversed().compactMap {
+            calendar.date(byAdding: .day, value: -$0, to: today)
+        }
+        let peak = span.compactMap { totals[$0] }.max() ?? 0
+        return span.map { day in
+            let weighted = totals[day] ?? 0
+            return DayUsage(
+                day: day, weighted: weighted,
+                percent: peak > 0 ? weighted / peak * 100 : 0
+            )
+        }
+    }
+
+    /// `claude-opus-5` → `Opus 5`. Anything that isn't a Claude model is left
+    /// alone: guessing at another vendor's naming is how "Gpt 5.6 Terra" happens.
+    static func displayModel(_ model: String?) -> String {
+        guard let model, !model.isEmpty else { return "unknown" }
+        guard model.hasPrefix("claude-") else { return model }
+        return model
+            .dropFirst("claude-".count)
+            .split(separator: "-")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+}
