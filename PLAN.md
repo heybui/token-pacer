@@ -269,7 +269,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 1.5 | **Live limits** — OAuth usage endpoint, Keychain, calibration, 10-min activity-gated polling, attention badge, single-instance guard | ✅ done (unplanned; see §0) |
 | 2 | Design system + the remaining pill states + spring morph | ✅ done |
 | 3 | Warning auto-expand, pinned panel, context menu | ✅ done |
-| 4 | Preferences, notifications, launch at login, pause-survives-relaunch | 🔨 persistence done; prefs, notifications, launch-at-login left |
+| 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done |
 | 5 | Source switcher in the pill + prefs (Claude / Codex / combined) | ⬜ not started |
 | 6 | Notarized DMG, Sparkle feed, Homebrew cask | ⬜ not started |
 
@@ -303,14 +303,45 @@ found later. It absorbed most of the time since phase 1.
   there is no daily cap to be a percentage of. Worth revisiting if the endpoint
   ever publishes one.
 
+### Carried out of phase 4
+
+- **Preferences shipped** with four rows: the alert scale, sound on threshold,
+  launch at login (`SMAppService.mainApp`), and hide-when-dormant. Alerts fire
+  through `AlertPolicy` → `UNUserNotificationCenter`, and only when the notch is
+  hidden — a full-screen app or another space — because a pill already showing
+  93% does not need to be told.
+- **One scale, two handles.** The design's two sliders became a single 0–100
+  track with a warn handle and a critical one, clamped so warn can never pass
+  critical. Reset restores that scale and nothing else; the other rows are
+  preferences, not a configuration to be undone.
+- **Three deltas against the design board**, chosen from a scan: the ring pops on
+  a threshold crossing, the ghost fades rather than cuts, and zero headroom reads
+  red. A silent return to dormant was offered and declined.
+- **A light runs the shell's border** while tokens flow — not in the design, asked
+  for on top of it. Tone follows the alert scale; the pinned panel is exempt,
+  since a 752×540 sheet with a light running round it is a screensaver.
+- **The app icon is bundled** and the Xcode target carries it explicitly, as
+  synchronized folder groups do not pick up a Resources phase entry.
+
 ### Standing design decisions
 
 - **Reduce Motion** — deliberately not honoured, for the activity dot or the shell morph.
 - **Instrument Sans is bundled** and registered twice over (`ATSApplicationFontsPath` for the bundle,
   `CTFontManagerRegisterFontsForURL` for `swift run`). Availability decides whether it is used, never
   the registration return value — a silent fallback to the system face is how a design drifts.
-- **The activity dot follows logged tokens**, not the open window: lit while the logs grew within the
-  last 5s, which is one poll interval, so it goes out seconds after work stops.
+- **The activity dot follows the turn**, not the open window and not logged tokens alone. A usage
+  record lands only when an exchange *completes*, so the stretch that most wants a signal — a long
+  think, or a five-minute build under a tool call — logs nothing at all. Nothing on disk says an
+  agent is working: `~/.claude/ide/*.lock` and the `claude` process both outlive a turn by hours.
+  The live signal is the newest *conversational* line, read back past the bookkeeping that makes up
+  two thirds of a session log (`ai-title`, `mode`, `attachment`, `queue-operation`): a `user` line
+  awaiting an answer, or an `assistant` line whose `stop_reason` is `tool_use`, means work is
+  happening. 735 of 792 assistant lines in a real session are the model stopping for a tool, so
+  reading "assistant" as "finished" was wrong most of the time. Capped at 15 minutes, so a CLI
+  killed mid-turn does not pulse all day; a 12s quiet window (two polls) covers the rest.
+- **Headroom is only projected four sample-lengths ahead.** A rate measured over thirty minutes told
+  a live machine it had 269 minutes left at 0.3% used. It fitted inside the window, which was the
+  only guard there was. Past the horizon there is no figure, and the countdown speaks instead.
 
 ### Verified on hardware
 
@@ -321,6 +352,12 @@ found later. It absorbed most of the time since phase 1.
 - Context menu on right-click — and the reason it first rendered white-on-white: `.regularMaterial`
   follows the desktop appearance. Nothing in this app may track the system scheme.
 - `make app` signs with a real identity, so the Keychain grant survives a rebuild.
+- Preferences, the dual-handle alert scale and the reset, on screen.
+- The border chase, and the two bugs behind it: a gradient stroke fades by position in the *view*,
+  so the light vanished down the left and right edges; and animating a `phase` from 0 to 1 animates
+  the trim bounds it produces, where 0 and 1 wrap to the same point — so every arc interpolated from
+  where it was to where it already was and the light sat perfectly still. It is driven by the clock
+  now, and measured in points so it looks the same on the pill and on the card.
 - The pinned panel and its context menu, on screen, against live figures.
 - Four bugs only the hardware could show: the host clipped the shell's shadow; the shadow reverted
   to a bounding box because a ScrollView cannot be rasterised into a compositing group; `.onHover`
@@ -333,11 +370,13 @@ found later. It absorbed most of the time since phase 1.
 - **Notch hardware.** Every run so far has been on an external display with no notch, so the
   no-notch fallback is what has been exercised. The notch path has unit tests only.
 - **Menu-bar click passthrough** and full-screen / space-switch behaviour.
-- **Calibration over time** — `weightedPerPercent` needs two anchors 10 minutes apart; every run so
-  far still logs `perPercent=0 samples=0`, so the conversion has never actually been measured. Until
-  it is, headroom rests on the inferred ceiling, and §4.1's outlier problem is still live.
+- ~~**Calibration over time**~~ ✅ measured. Persistence was the blocker: `perPercent=0 samples=0`
+  on every earlier run was the tracker restarting, not the calibration failing. The probe now reads
+  a conversion near 190k weighted a point against an inferred ceiling of 324k — so the ceiling is
+  roughly 70% too high, which is §4.1's outlier problem quantified rather than argued. Calibration
+  already wins wherever both exist; the ceiling still decides for API-key users.
 - **The warning state on screen** — it needs a window past 90% to appear, which no run has reached.
-  Every other state has now been seen.
+  Every other state has now been seen, and with it the ring pop, which shares the crossing.
 
 ## 4. Deliberate simplifications
 
