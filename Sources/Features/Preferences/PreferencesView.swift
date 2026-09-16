@@ -12,6 +12,12 @@ struct PreferencesView: View {
         VStack(alignment: .leading, spacing: 22) {
             group("Alerts") {
                 ThresholdScale(warn: $preferences.warnAt, critical: $preferences.criticalAt)
+                // Directly under the control it describes: a legend at the far
+                // end of the window is read after the fact, if at all.
+                Text(footnote)
+                    .font(Typography.sans(11))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
                 row("Sound on threshold") {
                     Toggle("", isOn: $preferences.soundOnThreshold).labelsHidden()
                 }
@@ -28,11 +34,7 @@ struct PreferencesView: View {
                 }
             }
 
-            HStack(alignment: .bottom, spacing: 16) {
-                Text(footnote)
-                    .font(Typography.sans(11))
-                    .foregroundStyle(.white.opacity(0.4))
-                    .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 16) {
                 Spacer(minLength: 0)
                 Button("Reset") { preferences.reset() }
                     .buttonStyle(.plain)
