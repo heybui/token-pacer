@@ -8,6 +8,8 @@ final class NotchController {
     private let store = UsageStore(
         usageAPI: ClaudeUsageAPI(token: ClaudeCredentials.tokenProvider)
     )
+    private let preferences = Preferences()
+    private let preferencesWindow = PreferencesWindow()
     private let panel: NotchPanel
     private let host: PassthroughHostingView<PillRootView>
     private var observers: [NSObjectProtocol] = []
@@ -18,7 +20,13 @@ final class NotchController {
     init() {
         let size = PillState.hostSize
         panel = NotchPanel(contentRect: NSRect(origin: .zero, size: size))
-        host = PassthroughHostingView(rootView: PillRootView(model: model, store: store))
+        host = PassthroughHostingView(rootView: PillRootView(
+            model: model, store: store, preferences: preferences,
+            onOpenPreferences: { [preferences, preferencesWindow] in
+                preferencesWindow.show(preferences: preferences)
+            }
+        ))
+        model.preferences = preferences
         host.frame = NSRect(origin: .zero, size: size)
         panel.contentView = host
 
@@ -85,6 +93,7 @@ final class NotchController {
         }
         guard event.modifierFlags.contains(.command) else { return event }
         switch event.charactersIgnoringModifiers {
+        case ",": preferencesWindow.show(preferences: preferences); model.closeMenu()
         case "c": UsageClipboard.copy(store.snapshot); model.closeMenu()
         case "q": NSApp.terminate(nil)
         default: return event

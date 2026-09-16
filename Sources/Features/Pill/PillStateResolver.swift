@@ -10,6 +10,9 @@ struct PillInputs: Equatable, Sendable {
     /// The warning fires once per window, then never again until it resets.
     var warningAcknowledged = false
     var criticalAt: Double = 90
+    /// Off keeps the collapsed pill on screen through a quiet spell rather than
+    /// withdrawing to the 3pt sliver.
+    var hideWhenDormant = true
 }
 
 /// One function, no scattered booleans. The design's eight states are mutually
@@ -27,7 +30,7 @@ enum PillStateResolver {
         if inputs.isPaused { return .paused }
         if inputs.isPinned { return .pinned }
 
-        if isDormant(inputs, at: now, dormantAfter: dormantAfter) {
+        if inputs.hideWhenDormant, isDormant(inputs, at: now, dormantAfter: dormantAfter) {
             // Hovering dead space reveals the ghost — the only way to reach the
             // menu while dormant.
             return inputs.pointerInside ? .ghost : .dormant

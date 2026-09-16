@@ -9,9 +9,9 @@ struct PinnedPanelView: View {
     var attention: String?
     let onClose: () -> Void
 
-    @State private var showAllHistory = false
+    @Environment(\.tone) private var toneScale
 
-    private var tone: Color { Tokens.tone(snapshot?.sessionPercent ?? 0) }
+    private var tone: Color { toneScale(snapshot?.sessionPercent) }
     private var panel: PanelData { snapshot?.panel ?? .empty }
 
     var body: some View {
@@ -91,7 +91,7 @@ struct PinnedPanelView: View {
                     captionRow("Weekly cap", weeklyCaption)
                     CapBar(
                         percent: snapshot?.weeklyPercent,
-                        tone: Tokens.tone(snapshot?.weeklyPercent ?? 0),
+                        tone: toneScale(snapshot?.weeklyPercent),
                         height: 7, trackOpacity: 0.12
                     )
                 }
@@ -254,6 +254,7 @@ private struct SplitColumn: View {
 /// A quarter fits in the space seven rows took, and the shape of a fortnight is
 /// visible at a glance where a list only ever showed the last seven days.
 private struct HistoryHeatmap: View {
+    @Environment(\.tone) private var toneScale
     let days: [DayUsage]
     var cell: CGFloat = 15
     var gap: CGFloat = 4
@@ -305,7 +306,7 @@ private struct HistoryHeatmap: View {
     /// Empty days keep the track colour: a quiet day is not a faint busy one.
     private func fill(_ day: DayUsage?) -> Color {
         guard let day, day.percent > 0 else { return .white.opacity(0.06) }
-        return Tokens.tone(day.percent).opacity(0.35 + 0.65 * min(1, day.percent / 100))
+        return toneScale(day.percent).opacity(0.35 + 0.65 * min(1, day.percent / 100))
     }
 
     private var weekdayLabels: some View {
@@ -357,6 +358,7 @@ private struct HistoryHeatmap: View {
 /// Only drawn for accounts that buy usage past the plan. The budget is the
 /// account's own monthly limit, not a preference we invented.
 private struct SpendCell: View {
+    @Environment(\.tone) private var toneScale
     let spend: Spend
 
     var body: some View {
@@ -377,7 +379,7 @@ private struct SpendCell: View {
             }
             CapBar(
                 percent: spend.percent,
-                tone: Tokens.tone(spend.percent ?? 0),
+                tone: toneScale(spend.percent),
                 height: 7, trackOpacity: 0.12
             )
             Text(Format.projection(used: spend.used))

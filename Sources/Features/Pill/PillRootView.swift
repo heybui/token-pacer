@@ -4,12 +4,14 @@ import SwiftUI
 struct PillRootView: View {
     let model: PillModel
     let store: UsageStore
+    var preferences = Preferences()
+    var onOpenPreferences: () -> Void = {}
 
     /// Preferences and updates are phases 4 and 6; the items are shown greyed
     /// rather than left out, so the menu keeps its shape.
     var menuItems: [NotchMenuItem] {
         [
-            NotchMenuItem(title: "Preferences…", key: "⌘,", isEnabled: false),
+            NotchMenuItem(title: "Preferences…", key: "⌘,", action: onOpenPreferences),
             NotchMenuItem(title: model.inputs.isPaused ? "Resume tracking" : "Pause tracking") {
                 setPaused(!model.inputs.isPaused)
             },
@@ -48,6 +50,12 @@ struct PillRootView: View {
             .onAppear { model.menuHeight = PillState.menuHeight(items: menuItems.count) }
             .onChange(of: store.snapshot) { _, snapshot in
                 model.update(snapshot: snapshot)
+            }
+            // The tone rule reaches every bar, ring and square from one place.
+            .environment(\.tone, preferences.thresholds)
+            .onChange(of: preferences.criticalAt) { _, _ in model.update(snapshot: store.snapshot) }
+            .onChange(of: preferences.hideWhenDormant) { _, _ in
+                model.update(snapshot: store.snapshot)
             }
             // The shell is black in every state, so its contents are never styled
             // for a light desktop.

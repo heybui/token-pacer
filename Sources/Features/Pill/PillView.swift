@@ -18,9 +18,11 @@ struct PillView: View {
     /// megabytes it is several seconds, and a fake 0% would be a lie.
     var isLoading: Bool { snapshot == nil }
 
+    @Environment(\.tone) private var toneScale
+
     private var tone: Color {
         guard let percent = snapshot?.sessionPercent else { return .white.opacity(0.5) }
-        return Tokens.tone(percent)
+        return toneScale(percent)
     }
 
     /// Percentage when one can be trusted, raw tokens when it can't.
@@ -228,7 +230,7 @@ struct PillView: View {
 
                 CapBar(
                     percent: snapshot?.weeklyPercent,
-                    tone: Tokens.tone(snapshot?.weeklyPercent ?? 0),
+                    tone: toneScale(snapshot?.weeklyPercent),
                     height: 4
                 )
 
@@ -259,7 +261,8 @@ struct PillView: View {
 
     private var statusLine: String {
         guard let percent = snapshot?.sessionPercent else { return "Measuring" }
-        return percent >= 90 ? "Wrap up soon" : percent >= 75 ? "Running hot" : "Plenty of room"
+        if percent >= toneScale.critAt { return "Wrap up soon" }
+        return percent >= toneScale.warnAt ? "Running hot" : "Plenty of room"
     }
 
     private var detailLine: String {

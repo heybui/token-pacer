@@ -28,9 +28,17 @@ final class PillModel {
     /// Esc closes both, and neither can hear it without the keyboard.
     var wantsKeyboard: Bool { state == .pinned || isMenuOpen }
 
+    /// The user's thresholds, when there are any. Read at every decision rather
+    /// than copied, so a slider takes effect on the next tick.
+    @ObservationIgnored var preferences: Preferences?
+
     /// Recomputed whenever anything feeding the decision changes.
     func update(snapshot: UsageSnapshot?, at now: Date = Date()) {
         inputs.snapshot = snapshot
+        if let preferences {
+            inputs.criticalAt = preferences.criticalAt
+            inputs.hideWhenDormant = preferences.hideWhenDormant
+        }
         // Seeing the pill expanded counts as acknowledging the warning, so it
         // fires once per window rather than every poll.
         if inputs.pointerInside { inputs.warningAcknowledged = true }
