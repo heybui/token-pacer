@@ -216,3 +216,37 @@ private func resolve(_ inputs: PillInputs) -> PillState {
         """)
     #expect(Format.usageSummary(nil).hasPrefix("Burn Tracker is still"))
 }
+
+// MARK: - the ghost's exit
+
+/// "Fades out ~400ms after the pointer leaves the notch." Crossing the notch on
+/// the way somewhere else should not snap the pill away mid-glance.
+@Test func theGhostOutstaysThePointer() {
+    let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
+    let leaving = PillInputs(
+        snapshot: quiet, pointerInside: false,
+        ghostHeldUntil: now.addingTimeInterval(PillStateResolver.ghostFade)
+    )
+
+    #expect(resolve(leaving) == .ghost)
+    #expect(PillStateResolver.resolve(
+        leaving, at: now.addingTimeInterval(PillStateResolver.ghostFade + 0.1)
+    ) == .dormant)
+}
+
+@MainActor
+@Test func leavingTheGhostSchedulesItsWithdrawal() async {
+    let model = PillModel()
+    let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
+    model.update(snapshot: quiet, at: now)
+    model.setPointerInside(true, at: now)
+    #expect(model.state == .ghost)
+
+    // Still a ghost the instant the pointer leaves…
+    model.setPointerInside(false, at: now)
+    #expect(model.state == .ghost)
+
+    // …and gone once the hold expires, without waiting for the 5s poll.
+    try? await Task.sleep(for: .seconds(PillStateResolver.ghostFade + 0.2))
+    #expect(model.state == .dormant)
+}

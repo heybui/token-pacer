@@ -31,6 +31,7 @@ final class PillModel {
     /// The user's thresholds, when there are any. Read at every decision rather
     /// than copied, so a slider takes effect on the next tick.
     @ObservationIgnored var preferences: Preferences?
+    @ObservationIgnored private var ghostWithdrawal: Task<Void, Never>?
 
     /// Recomputed whenever anything feeding the decision changes.
     func update(snapshot: UsageSnapshot?, at now: Date = Date()) {
@@ -72,10 +73,28 @@ final class PillModel {
 
     func setPointerInside(_ inside: Bool, at now: Date = Date()) {
         inputs.pointerInside = inside
-        // Leaving takes the menu with it. The menu sits inside the live area, so
-        // hovering it still counts as inside and it does not close underneath you.
-        if !inside { isMenuOpen = false }
+        if inside {
+            inputs.ghostHeldUntil = nil
+        } else {
+            // Leaving takes the menu with it. The menu sits inside the live area,
+            // so hovering it still counts as inside and it does not close
+            // underneath you.
+            isMenuOpen = false
+            if state == .ghost { holdGhost(from: now) }
+        }
         update(snapshot: inputs.snapshot, at: now)
+    }
+
+    /// The 5s poll would not notice a 400ms boundary, so the withdrawal is what
+    /// wakes the state back up.
+    private func holdGhost(from now: Date) {
+        inputs.ghostHeldUntil = now.addingTimeInterval(PillStateResolver.ghostFade)
+        ghostWithdrawal?.cancel()
+        ghostWithdrawal = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(PillStateResolver.ghostFade))
+            guard !Task.isCancelled, let self else { return }
+            update(snapshot: inputs.snapshot)
+        }
     }
     /// False on external displays and pre-notch Macs — the pill docks to the menu
     /// bar there instead of hiding behind hardware.

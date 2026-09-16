@@ -96,7 +96,7 @@ struct PinnedPanelView: View {
                     )
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    captionRow("Burn rate", burnCaption)
+                    captionRow("Burn rate", burnCaption, tone: isExhausted ? Tokens.red : nil)
                     Sparkline(values: panel.sparkline, tone: tone)
                 }
             }
@@ -118,7 +118,13 @@ struct PinnedPanelView: View {
         return "\(percent) · resets \(Format.weekday(resetsAt))"
     }
 
+    /// "If the panel is pinned it stays open and reads zero-headroom in red."
+    private var isExhausted: Bool { (snapshot?.sessionPercent ?? 0) >= 100 }
+
     private var burnCaption: String {
+        if isExhausted {
+            return "no headroom · resets in \(Format.countdown(to: snapshot?.resetsAt))"
+        }
         guard let burn = snapshot?.burn else { return "—" }
         var parts: [String] = []
         if let rate = burn.percentPerHour, rate > 0 {
@@ -129,7 +135,7 @@ struct PinnedPanelView: View {
         return parts.joined(separator: " · ")
     }
 
-    private func captionRow(_ label: String, _ value: String) -> some View {
+    private func captionRow(_ label: String, _ value: String, tone: Color? = nil) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text(label)
                 .font(Typography.sans(11))
@@ -137,7 +143,7 @@ struct PinnedPanelView: View {
             Spacer(minLength: 0)
             Text(value)
                 .font(Typography.mono(11))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(tone ?? .white.opacity(0.7))
                 .lineLimit(1)
         }
     }
