@@ -41,6 +41,10 @@ final class UsageStore {
     /// Raw events are kept only long enough to serve the history grid.
     private static let retention = TimeInterval(Aggregator.historyDays) * 24 * 3600
 
+    /// Called with every fresh snapshot of the active source. The alerting lives
+    /// outside Core — this is just where the snapshots already are.
+    @ObservationIgnored var onSnapshot: ((UsageSnapshot) -> Void)?
+
     /// `usageAPI` is injected rather than defaulted: it is backed by the Keychain,
     /// which lives outside Core.
     private let usageAPI: ClaudeUsageAPI?
@@ -197,6 +201,9 @@ final class UsageStore {
                     weights: weights,
                     weightedPerPercent: trackers[source.id]?.calibration.weightedPerPercent
                 )
+                if source.id == activeSource, let snapshot = snapshots[source.id] {
+                    onSnapshot?(snapshot)
+                }
                 errors[source.id] = Self.simulatedError
             } catch {
                 // A missing log directory just means that CLI isn't installed.

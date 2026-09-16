@@ -79,3 +79,46 @@ private func defaults() -> UserDefaults {
     // Nil is not zero-used; it is unknown, and the caller decides what to draw.
     #expect(scale(nil) == Tokens.green)
 }
+
+// MARK: - alerts
+
+private func crossings(_ percentages: [Double], resetsAt: Date = now.addingTimeInterval(3600),
+                       thresholds: [Double] = [75, 90]) -> [Double] {
+    var policy = AlertPolicy()
+    return percentages.compactMap {
+        policy.crossing(percent: $0, resetsAt: resetsAt, thresholds: thresholds)
+    }
+}
+
+/// A figure that hovers either side of the mark must alert once, not eleven times.
+@Test func aThresholdAlertsOncePerWindow() {
+    #expect(crossings([70, 76, 77, 74, 76]) == [75])
+}
+
+@Test func aJumpPastBothMarksSaysTheMoreUrgentThing() {
+    // Crossing 90 in one poll should say "wrap up", not "running warm".
+    #expect(crossings([20, 95]) == [90])
+}
+
+/// The next window is a fresh start: the same marks alert again.
+@Test func theNextWindowAlertsAgain() {
+    var policy = AlertPolicy()
+    let first = now.addingTimeInterval(3600)
+    let second = now.addingTimeInterval(3600 + 5 * 3600)
+
+    #expect(policy.crossing(percent: 80, resetsAt: first, thresholds: [75, 90]) == 75)
+    #expect(policy.crossing(percent: 85, resetsAt: first, thresholds: [75, 90]) == nil)
+    #expect(policy.crossing(percent: 80, resetsAt: second, thresholds: [75, 90]) == 75)
+}
+
+/// Launching mid-window past the mark is worth one alert; nothing to compare
+/// against is not a reason to stay quiet.
+@Test func aFirstReadingAlreadyPastTheMarkAlertsOnce() {
+    #expect(crossings([92]) == [90])
+}
+
+@Test func anUnknownPercentageNeverAlerts() {
+    var policy = AlertPolicy()
+    #expect(policy.crossing(percent: nil, resetsAt: now, thresholds: [75]) == nil)
+    #expect(policy.crossing(percent: 99, resetsAt: nil, thresholds: [75]) == nil)
+}

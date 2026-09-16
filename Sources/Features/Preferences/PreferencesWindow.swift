@@ -19,6 +19,9 @@ final class PreferencesWindow {
             )
             window.title = "Burn Tracker"
             window.titlebarAppearsTransparent = true
+            // AppKit draws the title in the *window's* appearance, not the
+            // content's: on a light desktop it came out dark-on-dark.
+            window.appearance = NSAppearance(named: .darkAqua)
             window.backgroundColor = NSColor(Color(hex: 0x141416))
             window.isReleasedWhenClosed = false
             window.contentView = NSHostingView(
