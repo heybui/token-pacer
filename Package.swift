@@ -6,6 +6,12 @@ let package = Package(
     platforms: [.macOS(.v15)],
     targets: [
         .executableTarget(name: "BurnTracker", path: "Sources"),
-        .testTarget(name: "BurnTrackerTests", dependencies: ["BurnTracker"], path: "Tests"),
+        // Fixtures are read from disk via #filePath, not from a bundle.
+        .testTarget(
+            name: "BurnTrackerTests",
+            dependencies: ["BurnTracker"],
+            path: "Tests",
+            exclude: ["Fixtures"]
+        ),
     ]
 )
