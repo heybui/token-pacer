@@ -31,8 +31,11 @@ Gating: returns `{}` unless the session is a managed OAuth subscriber holding th
 first time Burn Tracker reads it — *"BurnTracker wants to use the 'Claude Code-credentials' keychain
 item"* — and the ACL is keyed to the code signature. Consequences:
 
-- **Ad-hoc signing re-prompts on every rebuild.** During development that is constant. A stable
-  Developer ID makes it a single "Always Allow".
+- **Ad-hoc signing re-prompts on every rebuild** — the ACL is keyed to the designated
+  requirement, and an ad-hoc one is `cdhash H"…"`, a fresh identity every build. `make app` now
+  signs with the first identity `security find-identity -p codesigning` reports, so the requirement
+  is the stable `certificate leaf[subject.CN]` form and "Always Allow" survives rebuilds. The
+  prompt returns once when the identity itself changes. `make app SIGN=-` goes back to ad-hoc.
 - **No file fallback on macOS.** `~/.claude/.credentials.json` does not exist here; the Keychain is
   the only source. The file path is still read for installs that have one.
 - **Denial must not be terminal.** A denied prompt, a missing sign-in and an expired token all
