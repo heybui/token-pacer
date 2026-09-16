@@ -24,6 +24,13 @@ final class PreferencesWindow {
             window.appearance = NSAppearance(named: .darkAqua)
             window.backgroundColor = NSColor(Color(hex: 0x141416))
             window.isReleasedWhenClosed = false
+            // The pill floats at .statusBar, above every ordinary window, so a
+            // settings window at .normal opens *underneath* the notch. One level
+            // higher puts it in front of the thing it configures — and it hides
+            // when the app deactivates, so it never floats over another app's
+            // work once you have moved on.
+            window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+            window.hidesOnDeactivate = true
             window.contentView = NSHostingView(
                 rootView: PreferencesView(preferences: preferences, launchAtLogin: launchAtLogin)
             )
