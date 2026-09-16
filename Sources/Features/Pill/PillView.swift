@@ -80,6 +80,15 @@ struct PillView: View {
                     )
             }
             .overlay { shape.strokeBorder(state == .collapsed ? Tokens.shellRingIdle : Tokens.shellRingOpen, lineWidth: 1) }
+            .overlay {
+                // Not on the pinned panel: a 752×540 sheet with a light running
+                // round it is a screensaver, and the panel is for reading.
+                if chasesBorder {
+                    ChasingBorder(
+                        shape: shape, tone: tone, isRunning: snapshot?.isBurning == true
+                    )
+                }
+            }
             .opacity(state.opacity)
             .animation(Tokens.spring, value: state)
             // The panel has its own controls; a tap anywhere inside it would
@@ -138,6 +147,15 @@ struct PillView: View {
     /// Ghost is the collapsed pill dimmed, showing the weekly cap rather than a
     /// session that is no longer burning.
     private var isGhost: Bool { state == .ghost }
+
+    /// Collapsed and expanded, never pinned — and never while the notch is
+    /// pretending to be stock hardware.
+    private var chasesBorder: Bool {
+        switch state {
+        case .pinned, .dormant, .ghost, .paused: false
+        case .collapsed, .hover, .warning, .exhausted: true
+        }
+    }
 
     private var collapsed: some View {
         HStack(spacing: 8) {
