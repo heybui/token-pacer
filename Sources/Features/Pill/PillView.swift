@@ -18,6 +18,7 @@ struct PillView: View {
     /// Percentage when one can be trusted, raw tokens when it can't.
     private var headline: String {
         guard let snapshot else { return "--" }
+        if isGhost { return Format.percent(snapshot.weeklyPercent) }
         return snapshot.sessionPercent == nil
             ? Format.tokens(snapshot.sessionTokens)
             : Format.percent(snapshot.sessionPercent)
@@ -56,17 +57,56 @@ struct PillView: View {
     @ViewBuilder
     private var content: some View {
         switch state {
+        case .dormant: Color.clear
+        case .paused: pausedPill
+        case .exhausted: exhaustedPill
         case .hover, .warning: hoverCard
         default: collapsed
         }
     }
 
+    /// Grey, no numbers: tracking is off, which is not the same as idle.
+    private var pausedPill: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 3) {
+                ForEach(0..<2, id: \.self) { _ in
+                    Capsule().fill(.white.opacity(0.45)).frame(width: 3, height: 11)
+                }
+            }
+            Text("paused")
+                .font(.system(size: 11.5, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.45))
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 11)
+    }
+
+    /// At 100% there is nothing to report but the wait.
+    private var exhaustedPill: some View {
+        HStack(spacing: 10) {
+            Circle().fill(Tokens.red).frame(width: 6, height: 6)
+            OdometerText(text: Format.countdown(to: snapshot?.resetsAt), size: 12, color: Tokens.red)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// Ghost is the collapsed pill dimmed, showing the weekly cap rather than a
+    /// session that is no longer burning.
+    private var isGhost: Bool { state == .ghost }
+
     private var collapsed: some View {
         HStack(spacing: 8) {
-            UsageRing(percent: snapshot?.sessionPercent, tone: tone, size: 17, lineWidth: 3)
-            Text(isLoading ? "reading logs" : headline)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(isLoading ? .white.opacity(0.4) : tone)
+            UsageRing(
+                percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
+                tone: tone, size: 17, lineWidth: 3
+            )
+            if isLoading {
+                Text("reading logs")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.4))
+            } else {
+                OdometerText(text: headline, size: 12, color: tone)
+            }
 
             Spacer(minLength: 12)
 
@@ -75,9 +115,16 @@ struct PillView: View {
             } else if let snapshot, snapshot.isActive {
                 Circle().fill(tone).frame(width: 5, height: 5)
             }
-            Text(Format.countdown(to: snapshot?.resetsAt))
-                .font(.system(size: 11.5, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.5))
+            if isGhost {
+                Text("week")
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.4))
+            } else {
+                OdometerText(
+                    text: Format.countdown(to: snapshot?.resetsAt),
+                    size: 11.5, color: .white.opacity(0.5), weight: .regular
+                )
+            }
         }
         .padding(.leading, 11)
         .padding(.trailing, 13)
@@ -96,9 +143,15 @@ struct PillView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                     Spacer(minLength: 14)
-                    Text("\(Format.countdown(to: snapshot?.resetsAt)) left")
-                        .font(.system(size: 11.5, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.5))
+                    HStack(spacing: 4) {
+                        OdometerText(
+                            text: Format.countdown(to: snapshot?.resetsAt),
+                            size: 11.5, color: .white.opacity(0.5), weight: .regular
+                        )
+                        Text("left")
+                            .font(.system(size: 11.5, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
                 }
                 HStack(spacing: 6) {
                     if let attention {

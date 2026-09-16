@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PillRootView: View {
-    @Bindable var model: PillModel
+    let model: PillModel
     let store: UsageStore
 
     var body: some View {
@@ -13,7 +13,10 @@ struct PillRootView: View {
             .onHover { inside in
                 // Only fires inside the shell rect, which is how we know
                 // PassthroughHostingView is letting the rest of the panel through.
-                model.state = inside ? .hover : .collapsed
+                model.setPointerInside(inside)
+            }
+            .onChange(of: store.snapshot) { _, snapshot in
+                model.update(snapshot: snapshot)
             }
     }
 }
