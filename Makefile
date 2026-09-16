@@ -29,6 +29,7 @@ app: build
 	cp $(BIN) $(DEST)/Contents/MacOS/$(APP)
 	cp Resources/Info.plist $(DEST)/Contents/Info.plist
 	cp -R Resources/Fonts $(DEST)/Contents/Resources/Fonts
+	cp Resources/BurnTracker.icns $(DEST)/Contents/Resources/BurnTracker.icns
 	codesign --force --deep --sign $(SIGN) $(DEST)
 	@echo "→ $(DEST)"
 

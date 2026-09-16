@@ -11,6 +11,7 @@
 	<key>CFBundleVersion</key><string>1</string>
 	<key>LSMinimumSystemVersion</key><string>15.0</string>
 	<key>ATSApplicationFontsPath</key><string>Fonts</string>
+	<key>CFBundleIconFile</key><string>BurnTracker</string>
 	<key>LSUIElement</key><true/>
 	<key>NSHighResolutionCapable</key><true/>
 </dict>

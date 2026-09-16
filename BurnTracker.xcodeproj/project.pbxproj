@@ -19,7 +19,14 @@
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
+/* Begin PBXBuildFile section */
+		B0E400000000000000000020 /* BurnTracker.icns in Resources */ = {isa = PBXBuildFile; fileRef = B0E400000000000000000021 /* BurnTracker.icns */; };
+		B0E400000000000000000022 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = B0E400000000000000000023 /* Fonts */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
+		B0E400000000000000000021 /* BurnTracker.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = BurnTracker.icns; path = Resources/BurnTracker.icns; sourceTree = "<group>"; };
+		B0E400000000000000000023 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = Resources/Fonts; sourceTree = "<group>"; };
 		B0E400000000000000000004 /* BurnTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BurnTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0E400000000000000000005 /* BurnTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BurnTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0E40000000000000000001C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; };
@@ -33,6 +40,8 @@
 				B0E400000000000000000008 /* Sources */,
 				B0E400000000000000000009 /* Tests */,
 				B0E40000000000000000001C /* Info.plist */,
+				B0E400000000000000000021 /* BurnTracker.icns */,
+				B0E400000000000000000023 /* Fonts */,
 				B0E40000000000000000001D /* PLAN.md */,
 				B0E400000000000000000007 /* Products */,
 			);
@@ -60,7 +69,10 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
-		B0E40000000000000000000C /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		B0E40000000000000000000C /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
+				B0E400000000000000000020 /* BurnTracker.icns in Resources */,
+				B0E400000000000000000022 /* Fonts in Resources */,
+			); runOnlyForDeploymentPostprocessing = 0; };
 		B0E40000000000000000000F /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
