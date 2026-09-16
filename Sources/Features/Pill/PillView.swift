@@ -117,6 +117,14 @@ struct PillView: View {
         .padding(.bottom, 16)
     }
 
+    /// "reported" alone would imply the figure was just read. Between anchors it
+    /// is that reading carried forward by local token flow, so say how old it is.
+    private func reportedLabel(_ snapshot: UsageSnapshot) -> String {
+        guard let confirmedAt = snapshot.confirmedAt else { return "reported" }
+        let minutes = Int(Date().timeIntervalSince(confirmedAt) / 60)
+        return minutes < 1 ? "reported" : "reported \(minutes)m ago"
+    }
+
     private var statusLine: String {
         guard let percent = snapshot?.sessionPercent else { return "Measuring" }
         return percent >= 90 ? "Wrap up soon" : percent >= 75 ? "Running hot" : "Plenty of room"
@@ -126,7 +134,7 @@ struct PillView: View {
         if let attention { return attention }
         guard let snapshot else { return "reading logs…" }
         let origin = switch snapshot.origin {
-        case .authoritative: "reported"
+        case .authoritative: reportedLabel(snapshot)
         case .inferred: "estimated"
         case .unknown: "no ceiling yet"
         }

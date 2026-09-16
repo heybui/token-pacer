@@ -23,6 +23,9 @@ struct UsageSnapshot: Equatable, Sendable {
     var weeklyResetsAt: Date?
     var burn: BurnRate = .idle
     var isActive: Bool = false
+    /// When the authoritative figure was last confirmed. Between anchors the
+    /// number on screen is that reading plus local token flow, not a fresh read.
+    var confirmedAt: Date?
     var lastActivity: Date?
     var planType: String?
 
@@ -56,6 +59,7 @@ enum SnapshotBuilder {
             snapshot.origin = .authoritative
             snapshot.sessionPercent = primary.usedPercent
             snapshot.resetsAt = primary.resetsAt
+            snapshot.confirmedAt = limits?.observedAt
         } else if let percent = current.flatMap({ ceiling.percent(of: $0.weighted) }) {
             snapshot.origin = .inferred
             snapshot.sessionPercent = percent
