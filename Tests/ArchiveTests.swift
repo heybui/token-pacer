@@ -190,3 +190,26 @@ private func line(id: String, output: Int, at date: Date) -> String {
 
     #expect(relaunched.eventCount(.claude) == 1)
 }
+
+/// Without the reading itself, a relaunch has an anchor but nothing to report,
+/// so the pill drops to the inferred ceiling — a worse number — until the next
+/// request is due ten minutes later.
+@Test func theLastReadingSurvivesARelaunch() throws {
+    let limits = RateLimits(
+        primary: RateLimitWindow(usedPercent: 25, windowMinutes: 300,
+                                 resetsAt: t0.addingTimeInterval(3600)),
+        secondary: RateLimitWindow(usedPercent: 17, windowMinutes: 10080,
+                                   resetsAt: t0.addingTimeInterval(86400)),
+        planType: "max", observedAt: t0,
+        spend: Spend(used: Money(amountMinor: 1199, currency: "SGD", exponent: 2),
+                     limit: nil, percent: 99, isEnabled: true)
+    )
+    let archive = temporaryArchive()
+    archive.save(ArchivedState(limits: [.claude: limits]))
+
+    let restored = try #require(archive.load()).limits[.claude]
+    #expect(restored?.primary?.usedPercent == 25)
+    #expect(restored?.secondary?.usedPercent == 17)      // the weekly figure, not "--"
+    #expect(restored?.spend?.used.amountMinor == 1199)
+    #expect(restored?.observedAt == t0)                  // still says how old it is
+}

@@ -23,7 +23,7 @@ struct UsageEvent: Equatable, Sendable, Identifiable, Codable {
 
 /// Rate limits a CLI states outright. Codex publishes these; Claude does not,
 /// which is why `CeilingEstimator` exists.
-struct RateLimitWindow: Equatable, Sendable {
+struct RateLimitWindow: Equatable, Sendable, Codable {
     let usedPercent: Double
     let windowMinutes: Int
     let resetsAt: Date
@@ -54,7 +54,7 @@ struct RateLimitWindow: Equatable, Sendable {
 /// shift by, in a named currency. `1199` with exponent 2 in SGD is S$11.99 —
 /// reading the minor units as whole currency is a factor of 100 out, and the
 /// currency is not always dollars.
-struct Money: Equatable, Sendable {
+struct Money: Equatable, Sendable, Codable {
     var amountMinor: Int
     var currency: String
     var exponent: Int
@@ -64,7 +64,7 @@ struct Money: Equatable, Sendable {
 
 /// Pay-as-you-go spend past the plan's limits. Absent for accounts that never
 /// enabled extra usage, which is most of them.
-struct Spend: Equatable, Sendable {
+struct Spend: Equatable, Sendable, Codable {
     var used: Money
     var limit: Money?
     /// The endpoint's own figure; it disagrees with used/limit by a rounding step.
@@ -72,7 +72,7 @@ struct Spend: Equatable, Sendable {
     var isEnabled: Bool
 }
 
-struct RateLimits: Equatable, Sendable {
+struct RateLimits: Equatable, Sendable, Codable {
     /// The short window — 300 minutes, the design's "5-hour".
     let primary: RateLimitWindow?
     /// The long window — 10080 minutes, the weekly cap.

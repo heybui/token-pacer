@@ -61,6 +61,7 @@ final class UsageStore {
 
         let restored = archive?.load()
         self.trackers = restored?.trackers ?? [:]
+        self.liveLimits = restored?.limits ?? [:]
         self.isPaused = restored?.isPaused ?? false
     }
 
@@ -124,7 +125,7 @@ final class UsageStore {
     }
 
     private func persist() {
-        archive?.save(ArchivedState(trackers: trackers, isPaused: isPaused))
+        archive?.save(ArchivedState(trackers: trackers, limits: liveLimits, isPaused: isPaused))
     }
 
     func start() {
