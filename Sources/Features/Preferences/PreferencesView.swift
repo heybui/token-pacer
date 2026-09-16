@@ -43,10 +43,20 @@ struct PreferencesView: View {
                 }
             }
 
-            Text(footnote)
-                .font(Typography.sans(11))
-                .foregroundStyle(.white.opacity(0.4))
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .bottom, spacing: 16) {
+                Text(footnote)
+                    .font(Typography.sans(11))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Reset") { preferences.reset() }
+                    .buttonStyle(.plain)
+                    .font(Typography.sans(11.5))
+                    .foregroundStyle(preferences.isDefault ? .white.opacity(0.25) : Tokens.amber)
+                    .disabled(preferences.isDefault)
+                    .help("Back to 75% and 90%, sound on, pill hidden when dormant")
+                    .fixedSize()
+            }
         }
         .padding(26)
         .frame(width: 420)

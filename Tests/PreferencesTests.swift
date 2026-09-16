@@ -32,6 +32,24 @@ private func defaults() -> UserDefaults {
     #expect(second.hideWhenDormant == false)
 }
 
+@MainActor
+@Test func resetReturnsToTheDesignsNumbers() {
+    let store = defaults()
+    let preferences = Preferences(store: store)
+    preferences.warnAt = 55
+    preferences.criticalAt = 65
+    preferences.soundOnThreshold = false
+    preferences.hideWhenDormant = false
+    #expect(!preferences.isDefault)
+
+    preferences.reset()
+    #expect(preferences.isDefault)
+    #expect(preferences.warnAt == 75)
+    #expect(preferences.criticalAt == 90)
+    // And it is written, not just held: a relaunch stays reset.
+    #expect(Preferences(store: store).isDefault)
+}
+
 /// A hand-edited plist must not be able to invert the scale.
 @MainActor
 @Test func invertedThresholdsAreClampedNotObeyed() {

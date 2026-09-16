@@ -35,10 +35,36 @@ final class Preferences {
         self.store = store
         // `object(forKey:)` rather than `double(forKey:)`: an unset key reads as
         // zero, which would silently make every pill red.
-        warnAt = store.object(forKey: Key.warnAt) as? Double ?? 75
-        criticalAt = store.object(forKey: Key.criticalAt) as? Double ?? 90
-        soundOnThreshold = store.object(forKey: Key.soundOnThreshold) as? Bool ?? true
-        hideWhenDormant = store.object(forKey: Key.hideWhenDormant) as? Bool ?? true
+        warnAt = store.object(forKey: Key.warnAt) as? Double ?? Default.warnAt
+        criticalAt = store.object(forKey: Key.criticalAt) as? Double ?? Default.criticalAt
+        soundOnThreshold = store.object(forKey: Key.soundOnThreshold) as? Bool
+            ?? Default.soundOnThreshold
+        hideWhenDormant = store.object(forKey: Key.hideWhenDormant) as? Bool
+            ?? Default.hideWhenDormant
+    }
+
+    /// Back to the design board's own numbers. Launch at login is left alone: it
+    /// is a registration with the system, not one of these settings, and silently
+    /// unregistering it would be a surprise.
+    func reset() {
+        warnAt = Default.warnAt
+        criticalAt = Default.criticalAt
+        soundOnThreshold = Default.soundOnThreshold
+        hideWhenDormant = Default.hideWhenDormant
+    }
+
+    var isDefault: Bool {
+        warnAt == Default.warnAt && criticalAt == Default.criticalAt
+            && soundOnThreshold == Default.soundOnThreshold
+            && hideWhenDormant == Default.hideWhenDormant
+    }
+
+    /// One place, so `init` and `reset` cannot disagree about what default means.
+    private enum Default {
+        static let warnAt: Double = 75
+        static let criticalAt: Double = 90
+        static let soundOnThreshold = true
+        static let hideWhenDormant = true
     }
 
     /// Clamped on the way out, so a hand-edited plist cannot invert the scale.
