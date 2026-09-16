@@ -60,7 +60,8 @@ struct PillView: View {
         case .dormant: Color.clear
         case .paused: pausedPill
         case .exhausted: exhaustedPill
-        case .hover, .warning: hoverCard
+        case .warning: warningCard
+        case .hover: hoverCard
         default: collapsed
         }
     }
@@ -129,6 +130,37 @@ struct PillView: View {
         }
         .padding(.leading, 11)
         .padding(.trailing, 13)
+    }
+
+    /// Fires once when the window crosses critical: the figure big enough to read
+    /// from across the desk, and the one number that matters — how long is left.
+    ///
+    /// No dismiss button by design: mousing over it acknowledges, and it never
+    /// re-fires for this window.
+    private var warningCard: some View {
+        HStack(spacing: 16) {
+            UsageRing(percent: snapshot?.sessionPercent, tone: Tokens.red, size: 48, lineWidth: 6)
+            VStack(alignment: .leading, spacing: 4) {
+                OdometerText(text: headline, size: 26, color: Tokens.red)
+                Text(warningLine)
+                    .font(Typography.sans(12.5))
+                    .foregroundStyle(.white.opacity(0.66))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 26)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+    }
+
+    /// Headroom when it can be measured, the reset when it can't — never both,
+    /// and never a bare "wrap up soon" with no figure behind it.
+    private var warningLine: String {
+        if let headroom = snapshot?.burn.headroomMinutes {
+            return "~\(headroom) min left · wrap up soon"
+        }
+        return "\(Format.countdown(to: snapshot?.resetsAt)) to reset · wrap up soon"
     }
 
     private var hoverCard: some View {
