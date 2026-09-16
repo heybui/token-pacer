@@ -47,17 +47,21 @@ struct PillView: View {
     private var shell: some View {
         content
             .frame(width: state.size.width, height: state.size.height)
-            .background(.black, in: shape)
-            .overlay { shape.strokeBorder(state == .collapsed ? Tokens.shellRingIdle : Tokens.shellRingOpen, lineWidth: 1) }
             .clipShape(shape)
-            // Without this the shadow is cast from the unclipped rectangular
-            // bounds, so the square corners show through where the rounded ones
-            // cut away. Flattening first makes the shadow follow the real shape.
-            .compositingGroup()
-            .shadow(
-                color: .black.opacity(0.66),
-                radius: PillState.shadowRadius, y: PillState.shadowOffsetY
-            )
+            // The shadow is cast by the shape itself, never by the composited
+            // content. Flattening the content works only while SwiftUI can
+            // rasterise all of it — the panel's ScrollView is AppKit-backed and
+            // cannot be, so the group falls back to a layer shadow on its
+            // bounding box and the square corners show through.
+            .background {
+                shape
+                    .fill(.black)
+                    .shadow(
+                        color: .black.opacity(0.66),
+                        radius: PillState.shadowRadius, y: PillState.shadowOffsetY
+                    )
+            }
+            .overlay { shape.strokeBorder(state == .collapsed ? Tokens.shellRingIdle : Tokens.shellRingOpen, lineWidth: 1) }
             .opacity(state.opacity)
             .animation(Tokens.spring, value: state)
             // The panel has its own controls; a tap anywhere inside it would
