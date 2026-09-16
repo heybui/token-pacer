@@ -121,7 +121,9 @@ Toolchain: Xcode 27, Swift 6.4. **Deployment target macOS 15+**.
 
 - **Codex ships in phase 1**, not phase 5 — two conformances prove the seam instead of guessing it, and Codex's authoritative `used_percent` is a free correctness check on Claude's inferred one.
 - **macOS 15+**.
-- **API spend gauge**: cut as a *Console Admin API* feature, but `extra_usage` on the OAuth endpoint returns monthly credit spend for free. Revisit — it now costs nothing.
+- **API spend gauge**: cut as a *Console Admin API* feature, then restored — `extra_usage` on the
+  OAuth endpoint carries monthly credit spend for free. The panel draws it only when the account has
+  extra usage enabled.
 - **Instrument Sans bundled** (OFL) + SF Mono for numerics, matching the design's metrics exactly.
 
 ## 1. Architecture
@@ -285,42 +287,48 @@ found later. It absorbed most of the time since phase 1.
   the web app, so it splits by CLI instead; revisit if the endpoint ever says.
 - **Pause across relaunch** — pausing stops the poll now, but not past a restart.
 
-### What phase 2 needed
+### Standing design decisions
 
-Two of eight states render distinctly today — `collapsed` and `hover`. Everything else falls through
-to `collapsed`.
-
-- **States**: `dormant`, `ghost`, `exhausted`, `paused` (`warning` and `pinned` are phase 3).
-- **`OdometerText`** — digit strips with the roll and blur, used at five sizes. The single most
-  visible missing piece; every figure is plain text today.
-- **Instrument Sans** — decided, not bundled. The pill is on the system font, so metrics differ from
-  the design at 11–13px.
-- **`CapBar`** — the weekly bar. It now has a real data source (`seven_day`), which it did not when
-  phase 2 was written.
-- ~~**Pulsing activity dot**~~ ✅ — 2.6s, driven by log growth within the last 60s rather than by the
-  open window, which stays true for hours after work stops.
-- **Reduce Motion** — deliberately not implemented, for the dot or the shell morph.
+- **Reduce Motion** — deliberately not honoured, for the activity dot or the shell morph.
+- **Instrument Sans is bundled** and registered twice over (`ATSApplicationFontsPath` for the bundle,
+  `CTFontManagerRegisterFontsForURL` for `swift run`). Availability decides whether it is used, never
+  the registration return value — a silent fallback to the system face is how a design drifts.
+- **The activity dot follows logged tokens**, not the open window: lit while the logs grew within the
+  last 5s, which is one poll interval, so it goes out seconds after work stops.
 
 ### Verified on hardware
 
 - Live endpoint request succeeds; hover reads `reported`, matching Claude Code's own `/usage` panel.
 - Single instance enforced, including a raw binary launched past LaunchServices.
 - Shadow follows the clipped shape; headroom no longer outlasts its window.
+- Collapsed pill and hover card, on screen, against live figures.
+- Context menu on right-click — and the reason it first rendered white-on-white: `.regularMaterial`
+  follows the desktop appearance. Nothing in this app may track the system scheme.
+- `make app` signs with a real identity, so the Keychain grant survives a rebuild.
 
 ### Still unverified
 
 - **Notch hardware.** Every run so far has been on an external display with no notch, so the
   no-notch fallback is what has been exercised. The notch path has unit tests only.
 - **Menu-bar click passthrough** and full-screen / space-switch behaviour.
-- **Calibration over time** — `weightedPerPercent` needs two anchors 10 minutes apart; no session has
-  yet been observed running long enough to confirm the figure it settles on.
+- **Calibration over time** — `weightedPerPercent` needs two anchors 10 minutes apart; every run so
+  far still logs `perPercent=0 samples=0`, so the conversion has never actually been measured. Until
+  it is, headroom rests on the inferred ceiling, and §4.1's outlier problem is still live.
+- **The pinned panel on screen.** It compiles, it is covered by tests at the data layer, and it has
+  never been looked at: the ring, the sparkline and the history strip are unproven at real sizes.
+- **The warning state on screen** — it needs a window past 90% to appear, which no run has reached.
 
 ## 4. Deliberate simplifications
 
 - 5s polling timer, not FSEvents — a 5-hour window does not need sub-second freshness, and a watcher on `~/.claude/projects` fires constantly.
 - 5-minute buckets, not raw event persistence — caps disk and memory regardless of usage volume.
 - Full-screen detection by menu-bar visibility (`screen.visibleFrame.maxY == screen.frame.maxY`) rather than window enumeration — no Screen Recording permission needed. `ponytail:` heuristic; upgrade to `CGWindowListCopyWindowInfo` only if it misfires.
-- No network, no credentials, no Keychain — the app only ever reads local files. (API spend gauge cut.)
+- ~~No network, no credentials, no Keychain~~ — overtaken by phase 1.5. The app reads the OAuth usage
+  endpoint with the user's own token, read-only, activity-gated, with a 10-minute floor. It still
+  degrades to log-only inference when that fails.
+- The panel aggregates straight from the 30 days of events the store already holds, rather than the
+  planned persisted 5-minute buckets. Cheap per refresh, and it leaves the cold start unfixed —
+  `BucketArchive` is still the answer to §4.1, not a second copy of the buckets.
 
 ## 4.1 Measured on real logs (2026-09-16)
 
