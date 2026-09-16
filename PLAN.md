@@ -36,11 +36,24 @@ undocumented endpoint is how an account or IP earns a block. Rules, enforced in 
 
 1. **Activity-gated.** A call is only made when local logs show new token events since the last one.
    Utilization cannot move without them. An idle machine makes **zero** requests.
-2. **Hard floor of 60s between calls**, with jitter so installs don't synchronise. A heavy 8-hour day
-   is ≤480 calls worst case, and far fewer in practice; an idle day is 0.
+2. **Hard floor of 10 minutes between routine calls**, with jitter so installs don't synchronise.
+   A heavy 8-hour day is ≤48 calls; an idle day is 0. Threshold confirmations may jump the queue on
+   a 2-minute floor — set `confirmFloor = floor` to make every call strictly 10 minutes apart.
 3. **Anchor + interpolate.** The API result is an anchor: utilization *u* at time *T*. Between calls
-   the pill extrapolates from local weighted-token deltas since *T*. The UI still moves every 5s
-   while the network is touched at most once a minute.
+   the pill extrapolates from local weighted-token deltas since *T*, so it still moves every 5s
+   while the network is touched at most once per 10 minutes.
+
+   Consecutive anchors also *calibrate* the conversion — the quantity `CeilingEstimator` could only
+   guess at:
+
+   ```
+   anchor A: 11%  ──  W weighted tokens logged locally  ──  anchor B: 15%
+                      ⇒ weightedPerPercent = W / (15 − 11)
+   ```
+
+   Pairs that span a reset, or that saw no local tokens, teach nothing and are discarded. Accuracy
+   between anchors is bounded by usage this machine cannot see — other devices, claude.ai, the web
+   app — which the next anchor corrects.
 4. **Schedule around `resets_at`.** Utilization only falls at reset, so fetch once shortly after it
    rather than repeatedly before it.
 5. **Backoff by status.** 429/5xx → exponential backoff with jitter, honouring `Retry-After`.
