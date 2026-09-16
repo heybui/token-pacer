@@ -3,12 +3,19 @@ import Foundation
 /// Incremental line reader. Re-parsing every log on a 5s tick would read hundreds
 /// of megabytes, so each file keeps a byte offset and only new bytes are decoded.
 struct JSONLReader {
-    struct Cursor: Equatable, Sendable {
+    struct Cursor: Equatable, Sendable, Codable {
         var offset: UInt64
         var inode: UInt64
     }
 
     private(set) var cursors: [URL: Cursor] = [:]
+
+    /// Archived by path: a URL key would encode as an array, and the path is what
+    /// identifies the file across launches anyway.
+    var archived: [String: Cursor] {
+        get { Dictionary(uniqueKeysWithValues: cursors.map { ($0.key.path, $0.value) }) }
+        set { cursors = Dictionary(uniqueKeysWithValues: newValue.map { (URL(filePath: $0.key), $0.value) }) }
+    }
 
     /// Complete lines appended since the last call.
     ///

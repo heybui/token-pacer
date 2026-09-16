@@ -18,11 +18,17 @@ actor CodexSource: UsageSource {
 
     init(
         root: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/sessions"),
-        retention: TimeInterval? = 30 * 24 * 3600
+        retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600
     ) {
         self.root = root
         self.cutoff = retention.map { Date().addingTimeInterval(-$0) }
     }
+
+    func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {
+        scanner.restore(cursors: cursors, seen: seen)
+    }
+
+    func cursors() -> [String: JSONLReader.Cursor] { scanner.cursors }
 
     func poll() throws -> SourceSnapshot {
         // Detached copy: `decode` mutates self, so the scanner cannot also be

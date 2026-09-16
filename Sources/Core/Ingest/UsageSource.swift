@@ -5,6 +5,12 @@ import Foundation
 protocol UsageSource: Actor {
     nonisolated var id: SourceID { get }
     func poll() throws -> SourceSnapshot
+
+    /// Byte offsets from the last run, so a relaunch reads only what was appended
+    /// rather than 700MB of history. `seen` is rebuilt from the archived events
+    /// rather than stored twice.
+    func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>)
+    func cursors() -> [String: JSONLReader.Cursor]
 }
 
 /// Shared plumbing: cursors plus dedupe. A value type, so a source can mutate its
@@ -17,6 +23,13 @@ struct LogScanner {
     /// cursors already guarantee each line is read once.
     /// ponytail: flat cap, swap for a time-windowed set if a heavy user trips it.
     private static let seenLimit = 50_000
+
+    mutating func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {
+        reader.archived = cursors
+        self.seen = seen
+    }
+
+    var cursors: [String: JSONLReader.Cursor] { reader.archived }
 
     mutating func scan(
         root: URL,

@@ -64,6 +64,58 @@ final class UsageStore {
         self.isPaused = restored?.isPaused ?? false
     }
 
+    /// Hands every source its byte offsets back and repopulates the events the
+    /// panel draws, so the first poll reads only what has been appended since the
+    /// last run instead of the whole log corpus.
+    private func restoreEvents() async {
+        let started = Date()
+        guard let archived = archive?.loadEvents() else { return }
+        var count = 0
+
+        for source in sources {
+            guard let state = archived.sources[source.id] else { continue }
+            events[source.id] = state.events
+            count += state.events.count
+            // `seen` catches history replayed into a *new* file on resume, so it
+            // is rebuilt from the archived ids rather than stored a second time.
+            await source.restore(
+                cursors: state.cursors, seen: Set(state.events.map(\.id))
+            )
+        }
+
+        let ms = Int(Date().timeIntervalSince(started) * 1000)
+        Log.ingest.info("restored \(count, privacy: .public) events in \(ms, privacy: .public)ms")
+    }
+
+    /// Cheap to encode but megabytes to write, so it goes out on a slow cadence
+    /// and on the way out of the process — never on the 5s tick.
+    private static let eventSaveInterval: TimeInterval = 5 * 60
+    private var lastEventSave: Date?
+    private var reportedFirstSnapshot = false
+
+    private func persistEvents(now: Date = Date(), force: Bool = false) async {
+        guard let archive else { return }
+        if !force, let last = lastEventSave, now.timeIntervalSince(last) < Self.eventSaveInterval {
+            return
+        }
+        lastEventSave = now
+
+        var archived = ArchivedEvents()
+        for source in sources {
+            archived.sources[source.id] = ArchivedEvents.PerSource(
+                cursors: await source.cursors(), events: events[source.id] ?? []
+            )
+        }
+        archive.saveEvents(archived)
+    }
+
+    /// Called on the way out: the last few minutes of events would otherwise be
+    /// re-read from the logs on the next launch.
+    func flush() async {
+        persist()
+        await persistEvents(force: true)
+    }
+
     func setPaused(_ paused: Bool) {
         guard paused != isPaused else { return }
         isPaused = paused
@@ -77,9 +129,17 @@ final class UsageStore {
 
     func start() {
         guard pump == nil else { return }
+        let launchedAt = Date()
         pump = Task { [weak self] in
+            await self?.restoreEvents()
             while !Task.isCancelled {
                 await self?.refresh()
+                if let self, !reportedFirstSnapshot {
+                    reportedFirstSnapshot = true
+                    let ms = Int(Date().timeIntervalSince(launchedAt) * 1000)
+                    let events = SourceID.allCases.reduce(0) { $0 + eventCount($1) }
+                    Log.ingest.info("first snapshot in \(ms, privacy: .public)ms over \(events, privacy: .public) events")
+                }
                 guard let interval = self?.interval else { return }
                 try? await Task.sleep(for: .seconds(interval))
             }
@@ -143,6 +203,8 @@ final class UsageStore {
         let recent = events.values.flatMap { $0 }
             .filter { $0.timestamp > now.addingTimeInterval(-5 * 3600) }
         bySource = Aggregator.shares(recent, weights: weights) { $0.source.displayName }
+
+        await persistEvents(now: now)
     }
 
     /// Asks the usage endpoint only when the tracker says it is worth it.

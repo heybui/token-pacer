@@ -1,7 +1,14 @@
 import Foundation
 
 /// One billed exchange, normalised across CLIs.
-struct UsageEvent: Equatable, Sendable, Identifiable {
+struct UsageEvent: Equatable, Sendable, Identifiable, Codable {
+    /// Short keys: this is written 45,000 times over, and the field names would
+    /// otherwise be most of the file.
+    enum CodingKeys: String, CodingKey {
+        case id = "i", source = "s", timestamp = "t", model = "m"
+        case project = "p", sessionID = "n", counts = "c"
+    }
+
     /// Dedupe key. Resumed sessions replay history into a new file, so the same
     /// exchange can appear in more than one log.
     let id: String

@@ -80,3 +80,113 @@ private func temporaryArchive() -> Archive {
 
     #expect(archive.load() == nil)
 }
+
+// MARK: - the cold start
+
+/// A source that counts how often its log was actually opened.
+private actor CountingSource: UsageSource {
+    nonisolated let id: SourceID
+    private var scanner = LogScanner()
+    private let root: URL
+    private(set) var scans = 0
+
+    init(id: SourceID = .claude, root: URL) {
+        self.id = id
+        self.root = root
+    }
+
+    func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {
+        scanner.restore(cursors: cursors, seen: seen)
+    }
+
+    func cursors() -> [String: JSONLReader.Cursor] { scanner.cursors }
+
+    func poll() throws -> SourceSnapshot {
+        scans += 1
+        let events = try scanner.scan(root: root, decode: ClaudeCodeSource.decode)
+        return SourceSnapshot(source: id, events: events, limits: nil)
+    }
+}
+
+private func writeLog(_ lines: [String], to directory: URL, named name: String) throws -> URL {
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let url = directory.appending(path: name)
+    try lines.joined(separator: "\n").appending("\n").write(to: url, atomically: true, encoding: .utf8)
+    return url
+}
+
+private func line(id: String, output: Int, at date: Date) -> String {
+    """
+    {"type":"assistant","timestamp":"\(date.ISO8601Format())","cwd":"/tmp/demo",\
+    "sessionId":"s","requestId":"\(id)","message":{"id":"m\(id)","model":"claude-opus-5",\
+    "usage":{"input_tokens":10,"output_tokens":\(output)}}}
+    """
+}
+
+/// The point of the exercise: a relaunch must not re-read the log corpus.
+@MainActor
+@Test func aRelaunchReadsOnlyWhatWasAppended() async throws {
+    let root = FileManager.default.temporaryDirectory
+        .appending(path: "burn-tracker-tests/\(UUID().uuidString)")
+    let log = try writeLog(
+        [line(id: "1", output: 100, at: Date()), line(id: "2", output: 200, at: Date())],
+        to: root, named: "session.jsonl"
+    )
+    let archive = temporaryArchive()
+
+    let first = CountingSource(root: root)
+    let store = UsageStore(sources: [first], interval: 3600, archive: archive)
+    store.start()
+    // Let the pump restore, poll and persist.
+    try await Task.sleep(for: .milliseconds(200))
+    store.stop()
+    await store.flush()
+    #expect(store.eventCount(.claude) == 2)
+
+    // A new process over the same logs and the same archive.
+    try FileHandle(forWritingTo: log).seekToEnd()
+    try Data(line(id: "3", output: 300, at: Date()).appending("\n").utf8)
+        .write(to: root.appending(path: "later.jsonl"))
+
+    let second = CountingSource(root: root)
+    let relaunched = UsageStore(sources: [second], interval: 3600, archive: archive)
+    relaunched.start()
+    try await Task.sleep(for: .milliseconds(200))
+    relaunched.stop()
+
+    // All three events are present, but the first two came from the archive: the
+    // cursor means their bytes were never read again.
+    #expect(relaunched.eventCount(.claude) == 3)
+
+    // The cursor sits at the end of the file it never opened. (Compared by value:
+    // the enumerator resolves /var to /private/var, so the key is not log.path.)
+    let size = try FileHandle(forReadingFrom: log).seekToEnd()
+    let cursors = await second.cursors()
+    #expect(cursors.values.contains { $0.offset == size })
+}
+
+/// Replayed history in a new file must not be counted twice — the dedupe set is
+/// rebuilt from the archived events rather than stored alongside them.
+@MainActor
+@Test func replayedHistoryIsStillDeduplicatedAfterARelaunch() async throws {
+    let root = FileManager.default.temporaryDirectory
+        .appending(path: "burn-tracker-tests/\(UUID().uuidString)")
+    _ = try writeLog([line(id: "1", output: 100, at: Date())], to: root, named: "session.jsonl")
+    let archive = temporaryArchive()
+
+    let store = UsageStore(sources: [CountingSource(root: root)], interval: 3600, archive: archive)
+    store.start()
+    try await Task.sleep(for: .milliseconds(200))
+    store.stop()
+    await store.flush()
+
+    // A resumed session replays the same exchange into a different file.
+    _ = try writeLog([line(id: "1", output: 100, at: Date())], to: root, named: "resumed.jsonl")
+
+    let relaunched = UsageStore(sources: [CountingSource(root: root)], interval: 3600, archive: archive)
+    relaunched.start()
+    try await Task.sleep(for: .milliseconds(200))
+    relaunched.stop()
+
+    #expect(relaunched.eventCount(.claude) == 1)
+}

@@ -14,11 +14,17 @@ actor ClaudeCodeSource: UsageSource {
 
     init(
         root: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/projects"),
-        retention: TimeInterval? = 30 * 24 * 3600
+        retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600
     ) {
         self.root = root
         self.cutoff = retention.map { Date().addingTimeInterval(-$0) }
     }
+
+    func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {
+        scanner.restore(cursors: cursors, seen: seen)
+    }
+
+    func cursors() -> [String: JSONLReader.Cursor] { scanner.cursors }
 
     func poll() throws -> SourceSnapshot {
         let events = try scanner.scan(root: root, since: cutoff, decode: Self.decode)

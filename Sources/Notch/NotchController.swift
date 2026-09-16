@@ -39,6 +39,8 @@ final class NotchController {
         if !store.isPaused { store.start() }
     }
 
+    func flush() async { await store.flush() }
+
     private func observe() {
         let center = NotificationCenter.default
         // Display connected/disconnected, resolution change, menu-bar height change.
