@@ -308,18 +308,19 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
 @Test func aTurnInFlightKeepsTheDotLit() {
     let asked = t0
     let now = asked.addingTimeInterval(4 * 60)   // four minutes of thinking
-    let waiting = LogActivity(lastLineAt: asked, lastLineType: "user")
+    let waiting = LogActivity(lastLineAt: asked, lastLineType: "user", turnAt: asked)
 
     #expect(SnapshotBuilder.isBurning(activity: waiting, lastEvent: nil, at: now))
     // The same silence with the turn already answered is genuinely idle.
-    let answered = LogActivity(lastLineAt: asked, lastLineType: "assistant")
+    let answered = LogActivity(lastLineAt: asked, lastLineType: "assistant",
+                               turnAt: asked, turnEnded: true)
     #expect(SnapshotBuilder.isBurning(activity: answered, lastEvent: nil, at: now) == false)
 }
 
 /// A CLI killed mid-turn leaves its last line looking like a turn that never
 /// ended; the dot must not pulse for the rest of the day.
 @Test func anAbandonedTurnStopsPulsing() {
-    let waiting = LogActivity(lastLineAt: t0, lastLineType: "user")
+    let waiting = LogActivity(lastLineAt: t0, lastLineType: "user", turnAt: t0)
     let later = t0.addingTimeInterval(SnapshotBuilder.inFlightWindow + 60)
     #expect(SnapshotBuilder.isBurning(activity: waiting, lastEvent: nil, at: later) == false)
 }
@@ -327,7 +328,8 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
 /// Once the answer lands the dot goes out promptly — one poll interval, not a
 /// minute of pulsing at a finished session.
 @Test func aFinishedTurnGoesOutWithTheBurningWindow() {
-    let answered = LogActivity(lastLineAt: t0, lastLineType: "assistant")
+    let answered = LogActivity(lastLineAt: t0, lastLineType: "assistant",
+                               turnAt: t0, turnEnded: true)
     #expect(SnapshotBuilder.isBurning(activity: answered, lastEvent: t0, at: t0.addingTimeInterval(2)))
     #expect(SnapshotBuilder.isBurning(activity: answered, lastEvent: t0,
                                       at: t0.addingTimeInterval(20)) == false)
@@ -339,4 +341,12 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
     )
     #expect(empty.isBurning == false)
     #expect(empty.lastActivity == nil)
+}
+
+/// A tool call is the other half of the silence: the model stops, a build runs
+/// for two minutes, and nothing is written until it comes back.
+@Test func aToolRunningKeepsTheDotLit() {
+    let stopped = LogActivity(lastLineAt: t0, lastLineType: "assistant", turnAt: t0)
+    #expect(SnapshotBuilder.isBurning(activity: stopped, lastEvent: nil,
+                                      at: t0.addingTimeInterval(2 * 60)))
 }

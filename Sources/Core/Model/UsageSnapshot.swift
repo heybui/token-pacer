@@ -56,9 +56,10 @@ enum SnapshotBuilder {
     }
 
     /// How recently the logs must have grown to count as still burning, once a
-    /// turn has finished. Matched to the poll interval: the dot is lit by the
-    /// tick that reads the line and goes out on the next quiet one.
-    static let burningWindow: TimeInterval = 5
+    /// turn has finished. Two polls plus slack, not one: a line written just
+    /// before a tick is already older than a 5s window by the next one, so the
+    /// dot blinked off between beats of work it should have sat through.
+    static let burningWindow: TimeInterval = 12
 
     /// A turn in flight keeps the dot lit without any tokens being logged — the
     /// record only lands when the exchange completes. Capped, because a crashed

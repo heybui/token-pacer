@@ -80,3 +80,41 @@ private func lines(_ name: String) -> [Data] {
     #expect(limits.secondary?.windowMinutes == 10080)
     #expect(limits.planType != nil)
 }
+
+// MARK: - is anything running right now
+
+private func scanActivity(_ lines: [String]) throws -> LogActivity? {
+    let root = FileManager.default.temporaryDirectory
+        .appending(path: "burn-tracker-tests/\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try lines.joined(separator: "\n").appending("\n")
+        .write(to: root.appending(path: "session.jsonl"), atomically: true, encoding: .utf8)
+    var scanner = LogScanner()
+    _ = try scanner.scan(root: root, decode: ClaudeCodeSource.decode)
+    return scanner.activity
+}
+
+private func assistant(_ stopReason: String, at date: Date) -> String {
+    """
+    {"type":"assistant","timestamp":"\(date.ISO8601Format())","message":\
+    {"stop_reason":"\(stopReason)","usage":{"input_tokens":1,"output_tokens":1}}}
+    """
+}
+
+/// Two thirds of a session log is bookkeeping, and it is written *after* the
+/// turn it belongs to — so the last line is routinely an `ai-title`, and asking
+/// it whether Claude is working gets no answer at all.
+@Test func bookkeepingAfterATurnDoesNotHideIt() throws {
+    let now = Date()
+    let working = try scanActivity([
+        assistant("tool_use", at: now),
+        #"{"type":"ai-title","timestamp":"\#(now.ISO8601Format())","title":"x"}"#,
+    ])
+    #expect(try #require(working).isAwaitingResponse)
+
+    let done = try scanActivity([
+        assistant("end_turn", at: now),
+        #"{"type":"queue-operation","timestamp":"\#(now.ISO8601Format())"}"#,
+    ])
+    #expect(try #require(done).isAwaitingResponse == false)
+}
