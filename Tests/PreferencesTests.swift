@@ -32,22 +32,26 @@ private func defaults() -> UserDefaults {
     #expect(second.hideWhenDormant == false)
 }
 
+/// Reset sits beside the scale, so it touches the scale and nothing else.
 @MainActor
-@Test func resetReturnsToTheDesignsNumbers() {
+@Test func resetReturnsTheMarksAndLeavesTheRestAlone() {
     let store = defaults()
     let preferences = Preferences(store: store)
     preferences.warnAt = 55
     preferences.criticalAt = 65
     preferences.soundOnThreshold = false
     preferences.hideWhenDormant = false
-    #expect(!preferences.isDefault)
+    #expect(!preferences.hasDefaultThresholds)
 
-    preferences.reset()
-    #expect(preferences.isDefault)
+    preferences.resetThresholds()
+    #expect(preferences.hasDefaultThresholds)
     #expect(preferences.warnAt == 75)
     #expect(preferences.criticalAt == 90)
+    // The toggles two rows down are not the scale's business.
+    #expect(preferences.soundOnThreshold == false)
+    #expect(preferences.hideWhenDormant == false)
     // And it is written, not just held: a relaunch stays reset.
-    #expect(Preferences(store: store).isDefault)
+    #expect(Preferences(store: store).hasDefaultThresholds)
 }
 
 /// The scale clamps as you drag, but the stored values are the last line of

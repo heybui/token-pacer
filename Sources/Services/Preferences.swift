@@ -43,20 +43,16 @@ final class Preferences {
             ?? Default.hideWhenDormant
     }
 
-    /// Back to the design board's own numbers. Launch at login is left alone: it
-    /// is a registration with the system, not one of these settings, and silently
-    /// unregistering it would be a surprise.
-    func reset() {
+    /// Back to the design board's own marks. Scoped to the scale it sits beside:
+    /// a button that also silently flipped the toggles two rows down would be
+    /// doing more than it says.
+    func resetThresholds() {
         warnAt = Default.warnAt
         criticalAt = Default.criticalAt
-        soundOnThreshold = Default.soundOnThreshold
-        hideWhenDormant = Default.hideWhenDormant
     }
 
-    var isDefault: Bool {
+    var hasDefaultThresholds: Bool {
         warnAt == Default.warnAt && criticalAt == Default.criticalAt
-            && soundOnThreshold == Default.soundOnThreshold
-            && hideWhenDormant == Default.hideWhenDormant
     }
 
     /// One place, so `init` and `reset` cannot disagree about what default means.
