@@ -5,10 +5,11 @@ struct PillRootView: View {
     let model: PillModel
     let store: UsageStore
     var preferences = Preferences()
+    /// Nil in tests and in a `swift run` build: constructing one starts
+    /// Sparkle's scheduler, and a menu row is not worth a network call.
+    var updater: Updater?
     var onOpenPreferences: () -> Void = {}
 
-    /// Preferences and updates are phases 4 and 6; the items are shown greyed
-    /// rather than left out, so the menu keeps its shape.
     var menuItems: [NotchMenuItem] {
         [
             NotchMenuItem(title: "Preferences…", key: "⌘,", action: onOpenPreferences),
@@ -18,7 +19,9 @@ struct PillRootView: View {
             NotchMenuItem(title: "Copy usage summary", key: "⌘C") {
                 UsageClipboard.copy(store.snapshot)
             },
-            NotchMenuItem(title: "Check for updates…", isEnabled: false),
+            NotchMenuItem(title: "Check for updates…", isEnabled: updater?.canCheck ?? false) {
+                updater?.checkForUpdates()
+            },
             NotchMenuItem(title: "About Burn Tracker") {
                 NSApp.activate()
                 NSApp.orderFrontStandardAboutPanel(nil)

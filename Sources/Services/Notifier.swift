@@ -17,8 +17,10 @@ struct Notifier {
         Bundle.main.bundleIdentifier == nil ? nil : .current()
     }
 
-    func alert(title: String, body: String, sound: Bool) {
-        guard !isNotchVisible(), let center else { return }
+    /// - Parameter whenNotchHidden: false for messages the notch does not carry
+    ///   at all — an available update is not a number the pill is already showing.
+    func alert(title: String, body: String, sound: Bool, whenNotchHidden: Bool = true) {
+        guard !whenNotchHidden || !isNotchVisible(), let center else { return }
 
         // Asked for on the first crossing rather than at launch: permission for
         // something that has not happened yet is the most ignorable prompt there

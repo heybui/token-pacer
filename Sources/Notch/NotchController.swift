@@ -12,6 +12,9 @@ final class NotchController {
     private let notifier = Notifier()
     private var alerts = AlertPolicy()
     private let preferencesWindow = PreferencesWindow()
+    /// Constructing it starts Sparkle's scheduler, so it is owned here and
+    /// handed to the view — never defaulted into a struct that gets rebuilt.
+    private let updater = Updater()
     private let panel: NotchPanel
     private let host: PassthroughHostingView<PillRootView>
     private var observers: [NSObjectProtocol] = []
@@ -23,7 +26,7 @@ final class NotchController {
         let size = PillState.hostSize
         panel = NotchPanel(contentRect: NSRect(origin: .zero, size: size))
         host = PassthroughHostingView(rootView: PillRootView(
-            model: model, store: store, preferences: preferences,
+            model: model, store: store, preferences: preferences, updater: updater,
             onOpenPreferences: { [preferences, preferencesWindow] in
                 preferencesWindow.show(preferences: preferences)
             }

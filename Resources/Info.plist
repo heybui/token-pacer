@@ -13,6 +13,15 @@
 	<key>ATSApplicationFontsPath</key><string>Fonts</string>
 	<key>CFBundleIconFile</key><string>BurnTracker</string>
 	<key>LSUIElement</key><true/>
+
+	<!-- Sparkle. The feed is a release asset, so `releases/latest/download`
+	     always resolves to the newest one and nothing else needs hosting.
+	     The private half of SUPublicEDKey lives in the login Keychain as
+	     "Private key for signing Sparkle updates" — it is not in this repo, and
+	     losing it means no existing install can ever be updated again. -->
+	<key>SUFeedURL</key><string>https://github.com/heybui/burn-tracker/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key><string>upjF7oD8vW9TXGxqDlR4XSQ5AQNojCkT8Xi87J0DZWc=</string>
+	<key>SUEnableAutomaticChecks</key><true/>
 	<key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>
