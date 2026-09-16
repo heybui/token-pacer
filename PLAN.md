@@ -271,7 +271,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 3 | Warning auto-expand, pinned panel, context menu | ✅ done |
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done |
 | 5 | Source switcher in the pill + prefs (Claude / Codex / combined) | ⬜ not started |
-| 6 | Notarized DMG, Sparkle feed, Homebrew cask | ⬜ not started |
+| 6 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
 
 Phase 1.5 was not in the original plan. It exists because the limits source was wrong: the first
 version inferred a ceiling from log volume, and the endpoint that publishes the real figures was
@@ -323,9 +323,44 @@ found later. It absorbed most of the time since phase 1.
 - **The app icon is bundled** and the Xcode target carries it explicitly, as
   synchronized folder groups do not pick up a Resources phase entry.
 
+### Phase 6 — cutting a release
+
+```
+make dmg        # build, sign for distribution, stage a drag-to-Applications image
+make notarize   # submit to Apple, staple the ticket, assess it
+make appcast    # sign the update with the EdDSA key, write build/appcast.xml
+make cask       # print the tap formula with the image's real checksum
+```
+
+Then upload `BurnTracker-<version>.dmg` **and `appcast.xml`** to a GitHub release
+tagged `v<version>`, and put the cask in a tap.
+
+One-time setup, in order:
+
+1. **A Developer ID Application certificate.** The paid Developer Program; this
+   machine has only an Apple Development certificate, which cannot be notarized
+   and which Gatekeeper refuses on any other Mac. `make check-devid` says so.
+2. `xcrun notarytool store-credentials burn-tracker` — Apple ID, team, and an
+   app-specific password. Silent thereafter.
+3. ~~Sparkle's EdDSA key pair~~ ✅ generated. The public half is in `Info.plist`;
+   the private half is in the login Keychain as *Private key for signing Sparkle
+   updates*. **It is not in this repo and cannot be recovered.** Lose it and no
+   installed copy can ever be updated again — back it up with
+   `generate_keys -x` before the first release.
+
+Signing the first release also resets the Keychain grant on Claude Code's
+credentials once, because the designated requirement changes with the identity.
+
 ### Standing design decisions
 
 - **Reduce Motion** — deliberately not honoured, for the activity dot or the shell morph.
+- **Sparkle ships alongside the cask, not instead of it.** `brew upgrade` covers people who install
+  through the tap; the feed covers people who download the DMG. Gentle reminders are implemented
+  because this app has no Dock icon and no menu bar — Sparkle's own panel would arrive from nowhere,
+  so a scheduled find speaks through the threshold banner and only a check the user asked for opens
+  the panel.
+- **The bundle id stays `com.redevify.tokenburn`.** Decided at the last moment it was free to change:
+  after a public release it is what every install, preference file and Keychain grant is keyed to.
 - **Instrument Sans is bundled** and registered twice over (`ATSApplicationFontsPath` for the bundle,
   `CTFontManagerRegisterFontsForURL` for `swift run`). Availability decides whether it is used, never
   the registration return value — a silent fallback to the system face is how a design drifts.
@@ -407,4 +442,7 @@ found later. It absorbed most of the time since phase 1.
 
 1. **Undocumented log formats.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. Mitigation: decode defensively, and when a source yields no parseable usage record in a window where the CLI *is* running, show an explicit `no data` pill state — never a confident `0%`.
 2. **Claude's percentage is an estimate.** Until a full 5-hour window is observed the ceiling is unknown; the UI shows raw tokens (`1.24M`), not a percentage, and only switches to `%` once confident. Codex's authoritative number is the calibration reference — if the two diverge wildly on similar usage, the weights in `TokenWeights` are wrong, not the engine.
-3. **Bundle id** `com.redevify.tokenburn` vs product name "Burn Tracker" — kept as-is from the design's ship note; say the word if you want them aligned.
+3. ~~**Bundle id**~~ — settled: `com.redevify.tokenburn` stays, product name notwithstanding.
+4. **The Sparkle private key is a single point of failure.** It lives only in the login Keychain of
+   this machine. No backup means no future update for anyone already installed — not a bug that can
+   be fixed later, so back it up before the first release, not after.
