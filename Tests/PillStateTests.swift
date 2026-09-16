@@ -165,3 +165,56 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(Format.projection(used: 0, now: midJanuary, calendar: utc)
         == "no spend yet this month")
 }
+
+// MARK: - context menu
+
+@MainActor
+@Test func theMenuEnlargesTheClickableArea() {
+    let model = PillModel()
+    model.menuHeight = NotchMenuView.height(items: 6)
+    model.update(snapshot: snapshot(), at: now)
+    #expect(model.liveSize == PillState.collapsed.size)
+
+    model.toggleMenu()
+    // Otherwise the host passes clicks on the menu straight through to whatever
+    // is behind the notch. The collapsed pill is the wider of the two, so only
+    // the height grows here.
+    #expect(model.liveSize.width == PillState.collapsed.size.width)
+    #expect(model.liveSize.height
+        == PillState.collapsed.size.height + PillModel.menuGap + model.menuHeight)
+}
+
+@MainActor
+@Test func theMenuLeavesWithThePointer() {
+    let model = PillModel()
+    model.update(snapshot: snapshot(), at: now)
+    model.setPointerInside(true, at: now)
+    model.toggleMenu()
+    #expect(model.isMenuOpen)
+
+    model.setPointerInside(false, at: now)
+    #expect(!model.isMenuOpen)
+}
+
+/// The panel fills the shell and has its own controls; there is no room below it
+/// inside the host, and nothing the menu would add.
+@MainActor
+@Test func thePinnedPanelHasNoContextMenu() {
+    let model = PillModel()
+    model.update(snapshot: snapshot(), at: now)
+    model.setPinned(true, at: now)
+    model.toggleMenu()
+    #expect(!model.isMenuOpen)
+}
+
+@Test func theCopiedSummaryReadsAsASentence() {
+    var s = snapshot(percent: 62, weekly: 41)
+    s.resetsAt = now.addingTimeInterval(2 * 3600 + 4 * 60)
+    s.burn = BurnRate(weightedPerHour: 1000, percentPerHour: 18, headroomMinutes: 45)
+
+    #expect(Format.usageSummary(s, at: now) == """
+        Claude Code · 62% of the 5-hour window, resets in 2h 04m
+        Week 41% · 18%/hr · ~45 min headroom
+        """)
+    #expect(Format.usageSummary(nil).hasPrefix("Burn Tracker is still"))
+}

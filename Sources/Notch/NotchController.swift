@@ -22,11 +22,12 @@ final class NotchController {
         host.frame = NSRect(origin: .zero, size: size)
         panel.contentView = host
 
-        model.onStateChange = { [weak self] state in
-            self?.host.liveSize = state.size
-            self?.setKeyboardActive(state == .pinned)
+        model.onChromeChange = { [weak self] liveSize, wantsKeyboard in
+            self?.host.liveSize = liveSize
+            self?.setKeyboardActive(wantsKeyboard)
         }
-        host.liveSize = model.state.size
+        host.liveSize = model.liveSize
+        host.onRightMouseDown = { [weak model] in model?.toggleMenu() }
 
         observe()
         reanchor()
@@ -58,9 +59,7 @@ final class NotchController {
             NSApp.activate()
             panel.makeKeyAndOrderFront(nil)
             escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard event.keyCode == 53 else { return event }   // Esc
-                self?.model.setPinned(false)
-                return nil
+                self.flatMap { $0.handle(event) } ?? event
             }
         } else {
             escapeMonitor.map(NSEvent.removeMonitor)
@@ -68,6 +67,23 @@ final class NotchController {
             NSApp.deactivate()
             panel.orderFrontRegardless()
         }
+    }
+
+    /// The menu advertises ⌘C and ⌘Q, so they have to work wherever it can be
+    /// seen. An app with no menu bar has no responder chain to route them.
+    private func handle(_ event: NSEvent) -> NSEvent? {
+        if event.keyCode == 53 {                                     // Esc
+            // The menu is drawn on top of the panel, so it closes first.
+            if model.isMenuOpen { model.closeMenu() } else { model.setPinned(false) }
+            return nil
+        }
+        guard event.modifierFlags.contains(.command) else { return event }
+        switch event.charactersIgnoringModifiers {
+        case "c": UsageClipboard.copy(store.snapshot); model.closeMenu()
+        case "q": NSApp.terminate(nil)
+        default: return event
+        }
+        return nil
     }
 
     private func reanchor() {

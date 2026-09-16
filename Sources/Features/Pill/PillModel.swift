@@ -6,9 +6,29 @@ import Observation
 final class PillModel {
     var inputs = PillInputs()
 
-    private(set) var state: PillState = .collapsed {
-        didSet { if state != oldValue { onStateChange?(state) } }
+    private(set) var state: PillState = .collapsed { didSet { publishChrome() } }
+
+    /// The design's menu is drawn below the shell, inside the same host, so the
+    /// clickable area has to grow to cover it.
+    private(set) var isMenuOpen = false { didSet { publishChrome() } }
+    /// Set once by the view that owns the item list; the host needs the figure
+    /// before the menu has drawn.
+    var menuHeight: CGFloat = 0
+
+    /// Shell plus menu: what the host must let clicks through to.
+    var liveSize: CGSize {
+        let shell = state.size
+        guard isMenuOpen else { return shell }
+        return CGSize(
+            width: max(shell.width, NotchMenuView.width),
+            height: shell.height + Self.menuGap + menuHeight
+        )
     }
+
+    /// Esc closes both, and neither can hear it without the keyboard.
+    var wantsKeyboard: Bool { state == .pinned || isMenuOpen }
+
+    static let menuGap: CGFloat = 6
 
     /// Recomputed whenever anything feeding the decision changes.
     func update(snapshot: UsageSnapshot?, at now: Date = Date()) {
@@ -33,13 +53,32 @@ final class PillModel {
 
     func togglePinned(at now: Date = Date()) { setPinned(!inputs.isPinned, at: now) }
 
+    /// Right-click opens it; the panel has its own controls and no room below.
+    func toggleMenu() {
+        guard state != .pinned else { return }
+        isMenuOpen.toggle()
+    }
+
+    func closeMenu() { isMenuOpen = false }
+
+    func setPaused(_ paused: Bool, at now: Date = Date()) {
+        inputs.isPaused = paused
+        update(snapshot: inputs.snapshot, at: now)
+    }
+
     func setPointerInside(_ inside: Bool, at now: Date = Date()) {
         inputs.pointerInside = inside
+        // Leaving takes the menu with it. The menu sits inside the live area, so
+        // hovering it still counts as inside and it does not close underneath you.
+        if !inside { isMenuOpen = false }
         update(snapshot: inputs.snapshot, at: now)
     }
     /// False on external displays and pre-notch Macs — the pill docks to the menu
     /// bar there instead of hiding behind hardware.
     var hasNotch: Bool = true
 
-    @ObservationIgnored var onStateChange: ((PillState) -> Void)?
+    /// Called whenever the host's geometry or keyboard needs change.
+    @ObservationIgnored var onChromeChange: ((CGSize, Bool) -> Void)?
+
+    private func publishChrome() { onChromeChange?(liveSize, wantsKeyboard) }
 }

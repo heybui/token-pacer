@@ -8,6 +8,10 @@ import SwiftUI
 final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
     /// Size of the shell currently drawn, top-centred in the host.
     var liveSize: CGSize = .zero
+    /// SwiftUI has no right-click gesture, and the design's menu is not an NSMenu.
+    var onRightMouseDown: (() -> Void)?
+
+    override func rightMouseDown(with event: NSEvent) { onRightMouseDown?() }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)

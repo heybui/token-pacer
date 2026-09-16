@@ -10,6 +10,9 @@ struct PillView: View {
     var bySource: [UsageSplit] = []
     var onTogglePinned: () -> Void = {}
     var onClose: () -> Void = {}
+    var isMenuOpen = false
+    var menuItems: [NotchMenuItem] = []
+    var onCloseMenu: () -> Void = {}
     /// Nil until the first poll lands. On a cold start that reads hundreds of
     /// megabytes it is several seconds, and a fake 0% would be a lie.
     var isLoading: Bool { snapshot == nil }
@@ -31,9 +34,14 @@ struct PillView: View {
     var body: some View {
         VStack(spacing: 0) {
             shell
+            if isMenuOpen {
+                NotchMenuView(items: menuItems, onDismiss: onCloseMenu)
+                    .padding(.top, PillModel.menuGap)
+            }
             Spacer(minLength: 0)
         }
         .frame(width: PillState.hostSize.width, height: PillState.hostSize.height)
+        .animation(.easeOut(duration: 0.16), value: isMenuOpen)
     }
 
     private var shell: some View {
