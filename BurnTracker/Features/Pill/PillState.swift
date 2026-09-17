@@ -107,7 +107,7 @@ enum PillState: String, CaseIterable, Sendable {
 
     /// Room for the menu below the tallest shell. `PillModel.menuHeight` carries
     /// the real figure at runtime; this reserves for the list the app builds.
-    static let menuDrop = menuGap + menuHeight(items: 6)
+    static let menuDrop = menuGap + menuHeight(items: 7)
 
     /// The context menu's own geometry, from the same design board.
     static let menuGap: CGFloat = 6

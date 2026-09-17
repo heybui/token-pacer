@@ -10,6 +10,10 @@ struct PillRootView: View {
     var updater: Updater?
     var onOpenPreferences: () -> Void = {}
 
+    /// Where "Send feedback…" goes. One constant, so the day the page moves it
+    /// moves once.
+    private static let landingPage = URL(string: "https://github.com/heybui/burn-tracker")!
+
     var menuItems: [NotchMenuItem] {
         [
             NotchMenuItem(title: "Preferences…", key: "⌘,", action: onOpenPreferences),
@@ -21,6 +25,9 @@ struct PillRootView: View {
             },
             NotchMenuItem(title: "Check for updates…", isEnabled: updater?.canCheck ?? false) {
                 updater?.checkForUpdates()
+            },
+            NotchMenuItem(title: "Send feedback…") {
+                NSWorkspace.shared.open(Self.landingPage)
             },
             NotchMenuItem(title: "About Burn Tracker") {
                 NSApp.activate()
