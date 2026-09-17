@@ -1,6 +1,6 @@
-# Burn Tracker — implementation plan
+# Token Pacer — implementation plan
 
-macOS notch usage tracker. Design source: `design/Burn Tracker.dc.html`.
+macOS notch usage tracker. Design source: `design/Token Pacer.dc.html`.
 
 ## 0. Ground truth (corrected 2026-09-16)
 
@@ -46,7 +46,7 @@ guest at — the CLI makes that call on its own terms, with its own caching.
   instead of the panel, so the working directory is taken from the first project in
   `~/.claude.json` with `hasTrustDialogAccepted`.
 - **A GUI app has no PATH.** launchd gives it `/usr/bin:/bin:/usr/sbin:/sbin`, so the
-  binary is found by looking in the known install locations, or `BURNTRACKER_CLAUDE_BIN`.
+  binary is found by looking in the known install locations, or `TOKENPACER_CLAUDE_BIN`.
 
 ### What whole percentages cost: calibration is gone
 
@@ -217,18 +217,18 @@ Font: design uses Instrument Sans (OFL). Bundle it to match pixel-for-pixel; SF 
 **One Xcode target, folders only.** No SPM multi-module split until build times actually hurt — the layering below is enforced by import discipline and tests, not by module boundaries.
 
 Two build systems over one set of folders:
-- `BurnTracker.xcodeproj` — the shipping path (Info.plist, entitlements, hardened runtime, signing, Sparkle in phase 6). Uses Xcode 16+ **synchronized folder groups**, so `BurnTracker/` and `Tests/` are picked up wholesale and new files never need registering.
+- `TokenPacer.xcodeproj` — the shipping path (Info.plist, entitlements, hardened runtime, signing, Sparkle in phase 6). Uses Xcode 16+ **synchronized folder groups**, so `TokenPacer/` and `Tests/` are picked up wholesale and new files never need registering.
 - `Package.swift` — fast terminal loop (`swift build` ≈ 1.5s, `swift test`).
 
 Neither carries a file list, so they cannot drift.
 
 ```
-BurnTracker.xcodeproj     synchronized groups → BurnTracker/, BurnTrackerTests/
+TokenPacer.xcodeproj     synchronized groups → TokenPacer/, TokenPacerTests/
 Package.swift             same folders, CLI loop
-BurnTracker/              the target's sources, named for it rather than "Sources"
+TokenPacer/              the target's sources, named for it rather than "Sources"
   Info.plist              build inputs, not bundle resources: the synchronized
-  BurnTracker.entitlements  group carries a membership exception for both
-  Resources/              InstrumentSans.ttf · BurnTracker.icns
+  TokenPacer.entitlements  group carries a membership exception for both
+  Resources/              InstrumentSans.ttf · TokenPacer.icns
   App/                    main.swift · AppDelegate.swift · Probe.swift
   Notch/                  NotchPanel.swift · NotchController.swift · NotchAnchor.swift
                           PassthroughHostingView.swift
@@ -252,13 +252,13 @@ BurnTracker/              the target's sources, named for it rather than "Source
   DesignSystem/           Tokens.swift · ToneScale.swift · Typography.swift · Format.swift
                           OdometerText.swift · UsageRing.swift · CapBar.swift
                           PulsingDot.swift · ChasingBorder.swift · AttentionBadge.swift
-BurnTrackerTests/
+TokenPacerTests/
   Fixtures/               claude-session.jsonl · codex-rollout.jsonl (trimmed real logs)
   EngineTests.swift · SourceTests.swift · PillStateTests.swift · ArchiveTests.swift · …
 ```
 
 No `Resources/` at the repo root and no file lists anywhere: everything the app
-ships lives under `BurnTracker/`, and the synchronized group registers it. Adding
+ships lives under `TokenPacer/`, and the synchronized group registers it. Adding
 a font or an icon needs no project edit. `Info.plist` and the entitlements sit
 beside it as build-setting inputs, excluded from the group's membership so they
 are not also copied in as resources, and from SPM's target so it does not warn
@@ -342,7 +342,7 @@ make appcast    # sign the update with the EdDSA key, write build/appcast.xml
 make cask       # print the tap formula with the image's real checksum
 ```
 
-Then upload `BurnTracker-<version>.dmg` **and `appcast.xml`** to a GitHub release
+Then upload `TokenPacer-<version>.dmg` **and `appcast.xml`** to a GitHub release
 tagged `v<version>`, and put the cask in a tap.
 
 One-time setup, in order:
@@ -350,7 +350,7 @@ One-time setup, in order:
 1. **A Developer ID Application certificate.** The paid Developer Program; this
    machine has only an Apple Development certificate, which cannot be notarized
    and which Gatekeeper refuses on any other Mac. `make check-devid` says so.
-2. `xcrun notarytool store-credentials burn-tracker` — Apple ID, team, and an
+2. `xcrun notarytool store-credentials token-pacer` — Apple ID, team, and an
    app-specific password. Silent thereafter.
 3. ~~Sparkle's EdDSA key pair~~ ✅ generated. The public half is in `Info.plist`;
    the private half is in the login Keychain as *Private key for signing Sparkle
@@ -370,8 +370,9 @@ update path is — an installed copy will only accept an update signed the same 
   because this app has no Dock icon and no menu bar — Sparkle's own panel would arrive from nowhere,
   so a scheduled find speaks through the threshold banner and only a check the user asked for opens
   the panel.
-- **The bundle id stays `com.redevify.tokenburn`.** Decided at the last moment it was free to change:
-  after a public release it is what every install and preference file is keyed to.
+- **The bundle id is `com.redevify.token-pacer`.** Changed with the rename, while it was still free:
+  after a public release it is what every install and preference file is keyed to, and nothing had
+  shipped yet.
 - **Instrument Sans is bundled** and registered twice over (`ATSApplicationFontsPath` for the bundle,
   `CTFontManagerRegisterFontsForURL` for `swift run`). Availability decides whether it is used, never
   the registration return value — a silent fallback to the system face is how a design drifts.
@@ -456,7 +457,7 @@ update path is — an installed copy will only accept an update signed the same 
 
 1. **Undocumented log formats.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. Mitigation: decode defensively, and when a source yields no parseable usage record in a window where the CLI *is* running, show an explicit `no data` pill state — never a confident `0%`.
 2. **Claude's percentage is an estimate.** Until a full 5-hour window is observed the ceiling is unknown; the UI shows raw tokens (`1.24M`), not a percentage, and only switches to `%` once confident. Codex's authoritative number is the calibration reference — if the two diverge wildly on similar usage, the weights in `TokenWeights` are wrong, not the engine.
-3. ~~**Bundle id**~~ — settled: `com.redevify.tokenburn` stays, product name notwithstanding.
+3. ~~**Bundle id**~~ — settled: `com.redevify.token-pacer`, renamed with the product before release.
 4. **The Sparkle private key is a single point of failure.** It lives only in the login Keychain of
    this machine. No backup means no future update for anyone already installed — not a bug that can
    be fixed later, so back it up before the first release, not after.

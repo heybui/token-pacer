@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key><string>Token Pacer</string>
+	<key>CFBundleDisplayName</key><string>Token Pacer</string>
+	<key>CFBundleExecutable</key><string>TokenPacer</string>
+	<key>CFBundleIdentifier</key><string>com.redevify.token-pacer</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>0.1.0</string>
+	<key>CFBundleVersion</key><string>1</string>
+	<key>LSMinimumSystemVersion</key><string>15.0</string>
+	<!-- "." is Contents/Resources itself. Xcode's synchronized group flattens a
+	     folder of resources into it, so a `Fonts` subdirectory would exist on the
+	     Makefile path and not the Xcode one. -->
+	<key>ATSApplicationFontsPath</key><string>.</string>
+	<key>CFBundleIconFile</key><string>TokenPacer</string>
+	<key>LSUIElement</key><true/>
+
+	<!-- Sparkle. The feed is a release asset, so `releases/latest/download`
+	     always resolves to the newest one and nothing else needs hosting.
+	     The private half of SUPublicEDKey lives in the login Keychain as
+	     "Private key for signing Sparkle updates" — it is not in this repo, and
+	     losing it means no existing install can ever be updated again. -->
+	<key>SUFeedURL</key><string>https://github.com/heybui/token-pacer/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key><string>upjF7oD8vW9TXGxqDlR4XSQ5AQNojCkT8Xi87J0DZWc=</string>
+	<key>SUEnableAutomaticChecks</key><true/>
+	<key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>

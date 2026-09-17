@@ -1,4 +1,4 @@
-APP  := BurnTracker
+APP  := TokenPacer
 ## An ad-hoc signature is a fresh identity every build. Nothing reads the Keychain
 ## any more, so no grant rides on it — but Sparkle keys updates to the designated
 ## requirement, and an ad-hoc one changes on every rebuild. A real signing identity
@@ -12,7 +12,7 @@ DEST := build/$(APP).app
 
 ## Marketing version from the plist; build number from the commit count, so it
 ## only ever goes up. Sparkle compares CFBundleVersion, not the pretty one.
-VERSION ?= $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" BurnTracker/Info.plist)
+VERSION ?= $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" TokenPacer/Info.plist)
 BUILD   ?= $(shell git rev-list --count HEAD)
 DMG     := build/$(APP)-$(VERSION).dmg
 
@@ -20,8 +20,8 @@ DMG     := build/$(APP)-$(VERSION).dmg
 ## Development one above is for this machine only and cannot be notarized.
 ## Requires the paid Developer Program.
 DEVID   := $(shell security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk '{print $$2}')
-## `xcrun notarytool store-credentials burn-tracker` once, then it is silent.
-NOTARY_PROFILE ?= burn-tracker
+## `xcrun notarytool store-credentials token-pacer` once, then it is silent.
+NOTARY_PROFILE ?= token-pacer
 
 ## Sparkle ships as an XCFramework. SPM links it but cannot embed it, so the
 ## bundle assembly below copies it in and signs it inside-out.
@@ -49,9 +49,9 @@ app: build
 	rm -rf $(DEST)
 	mkdir -p $(DEST)/Contents/MacOS $(DEST)/Contents/Resources
 	cp $(BIN) $(DEST)/Contents/MacOS/$(APP)
-	cp BurnTracker/Info.plist $(DEST)/Contents/Info.plist
-	cp BurnTracker/Resources/InstrumentSans.ttf $(DEST)/Contents/Resources/
-	cp BurnTracker/Resources/BurnTracker.icns $(DEST)/Contents/Resources/BurnTracker.icns
+	cp TokenPacer/Info.plist $(DEST)/Contents/Info.plist
+	cp TokenPacer/Resources/InstrumentSans.ttf $(DEST)/Contents/Resources/
+	cp TokenPacer/Resources/TokenPacer.icns $(DEST)/Contents/Resources/TokenPacer.icns
 	mkdir -p $(DEST)/Contents/Frameworks
 	cp -R $(SPARKLE) $(DEST)/Contents/Frameworks/
 	install_name_tool -add_rpath @executable_path/../Frameworks $(DEST)/Contents/MacOS/$(APP)
@@ -84,7 +84,7 @@ check-devid:
 ## No --deep — it signs nested code wrong, and Apple's own advice is against it.
 release-app: check-devid
 	$(MAKE) app SIGN=$(DEVID) SIGNFLAGS="--options runtime --timestamp" \
-	            ENTITLE="--entitlements BurnTracker/BurnTracker.entitlements"
+	            ENTITLE="--entitlements TokenPacer/TokenPacer.entitlements"
 	codesign --verify --strict --deep --verbose=2 $(DEST)
 
 ## Drag-to-Applications disk image. No create-dmg dependency: a staging folder
@@ -105,7 +105,7 @@ dmg: release-app
 ## installed copy refuses the download, which is the whole point of the key.
 appcast: $(DMG)
 	$(SPARKLE_BIN)/generate_appcast --download-url-prefix \
-	  https://github.com/heybui/burn-tracker/releases/download/v$(VERSION)/ build
+	  https://github.com/heybui/token-pacer/releases/download/v$(VERSION)/ build
 	@echo "→ build/appcast.xml"
 
 ## Apple staples the ticket to the image, so a first launch works offline.
@@ -120,25 +120,25 @@ notarize: dmg
 cask: dmg
 	@mkdir -p build
 	@printf '%s\n' \
-	'cask "burn-tracker" do' \
+	'cask "token-pacer" do' \
 	'  version "$(VERSION)"' \
 	'  sha256 "$(shell shasum -a 256 $(DMG) | cut -d" " -f1)"' \
 	'' \
-	'  url "https://github.com/heybui/burn-tracker/releases/download/v#{version}/$(APP)-#{version}.dmg"' \
-	'  name "Burn Tracker"' \
+	'  url "https://github.com/heybui/token-pacer/releases/download/v#{version}/$(APP)-#{version}.dmg"' \
+	'  name "Token Pacer"' \
 	'  desc "Claude Code and Codex usage in the notch"' \
-	'  homepage "https://github.com/heybui/burn-tracker"' \
+	'  homepage "https://github.com/heybui/token-pacer"' \
 	'' \
 	'  depends_on macos: ">= :sequoia"' \
 	'' \
 	'  app "$(APP).app"' \
 	'' \
 	'  zap trash: [' \
-	'    "~/Library/Application Support/BurnTracker",' \
-	'    "~/Library/Preferences/com.redevify.tokenburn.plist",' \
+	'    "~/Library/Application Support/TokenPacer",' \
+	'    "~/Library/Preferences/com.redevify.token-pacer.plist",' \
 	'  ]' \
-	'end' > build/burn-tracker.rb
-	@echo "→ build/burn-tracker.rb"
+	'end' > build/token-pacer.rb
+	@echo "→ build/token-pacer.rb"
 
 xcbuild:   ## shipping path: signing, entitlements, hardened runtime
 	xcodebuild -project $(APP).xcodeproj -scheme $(APP) -configuration Debug build
