@@ -4,24 +4,21 @@ import os
 /// What has to outlive the process.
 ///
 /// The app was entirely stateless across launches, which cost more than it
-/// looked: calibration restarted from zero anchors every time — so during
-/// development, where a rebuild kills the app every few minutes, the conversion
-/// could never be measured at all — and the 10-minute floor restarted with it,
-/// so a relaunch jumped the queue at an undocumented endpoint.
+/// looked: the refresh floor restarted with the process, so during development —
+/// where a rebuild kills the app every few minutes — every launch spawned another
+/// CLI, and the last reading was thrown away with it.
 struct ArchivedState: Codable, Sendable {
     /// Bumped when a field's meaning changes. A state file from a newer version
     /// is ignored rather than guessed at.
     ///
-    /// 2: every anchor written before this read the endpoint's percentages
-    /// through a fraction guess that turned a genuine 1% into 100%, and the
-    /// calibration those anchors taught is wrong in the same way. There is no
-    /// repairing them in place, so they are dropped and re-measured. The event
-    /// archive is a separate file and keeps its cursors, so this costs no cold
-    /// start.
-    static let currentVersion = 2
+    /// 3: the limits no longer come from the usage endpoint but from the CLI's
+    /// own `/usage` panel, so the anchors and the calibration a version-2 file
+    /// carries describe a reading this build cannot make. The event archive is a
+    /// separate file and keeps its cursors, so this costs no cold start.
+    static let currentVersion = 3
 
     var version = currentVersion
-    var trackers: [SourceID: LiveLimitsTracker] = [:]
+    var pollers: [SourceID: PanelPoller] = [:]
     /// The last reading itself, not just the tracker around it. Without it a
     /// relaunch has an anchor but nothing to report, so the pill falls back to
     /// the inferred ceiling until the next request is due — ten minutes of a

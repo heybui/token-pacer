@@ -25,9 +25,7 @@ enum BurnRateCalculator {
 
     /// - Parameters:
     ///   - currentPercent: the figure actually on screen, authoritative when the
-    ///     endpoint supplied it. Headroom must agree with what the user is reading.
-    ///   - weightedPerPercent: the calibrated conversion, when two anchors have
-    ///     measured it. Beats the inferred ceiling whenever it exists.
+    ///     panel supplied it. Headroom must agree with what the user is reading.
     ///   - windowEndsAt: headroom can never outlast the window; at reset it refills.
     static func rate(
         events: [UsageEvent],
@@ -37,7 +35,6 @@ enum BurnRateCalculator {
         weights: TokenWeights = .default,
         sample: TimeInterval = sample,
         currentPercent: Double? = nil,
-        weightedPerPercent: Double? = nil,
         windowEndsAt: Date? = nil
     ) -> BurnRate {
         let cutoff = now.addingTimeInterval(-sample)
@@ -50,10 +47,11 @@ enum BurnRateCalculator {
         let elapsed = max(60, min(sample, now.timeIntervalSince(recent[0].timestamp)))
         let perHour = weighted / elapsed * 3600
 
-        // A calibrated conversion is measured against the real limit; the ceiling
-        // is only ever inferred from log volume.
-        let perPercent = weightedPerPercent ?? ceiling.weightedTokens.map { $0 / 100 }
-        guard let perPercent, perPercent > 0, perHour > 0 else {
+        // Inferred from log volume, and that is the only conversion there is: the
+        // panel states percentages as whole numbers, never how many tokens made one.
+        guard let perPercent = ceiling.weightedTokens.map({ $0 / 100 }),
+              perPercent > 0, perHour > 0
+        else {
             return BurnRate(weightedPerHour: perHour, percentPerHour: nil, headroomMinutes: nil)
         }
 

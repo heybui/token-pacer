@@ -5,303 +5,74 @@ import Testing
 private let t0 = Date(timeIntervalSince1970: 1_789_000_000)
 private func at(_ minutes: Double) -> Date { t0.addingTimeInterval(minutes * 60) }
 
-// MARK: - calibration
+// MARK: - when a run is worth spawning a process for
 
-@Test func twoAnchorsMeasureTokensPerPercent() {
-    var calibration = LimitsCalibration()
-    calibration.observe(
-        from: LimitsAnchor(utilization: 11, observedAt: at(0), resetsAt: at(300)),
-        to: LimitsAnchor(utilization: 15, observedAt: at(10), resetsAt: at(300)),
-        weightedBetween: 400_000
-    )
-    // 400k weighted tokens moved it 4 points.
-    #expect(calibration.weightedPerPercent == 100_000)
-    #expect(calibration.isCalibrated)
+@Test func theFirstRunHappensAtLaunch() {
+    #expect(PanelPoller().shouldRun(at: at(0)))
 }
 
-/// A pair spanning a reset measures nothing: the number fell without tokens being
-/// returned. Learning from it would corrupt the conversion.
-@Test func aPairSpanningAResetIsIgnored() {
-    var calibration = LimitsCalibration()
-    calibration.observe(
-        from: LimitsAnchor(utilization: 88, observedAt: at(0), resetsAt: at(5)),
-        to: LimitsAnchor(utilization: 3, observedAt: at(10), resetsAt: at(305)),
-        weightedBetween: 250_000
-    )
-    #expect(calibration.isCalibrated == false)
-    #expect(calibration.samples == 0)
-}
-
-@Test func anchorsWithNoLocalUsageAreIgnored() {
-    var calibration = LimitsCalibration()
-    // Usage from another machine or claude.ai moved the number; local logs saw
-    // nothing, so this pair cannot calibrate anything.
-    calibration.observe(
-        from: LimitsAnchor(utilization: 10, observedAt: at(0), resetsAt: nil),
-        to: LimitsAnchor(utilization: 14, observedAt: at(10), resetsAt: nil),
-        weightedBetween: 0
-    )
-    #expect(calibration.isCalibrated == false)
-}
-
-@Test func laterSamplesPullTheEstimateWithoutDiscardingHistory() {
-    var calibration = LimitsCalibration()
-    let a = LimitsAnchor(utilization: 10, observedAt: at(0), resetsAt: nil)
-    let b = LimitsAnchor(utilization: 20, observedAt: at(10), resetsAt: nil)
-    calibration.observe(from: a, to: b, weightedBetween: 1_000_000)   // 100k/point
-    calibration.observe(from: a, to: b, weightedBetween: 2_000_000)   // 200k/point
-
-    let value = try! #require(calibration.weightedPerPercent)
-    #expect(value > 100_000 && value < 200_000)
-    #expect(calibration.samples == 2)
-}
-
-@Test func extrapolationWaitsForCalibration() {
-    let calibration = LimitsCalibration()
-    let anchor = LimitsAnchor(utilization: 11, observedAt: at(0), resetsAt: at(300))
-    #expect(calibration.extrapolate(from: anchor, weightedSince: 500_000, at: at(5)) == nil)
-}
-
-@Test func extrapolationAddsLocalUsageToTheAnchor() {
-    var calibration = LimitsCalibration()
-    calibration.observe(
-        from: LimitsAnchor(utilization: 10, observedAt: at(0), resetsAt: nil),
-        to: LimitsAnchor(utilization: 20, observedAt: at(10), resetsAt: nil),
-        weightedBetween: 1_000_000
-    )
-    let anchor = LimitsAnchor(utilization: 20, observedAt: at(10), resetsAt: at(300))
-    // Half a million weighted tokens at 100k/point is five points on top of 20.
-    #expect(calibration.extrapolate(from: anchor, weightedSince: 500_000, at: at(15)) == 25)
-}
-
-@Test func extrapolationRestartsFromZeroPastTheReset() {
-    var calibration = LimitsCalibration()
-    calibration.observe(
-        from: LimitsAnchor(utilization: 10, observedAt: at(0), resetsAt: nil),
-        to: LimitsAnchor(utilization: 20, observedAt: at(10), resetsAt: nil),
-        weightedBetween: 1_000_000
-    )
-    let anchor = LimitsAnchor(utilization: 90, observedAt: at(10), resetsAt: at(20))
-    let after = calibration.extrapolate(from: anchor, weightedSince: 200_000, at: at(25))
-    #expect(after == 2)      // not 92
-}
-
-@Test func extrapolationIsClampedToOneHundred() {
-    var calibration = LimitsCalibration()
-    calibration.observe(
-        from: LimitsAnchor(utilization: 10, observedAt: at(0), resetsAt: nil),
-        to: LimitsAnchor(utilization: 20, observedAt: at(10), resetsAt: nil),
-        weightedBetween: 1_000_000
-    )
-    let anchor = LimitsAnchor(utilization: 95, observedAt: at(10), resetsAt: at(300))
-    #expect(calibration.extrapolate(from: anchor, weightedSince: 99_000_000, at: at(15)) == 100)
-}
-
-// MARK: - refresh policy
-
-private func state(
-    lastCall: Date?, activity: Bool = true, estimate: Double? = nil,
-    confirmed: Double? = nil,
-    launched: Bool = true, woke: Bool = false
-) -> LimitsRefreshPolicy.State {
-    .init(
-        lastCallAt: lastCall, lastConfirmedUtilization: confirmed, hasNewActivity: activity,
-        estimate: estimate, didLaunchFetch: launched, didWake: woke
-    )
-}
-
-@Test func theFirstCallHappensAtLaunch() {
-    let policy = LimitsRefreshPolicy()
-    #expect(policy.reason(at: at(0), state: state(lastCall: nil, launched: false)) == .launch)
-}
-
-/// Utilization cannot move without local token events, so an idle machine is silent.
-@Test func noLocalActivityMeansNoRequest() {
-    let policy = LimitsRefreshPolicy()
-    #expect(policy.reason(at: at(60), state: state(lastCall: at(0), activity: false)) == nil)
-}
-
-@Test func routineAnchorsAreTenMinutesApart() {
-    let policy = LimitsRefreshPolicy()
-    #expect(policy.reason(at: at(9), state: state(lastCall: at(0))) == nil)
-    #expect(policy.reason(at: at(10), state: state(lastCall: at(0))) == .scheduled)
-}
-
-/// A false 90% warning is the worst failure mode, so an estimate reaching a
-/// threshold buys one early confirmation.
-@Test func crossingAThresholdJumpsTheQueue() {
-    let policy = LimitsRefreshPolicy()
-    let reason = policy.reason(
-        at: at(3), state: state(lastCall: at(0), estimate: 91, confirmed: 60)
-    )
-    #expect(reason == .confirmThreshold(90))
-}
-
-@Test func anAlreadyConfirmedThresholdIsNotRechecked() {
-    let policy = LimitsRefreshPolicy()
-    let reason = policy.reason(
-        at: at(3), state: state(lastCall: at(0), estimate: 91, confirmed: 90)
-    )
-    #expect(reason == nil)
-}
-
-@Test func thresholdConfirmationStillRespectsItsOwnFloor() {
-    let policy = LimitsRefreshPolicy()
-    let reason = policy.reason(
-        at: at(1), state: state(lastCall: at(0), estimate: 91, confirmed: 10)
-    )
-    #expect(reason == nil)
-}
-
-/// A reset needs no request: `resets_at` is known and the extrapolation restarts
-/// from zero locally, so an idle machine stays silent straight through a rollover.
-@Test func aResetDoesNotEarnARequestWhileIdle() {
-    let policy = LimitsRefreshPolicy()
-    let reason = policy.reason(at: at(10), state: state(lastCall: at(0), activity: false))
-    #expect(reason == nil)
-}
-
-@Test func aHeavyEightHourDayStaysUnderFiftyCalls() {
-    let policy = LimitsRefreshPolicy()
-    var calls = 0
-    var last: Date?
-    // One tick a minute, always busy, never near a threshold.
-    for minute in 0..<(8 * 60) {
-        let now = at(Double(minute))
-        if policy.reason(at: now, state: state(lastCall: last, estimate: 40, confirmed: 40)) != nil {
-            calls += 1
-            last = now
-        }
-    }
-    #expect(calls <= 48)
-}
-
-// MARK: - activity gating
-
-@Test func anIdleMachineNeverRequests() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
-
-    // Hours pass with no local tokens. Utilization cannot have moved.
-    for hour in 1...8 {
-        #expect(tracker.refreshReason(at: at(Double(hour) * 60)) == nil)
-    }
-    #expect(tracker.hasNewActivity == false)
-}
-
-@Test func activityAfterTheFloorEarnsARequest() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
-
-    #expect(tracker.refreshReason(at: at(30)) == nil)   // idle, well past the floor
-    tracker.record(weighted: 250_000)
-    #expect(tracker.hasNewActivity)
-    #expect(tracker.refreshReason(at: at(30)) == .scheduled)
+@Test func anIdleMachineNeverRuns() {
+    var poller = PanelPoller()
+    poller.ran(at: at(0))
+    #expect(poller.shouldRun(at: at(600)) == false)     // ten hours, no tokens
 }
 
 @Test func activityInsideTheFloorStillWaits() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
-    tracker.record(weighted: 250_000)
-    #expect(tracker.refreshReason(at: at(5)) == nil)
-    #expect(tracker.refreshReason(at: at(10)) == .scheduled)
+    var poller = PanelPoller()
+    poller.ran(at: at(0))
+    poller.record(weighted: 50_000)
+    #expect(poller.shouldRun(at: at(4)) == false)
+    #expect(poller.shouldRun(at: at(5)))
 }
 
-@Test func anchoringCalibratesAndClearsTheActivitySignal() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 10, observedAt: at(0), resetsAt: at(300)), at: at(0))
-    tracker.record(weighted: 1_000_000)
-    tracker.anchored(LimitsAnchor(utilization: 20, observedAt: at(10), resetsAt: at(300)), at: at(10))
-
-    #expect(tracker.calibration.weightedPerPercent == 100_000)
-    #expect(tracker.hasNewActivity == false)
-    #expect(tracker.lastConfirmed == 20)
+@Test func aRunClearsTheActivitySignal() {
+    var poller = PanelPoller()
+    poller.ran(at: at(0))
+    poller.record(weighted: 50_000)
+    poller.ran(at: at(5))
+    #expect(poller.hasNewActivity == false)
+    #expect(poller.shouldRun(at: at(30)) == false)
 }
 
-@Test func theFigureMovesBetweenAnchorsWithoutRequesting() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 10, observedAt: at(0), resetsAt: at(300)), at: at(0))
-    tracker.record(weighted: 1_000_000)
-    tracker.anchored(LimitsAnchor(utilization: 20, observedAt: at(10), resetsAt: at(300)), at: at(10))
+/// A CLI that is broken or mid-upgrade must not be respawned all day.
+@Test func failuresBackOffInsteadOfRetryingEveryFloor() {
+    var poller = PanelPoller()
+    poller.ran(at: at(0))
+    poller.record(weighted: 50_000)
+    poller.failed(at: at(5))
 
-    tracker.record(weighted: 300_000)          // 3 points at 100k/point
-    #expect(tracker.utilization(at: at(12)) == 23)
-    #expect(tracker.refreshReason(at: at(12)) == nil)   // still inside the floor
+    #expect(poller.shouldRun(at: at(14)) == false)       // 2 × 5 minutes
+    #expect(poller.shouldRun(at: at(15)))
+
+    poller.failed(at: at(15))
+    #expect(poller.shouldRun(at: at(30)) == false)       // 4 × 5 minutes
+    #expect(poller.shouldRun(at: at(35)))
 }
 
-@Test func failuresBackOffInsteadOfRetryingEveryTick() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
-    tracker.record(weighted: 250_000)
+@Test func aSuccessfulRunClearsTheBackoff() {
+    var poller = PanelPoller()
+    poller.ran(at: at(0))
+    poller.record(weighted: 50_000)
+    poller.failed(at: at(5))
+    poller.record(weighted: 50_000)
+    poller.ran(at: at(20))
 
-    tracker.failed(at: at(10))
-    #expect(tracker.refreshReason(at: at(25)) == nil)   // 20 min floor after one failure
-    #expect(tracker.refreshReason(at: at(30)) == .scheduled)
-
-    tracker.failed(at: at(30))
-    tracker.failed(at: at(70))
-    #expect(tracker.consecutiveFailures == 3)
-    // Doubling is capped at an hour, so this is 60 min after the last attempt.
-    #expect(tracker.refreshReason(at: at(120)) == nil)
-    #expect(tracker.refreshReason(at: at(130)) == .scheduled)
+    poller.record(weighted: 50_000)
+    #expect(poller.shouldRun(at: at(25)))
 }
 
-@Test func aSuccessfulAnchorClearsTheBackoff() {
-    var tracker = LiveLimitsTracker()
-    tracker.record(weighted: 100)
-    tracker.failed(at: at(0))
-    tracker.failed(at: at(60))
-    #expect(tracker.consecutiveFailures == 2)
-
-    tracker.anchored(LimitsAnchor(utilization: 5, observedAt: at(90), resetsAt: at(300)), at: at(90))
-    #expect(tracker.consecutiveFailures == 0)
-}
-
-@Test func nothingIsShownBeforeTheFirstReading() {
-    let tracker = LiveLimitsTracker()
-    #expect(tracker.utilization(at: at(0)) == nil)
-}
-
-@Test func anUncalibratedTrackerStillShowsTheAnchor() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 42, observedAt: at(0), resetsAt: at(300)), at: at(0))
-    tracker.record(weighted: 500_000)
-    // No second anchor yet, so no conversion exists; the last known truth stands.
-    #expect(tracker.utilization(at: at(5)) == 42)
-}
-
-/// Resuming after a quiet spell anchors on the next tick, not 10 minutes later:
-/// the floor is time since the last *call*, and that is already long past.
-@Test func firstActivityAfterAQuietSpellAnchorsImmediately() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
-
-    // An hour of nothing.
-    #expect(tracker.refreshReason(at: at(60)) == nil)
-
-    // The first logged tokens after that are anchored at once.
-    tracker.record(weighted: 120_000)
-    #expect(tracker.refreshReason(at: at(60)) == .scheduled)
-}
-
-/// While work continues, the floor throttles to one call per 10 minutes even
-/// though every 5s tick sees fresh tokens.
-@Test func continuousWorkIsThrottledToOneCallPerFloor() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 30, observedAt: at(0), resetsAt: at(300)), at: at(0))
-
-    var calls = 0
-    for tick in 1...120 {                       // two hours, a tick a minute
-        let now = at(Double(tick))
-        tracker.record(weighted: 50_000)        // always busy
-        if tracker.refreshReason(at: now) != nil {
-            calls += 1
-            tracker.anchored(
-                LimitsAnchor(utilization: 30, observedAt: now, resetsAt: at(300)), at: now
-            )
+/// Eight hours of continuous work: one process every five minutes, not one per tick.
+@Test func continuousWorkIsThrottledToOneRunPerFloor() {
+    var poller = PanelPoller()
+    var runs = 0
+    for tick in stride(from: 0.0, to: 480, by: 5.0 / 60) {   // a 5s tick, 8 hours
+        poller.record(weighted: 200)
+        if poller.shouldRun(at: at(tick)) {
+            poller.ran(at: at(tick))
+            runs += 1
         }
     }
-    #expect(calls == 12)                        // 120 minutes / 10
+    #expect(runs == 96)                                       // launch, then 0:05 … 7:55
 }
 
 // MARK: - surviving a window reset
@@ -329,28 +100,17 @@ private func state(
     #expect(rolled.usedPercent == 42)         // the fresher figure still lands
 }
 
-/// The window emptying is knowable without any calibration, and is a far better
-/// answer than a ceiling guessed from log volume.
-@Test func anUncalibratedTrackerReportsZeroPastTheReset() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 88, observedAt: at(0), resetsAt: at(300)), at: at(0))
-    #expect(tracker.utilization(at: at(100)) == 88)
-    #expect(tracker.utilization(at: at(301)) == 0)
-}
-
-/// The whole point: a reset must not drop the source back to inference.
+/// The whole point: a reset must not drop the source back to inference just
+/// because the next run is minutes away. The window emptying needs no reading.
 @Test func theReportedFigureSurvivesAReset() {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 88, observedAt: at(0), resetsAt: at(300)), at: at(0))
-
     let anchored = RateLimitWindow(usedPercent: 88, windowMinutes: 300, resetsAt: at(300))
     let now = at(310)
-    let live = try! #require(tracker.utilization(at: now))
-    let carried = anchored.rolled(to: now, usedPercent: live)
-
     let snapshot = SnapshotBuilder.build(
         source: .claude,
-        limits: RateLimits(primary: carried, secondary: nil, planType: nil, observedAt: at(0)),
+        limits: RateLimits(
+            primary: anchored.rolled(to: now, usedPercent: 0),
+            secondary: nil, planType: nil, observedAt: at(0)
+        ),
         events: [], ceiling: Ceiling(weightedTokens: 1_000_000, observedWindows: 9), at: now
     )
     #expect(snapshot.origin == .authoritative)
@@ -367,4 +127,73 @@ private func state(
         source: .claude, limits: limits, events: [], ceiling: .unknown, at: at(6)
     )
     #expect(snapshot.confirmedAt == at(0))
+}
+
+// MARK: - what the store does between readings
+
+/// A source with no logs at all, so the store's only input is the panel.
+private actor SilentSource: UsageSource {
+    nonisolated let id: SourceID = .claude
+    func poll() throws -> SourceSnapshot { SourceSnapshot(source: id, events: [], limits: nil) }
+    func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {}
+    func cursors() -> [String: JSONLReader.Cursor] { [:] }
+}
+
+@MainActor
+private func store(reading: @escaping ClaudeUsagePanel.Reader) async -> UsageStore {
+    let store = UsageStore(
+        sources: [SilentSource()], interval: 3600,
+        usagePanel: ClaudeUsagePanel(read: reading), archive: nil
+    )
+    await store.refresh()
+    // The reading is launched, not awaited: give it the tick it lands on.
+    for _ in 0..<50 where store.isReadingLimits {
+        try? await Task.sleep(for: .milliseconds(20))
+    }
+    return store
+}
+
+/// The two windows expire independently. Gating the weekly roll on the session
+/// having reset too dropped the weekly figure every Monday at 1am — and at 1am
+/// there is no activity to earn the reading that would bring it back.
+///
+/// Anchored on the wall clock, not on `t0`: the panel prints no year, so the
+/// parser resolves a stamp against the real date, and a fixture dated 2026 would
+/// land in the past and roll forward a year.
+@MainActor
+@Test func theWeeklyWindowRollsOnItsOwnReset() async {
+    let base = Date()
+    let panel = """
+    Current session 40% used Resets \(clock(base.addingTimeInterval(10 * 3600))) (UTC) \
+    Current week (all models) 80% used Resets \(clock(base.addingTimeInterval(5 * 60))) (UTC)
+    """
+    let store = await store(reading: { panel })
+
+    // Ten minutes on: the weekly window has reset, the session window has not.
+    await store.refresh(now: base.addingTimeInterval(600))
+    #expect(store.snapshot?.sessionPercent == 40)      // untouched
+    #expect(store.snapshot?.weeklyPercent == 0)        // rolled, not dropped
+    #expect(store.snapshot?.weeklyResetsAt != nil)
+}
+
+/// A healthy log poll runs every 5s; a reading happens every 5 minutes at most,
+/// and not at all while backed off. The message has to survive the ticks in
+/// between or it flashes once and is gone.
+@MainActor
+@Test func aLimitsFailureStaysOnScreenBetweenReadings() async {
+    let store = await store(reading: { throw PanelError.cliNotFound })
+    #expect(store.errors[.claude] == PanelError.cliNotFound.message)
+
+    // Several ticks with no reading — cliNotFound is fatal, so there is no retry.
+    for tick in 1...3 { await store.refresh(now: Date().addingTimeInterval(Double(tick) * 5)) }
+    #expect(store.errors[.claude] == PanelError.cliNotFound.message)
+}
+
+/// `h:mma (UTC)`, the shape the panel prints.
+private func clock(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(identifier: "UTC")
+    formatter.dateFormat = "MMM d h:mma"
+    return formatter.string(from: date)
 }

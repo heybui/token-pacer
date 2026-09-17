@@ -11,7 +11,7 @@ import os
 enum Log {
     private static let subsystem = "com.redevify.tokenburn"
 
-    static let usage = Logger(subsystem: subsystem, category: "usage-api")
+    static let usage = Logger(subsystem: subsystem, category: "usage")
     static let ingest = Logger(subsystem: subsystem, category: "ingest")
     static let notch = Logger(subsystem: subsystem, category: "notch")
 }

@@ -9,54 +9,55 @@ private func temporaryArchive() -> Archive {
         .appending(path: "burn-tracker-tests/\(UUID().uuidString)/state.json"))
 }
 
-/// Calibration takes two anchors ten minutes apart. A process that restarts more
-/// often than that — every rebuild during development — can never measure it.
-@Test func calibrationSurvivesARelaunch() throws {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 10, observedAt: t0, resetsAt: nil), at: t0)
-    tracker.record(weighted: 50_000)
-    tracker.anchored(
-        LimitsAnchor(utilization: 15, observedAt: t0.addingTimeInterval(600), resetsAt: nil),
-        at: t0.addingTimeInterval(600)
-    )
-    #expect(tracker.calibration.weightedPerPercent == 10_000)
+/// The floor cannot depend on uptime: a relaunch used to reset it, so a rebuild
+/// every few minutes during development meant a `/usage` run every few minutes.
+@Test func theRunFloorSurvivesARelaunch() throws {
+    var poller = PanelPoller()
+    poller.ran(at: t0)
 
     let archive = temporaryArchive()
-    archive.save(ArchivedState(trackers: [.claude: tracker], isPaused: true))
+    archive.save(ArchivedState(pollers: [.claude: poller], isPaused: true))
 
-    let restored = try #require(archive.load())
-    #expect(restored.trackers[.claude]?.calibration.weightedPerPercent == 10_000)
-    #expect(restored.trackers[.claude]?.calibration.samples == 1)
-    #expect(restored.isPaused)
-}
-
-/// Politeness to an undocumented endpoint cannot depend on uptime: a relaunch
-/// used to reset the floor and fire a request straight away.
-@Test func theRequestFloorSurvivesARelaunch() throws {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 10, observedAt: t0, resetsAt: nil), at: t0)
-
-    let archive = temporaryArchive()
-    archive.save(ArchivedState(trackers: [.claude: tracker]))
-    var restored = try #require(archive.load()).trackers[.claude]!
+    let state = try #require(archive.load())
+    var restored = try #require(state.pollers[.claude])
+    #expect(state.isPaused)
 
     restored.record(weighted: 1000)
-    #expect(restored.refreshReason(at: t0.addingTimeInterval(60)) == nil)
-    #expect(restored.refreshReason(at: t0.addingTimeInterval(700)) != nil)
+    #expect(restored.shouldRun(at: t0.addingTimeInterval(60)) == false)
+    #expect(restored.shouldRun(at: t0.addingTimeInterval(400)))
 }
 
-/// The count of "usage since the anchor" is rebuilt from the logs, never carried
-/// over — the sources replay everything they hold on a cold start.
-@Test func activitySinceTheAnchorIsNotArchived() throws {
-    var tracker = LiveLimitsTracker()
-    tracker.anchored(LimitsAnchor(utilization: 10, observedAt: t0, resetsAt: nil), at: t0)
-    tracker.record(weighted: 90_000)
+/// Backoff is state worth keeping too: a CLI that failed twice before the last
+/// quit should not be respawned immediately after the next launch.
+@Test func backoffSurvivesARelaunch() throws {
+    var poller = PanelPoller()
+    poller.ran(at: t0)
+    poller.record(weighted: 1000)
+    poller.failed(at: t0)
+    poller.failed(at: t0)
 
     let archive = temporaryArchive()
-    archive.save(ArchivedState(trackers: [.claude: tracker]))
+    archive.save(ArchivedState(pollers: [.claude: poller]))
 
-    let restored = try #require(archive.load()).trackers[.claude]
-    #expect(restored?.weightedSinceAnchor == 0)
+    let state = try #require(archive.load())
+    var restored = try #require(state.pollers[.claude])
+    restored.record(weighted: 1000)
+    #expect(restored.shouldRun(at: t0.addingTimeInterval(600)) == false)   // 4 × 5 min
+    #expect(restored.shouldRun(at: t0.addingTimeInterval(1_300)))
+}
+
+/// The count of "usage since the last run" is rebuilt from the logs, never
+/// carried over — the sources replay everything they hold on a cold start.
+@Test func activitySinceTheLastRunIsNotArchived() throws {
+    var poller = PanelPoller()
+    poller.ran(at: t0)
+    poller.record(weighted: 90_000)
+
+    let archive = temporaryArchive()
+    archive.save(ArchivedState(pollers: [.claude: poller]))
+
+    let restored = try #require(archive.load()).pollers[.claude]
+    #expect(restored?.pendingWeighted == 0)
     #expect(restored?.hasNewActivity == false)
 }
 
@@ -191,9 +192,8 @@ private func line(id: String, output: Int, at date: Date) -> String {
     #expect(relaunched.eventCount(.claude) == 1)
 }
 
-/// Without the reading itself, a relaunch has an anchor but nothing to report,
-/// so the pill drops to the inferred ceiling — a worse number — until the next
-/// request is due ten minutes later.
+/// Without the reading itself, a relaunch has nothing to report and the pill
+/// drops to the inferred ceiling — a worse number — until the next run is due.
 @Test func theLastReadingSurvivesARelaunch() throws {
     let limits = RateLimits(
         primary: RateLimitWindow(usedPercent: 25, windowMinutes: 300,

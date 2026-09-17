@@ -14,21 +14,36 @@ final class UsageStore {
 
     func eventCount(_ id: SourceID) -> Int { events[id]?.count ?? 0 }
 
+    /// A `/usage` run is outstanding. The UI never waits on this — the next tick
+    /// picks the result up — but `--probe` has to, or it exits before the CLI
+    /// has finished booting and reports the inferred figure it was built to check.
+    var isReadingLimits: Bool { !limitsInFlight.isEmpty }
+
     /// 5s poll on a timer rather than a file watcher: a 5-hour window does not
     /// need sub-second freshness, and watching ~/.claude/projects fires constantly.
     private let interval: TimeInterval
     private let sources: [any UsageSource]
     private let weights: TokenWeights
     private var events: [SourceID: [UsageEvent]] = [:]
-    /// Live limits state per source. Only Claude needs it; Codex states its own
-    /// limits in its logs, so it never issues a request.
-    private var trackers: [SourceID: LiveLimitsTracker] = [:]
+    /// Poll state per source. Only Claude needs it; Codex states its own limits
+    /// in its logs, so it never spawns anything.
+    private var pollers: [SourceID: PanelPoller] = [:]
     private var liveLimits: [SourceID: RateLimits] = [:]
     /// Last known state of each source's newest log line. A poll that reads no
     /// new lines says nothing about activity, so the previous answer stands.
     private var activities: [SourceID: LogActivity] = [:]
-    /// Sources whose limits endpoint returned something retrying cannot fix.
+    /// Sources whose limits reading failed in a way retrying cannot fix.
     private var limitsDisabled: Set<SourceID> = []
+    /// The last limits failure per source, held until a reading succeeds.
+    ///
+    /// It cannot live in `errors` alone: a healthy log poll rewrites that every
+    /// 5s, while a reading happens every 5 minutes at most — and not at all while
+    /// backed off or disabled, which is exactly when there is a message worth
+    /// showing. Written once, re-applied every tick.
+    private var limitsErrors: [SourceID: String] = [:]
+    /// One reading per source at a time. The panel is read off the main actor, so
+    /// without this a slow CLI would be respawned on the next tick.
+    private var limitsInFlight: Set<SourceID> = []
     /// Exposed: an unconfident ceiling is why the pill shows raw tokens instead
     /// of a percentage.
     private(set) var ceilings: [SourceID: Ceiling] = [:]
@@ -45,9 +60,9 @@ final class UsageStore {
     /// outside Core — this is just where the snapshots already are.
     @ObservationIgnored var onSnapshot: ((UsageSnapshot) -> Void)?
 
-    /// `usageAPI` is injected rather than defaulted: it is backed by the Keychain,
-    /// which lives outside Core.
-    private let usageAPI: ClaudeUsageAPI?
+    /// Injected rather than defaulted: it is backed by a pseudo-terminal and a
+    /// spawned process, neither of which belongs in Core.
+    private let usagePanel: ClaudeUsagePanel?
     private let archive: Archive?
 
     /// Survives relaunch, so "tracking is off" stays off.
@@ -57,17 +72,17 @@ final class UsageStore {
         sources: [any UsageSource] = [ClaudeCodeSource(), CodexSource()],
         weights: TokenWeights = .default,
         interval: TimeInterval = 5,
-        usageAPI: ClaudeUsageAPI? = nil,
+        usagePanel: ClaudeUsagePanel? = nil,
         archive: Archive? = .default
     ) {
         self.sources = sources
         self.weights = weights
         self.interval = interval
-        self.usageAPI = usageAPI
+        self.usagePanel = usagePanel
         self.archive = archive
 
         let restored = archive?.load()
-        self.trackers = restored?.trackers ?? [:]
+        self.pollers = restored?.pollers ?? [:]
         self.liveLimits = restored?.limits ?? [:]
         self.isPaused = restored?.isPaused ?? false
     }
@@ -132,7 +147,7 @@ final class UsageStore {
     }
 
     private func persist() {
-        archive?.save(ArchivedState(trackers: trackers, limits: liveLimits, isPaused: isPaused))
+        archive?.save(ArchivedState(pollers: pollers, limits: liveLimits, isPaused: isPaused))
     }
 
     func start() {
@@ -187,24 +202,26 @@ final class UsageStore {
                 )
                 ceilings[source.id] = ceiling
 
-                await refreshLimits(for: source.id, events: fresh.events, now: now)
+                // The limits failure is re-applied rather than cleared: a healthy
+                // log poll used to wipe the message on the very next tick, so
+                // "Claude Code CLI not found" never stayed on screen.
+                errors[source.id] = Self.simulatedError ?? limitsErrors[source.id]
+                refreshLimits(for: source.id, events: fresh.events, now: now)
 
                 snapshots[source.id] = SnapshotBuilder.build(
                     source: source.id,
-                    // A source that states its own limits wins; otherwise use what
-                    // the endpoint anchored, extrapolated to now.
+                    // A source that states its own limits wins; otherwise use the
+                    // last panel reading, rolled forward if its window has reset.
                     limits: fresh.limits ?? currentLimits(for: source.id, at: now),
                     events: merged,
                     activity: fresh.activity ?? activities[source.id],
                     ceiling: ceiling,
                     at: now,
-                    weights: weights,
-                    weightedPerPercent: trackers[source.id]?.calibration.weightedPerPercent
+                    weights: weights
                 )
                 if source.id == activeSource, let snapshot = snapshots[source.id] {
                     onSnapshot?(snapshot)
                 }
-                errors[source.id] = Self.simulatedError
             } catch {
                 // A missing log directory just means that CLI isn't installed.
                 errors[source.id] = error.localizedDescription
@@ -220,80 +237,109 @@ final class UsageStore {
         await persistEvents(now: now)
     }
 
-    /// Asks the usage endpoint only when the tracker says it is worth it.
-    private func refreshLimits(for id: SourceID, events: [UsageEvent], now: Date) async {
-        guard id == .claude, !limitsDisabled.contains(id), let usageAPI else { return }
+    /// Reads the CLI's `/usage` panel, but only when the poller says it is worth
+    /// spawning a process for.
+    ///
+    /// The read is launched, never awaited here. It costs about four seconds — an
+    /// HTTP call cost milliseconds — and awaiting it inline held up the snapshot
+    /// for *both* sources while a CLI booted, so the pill froze every five minutes
+    /// and again at launch. The result lands on a later tick, which is at most 5s
+    /// behind a figure that only moves every five minutes anyway.
+    private func refreshLimits(for id: SourceID, events: [UsageEvent], now: Date) {
+        guard id == .claude, !limitsDisabled.contains(id), !limitsInFlight.contains(id),
+              let usagePanel
+        else { return }
 
-        var tracker = trackers[id] ?? LiveLimitsTracker()
-        // Only what the anchor has not already seen. A cold start replays every
-        // retained event, and counting 90 days of history as usage since the last
-        // reading would teach calibration a conversion out by orders of magnitude.
-        let since = tracker.anchor?.observedAt ?? .distantPast
-        tracker.record(
+        var poller = pollers[id] ?? PanelPoller()
+        // Only what the last reading has not already seen. A cold start replays
+        // every retained event, and 90 days of history would look like activity
+        // that happened since the last run.
+        let since = poller.lastRunAt ?? .distantPast
+        poller.record(
             weighted: events.lazy
                 .filter { $0.timestamp > since }
                 .reduce(0) { $0 + $1.counts.weighted(weights) }
         )
-        defer { trackers[id] = tracker }
+        pollers[id] = poller
 
-        let waited = Int(now.timeIntervalSince(tracker.lastCallAt ?? now))
-        guard let reason = tracker.refreshReason(at: now) else {
-            Log.usage.debug("skip \(id.rawValue, privacy: .public) activity=\(tracker.hasNewActivity, privacy: .public) waited=\(waited, privacy: .public)s")
+        let waited = Int(now.timeIntervalSince(poller.lastRunAt ?? now))
+        guard poller.shouldRun(at: now) else {
+            Log.usage.debug("skip \(id.rawValue, privacy: .public) activity=\(poller.hasNewActivity, privacy: .public) waited=\(waited, privacy: .public)s")
             return
         }
 
-        Log.usage.info("request \(id.rawValue, privacy: .public) reason=\(String(describing: reason), privacy: .public) waited=\(waited, privacy: .public)s weighted=\(Int(tracker.weightedSinceAnchor), privacy: .public)")
-        let started = Date()
+        Log.usage.info("run \(id.rawValue, privacy: .public) waited=\(waited, privacy: .public)s weighted=\(Int(poller.pendingWeighted), privacy: .public)")
+        limitsInFlight.insert(id)
 
-        do {
-            let response = try await usageAPI.fetch()
-            let ms = Int(Date().timeIntervalSince(started) * 1000)
-
-            guard let anchor = response.anchor(observedAt: now) else {
-                // `{}` means this account has nothing to report — an API key, or a
-                // token without `user:profile`. Stop asking; inference takes over.
-                Log.usage.notice("empty \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms, falling back to inference")
-                limitsDisabled.insert(id)
-                return
+        Task { [weak self] in
+            let started = Date()
+            do {
+                let limits = try await usagePanel.fetch(now: Date())
+                self?.applyLimits(.success(limits), for: id, startedAt: started)
+            } catch {
+                self?.applyLimits(.failure(error), for: id, startedAt: started)
             }
-            tracker.anchored(anchor, at: now)
-            liveLimits[id] = response.rateLimits(observedAt: now)
-            errors[id] = Self.simulatedError
-            trackers[id] = tracker
-            persist()
-
-            let windows = response.windows.keys.sorted().joined(separator: ",")
-            let perPercent = Int(tracker.calibration.weightedPerPercent ?? 0)
-            Log.usage.info("ok \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms session=\(anchor.utilization, privacy: .public)% weekly=\(response.weekly?.utilization ?? -1, privacy: .public)% windows=[\(windows, privacy: .public)] perPercent=\(perPercent, privacy: .public) samples=\(tracker.calibration.samples, privacy: .public)")
-        } catch {
-            tracker.failed(at: now)
-            trackers[id] = tracker
-            persist()
-            let failure = error as? UsageAPIError
-            if failure?.isFatal == true { limitsDisabled.insert(id) }
-            errors[id] = failure?.message ?? error.localizedDescription
-
-            let ms = Int(Date().timeIntervalSince(started) * 1000)
-            Log.usage.error("failed \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms error=\(String(describing: failure), privacy: .public) fatal=\(failure?.isFatal == true, privacy: .public) failures=\(tracker.consecutiveFailures, privacy: .public)")
         }
     }
 
-    /// The anchored limits with the session figure extrapolated to now, so the
-    /// pill keeps moving between requests.
+    /// The tail of a reading, back on the main actor.
+    private func applyLimits(
+        _ result: Result<RateLimits, any Error>, for id: SourceID, startedAt: Date
+    ) {
+        limitsInFlight.remove(id)
+        var poller = pollers[id] ?? PanelPoller()
+        let now = Date()
+        let ms = Int(now.timeIntervalSince(startedAt) * 1000)
+
+        switch result {
+        case .success(let limits):
+            poller.ran(at: now)
+            pollers[id] = poller
+            liveLimits[id] = limits
+            limitsErrors[id] = nil
+            errors[id] = Self.simulatedError
+            persist()
+
+            Log.usage.info("ok \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms session=\(limits.primary?.usedPercent ?? -1, privacy: .public)% weekly=\(limits.secondary?.usedPercent ?? -1, privacy: .public)%")
+
+        case .failure(let error):
+            poller.failed(at: now)
+            pollers[id] = poller
+            persist()
+            let failure = error as? PanelError
+            if failure?.isFatal == true { limitsDisabled.insert(id) }
+            limitsErrors[id] = failure?.message ?? error.localizedDescription
+            errors[id] = Self.simulatedError ?? limitsErrors[id]
+
+            Log.usage.error("failed \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms error=\(String(describing: failure), privacy: .public) fatal=\(failure?.isFatal == true, privacy: .public) failures=\(poller.failures, privacy: .public)")
+        }
+    }
+
+    /// The last reading, with each window rolled forward past its own reset.
+    ///
+    /// Independently, because they expire independently: gating the weekly roll on
+    /// the session having reset too meant that after a Monday 1am weekly rollover
+    /// the weekly figure was simply dropped as stale — and at 1am there is no
+    /// activity to earn the reading that would bring it back.
+    ///
+    /// Nothing is extrapolated in between: whole percentages cannot be advanced by
+    /// a token count without inventing precision the panel never had. A reset is
+    /// the one exception, and it needs no conversion — the window is simply empty,
+    /// and the next run re-reads whatever has been spent since.
     private func currentLimits(for id: SourceID, at now: Date) -> RateLimits? {
-        guard let anchored = liveLimits[id] else { return nil }
-        guard let tracker = trackers[id], let live = tracker.utilization(at: now),
-              let primary = anchored.primary
-        else { return anchored }
+        guard let reading = liveLimits[id] else { return nil }
+
+        func rolled(_ window: RateLimitWindow?) -> RateLimitWindow? {
+            guard let window, window.resetsAt <= now else { return window }
+            return window.rolled(to: now, usedPercent: 0)
+        }
 
         return RateLimits(
-            // Rolled forward when the window has already reset, so a figure the
-            // tracker knows is current is not thrown away as stale.
-            primary: primary.rolled(to: now, usedPercent: live),
-            secondary: anchored.secondary,
-            planType: anchored.planType,
-            observedAt: anchored.observedAt,
-            spend: anchored.spend
+            primary: rolled(reading.primary),
+            secondary: rolled(reading.secondary),
+            planType: reading.planType,
+            observedAt: reading.observedAt,
+            spend: reading.spend
         )
     }
 }

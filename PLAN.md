@@ -4,105 +4,96 @@ macOS notch usage tracker. Design source: `design/Burn Tracker.dc.html`.
 
 ## 0. Ground truth (corrected 2026-09-16)
 
-### Limits come from an API, not the logs
+### Limits come from the CLI's own `/usage` panel
 
-Claude Code reads its own usage from an authenticated endpoint. This is the source of truth for every percentage; the earlier plan inferred a ceiling from log volume because this endpoint had not been found, which was wrong.
+Claude Code reads its own usage from an authenticated endpoint. This app does not
+call it. It drives the CLI through a pseudo-terminal, types `/usage`, and reads the
+panel the CLI draws — which is that endpoint's response, already fetched and
+rendered by the one client that legitimately holds the credentials.
 
 ```
-GET https://api.anthropic.com/api/oauth/usage
-Authorization: Bearer <accessToken>      # Keychain service "Claude Code-credentials" → claudeAiOauth.accessToken
-anthropic-beta: oauth-2025-04-20
+openpty → posix_spawn(claude, POSIX_SPAWN_SETSID) → wait for the screen to go quiet
+        → write "/usage\r" → read until "Resets" and the screen settles → kill the group
 ```
 
-Response (verbatim from Claude Code's `src/services/api/usage.ts`):
+Measured on this machine: **~4s per run, 4.2KB of terminal output, $0.0000** — a
+`/usage` run makes no model call. `ClaudeCLI` owns the pty; `ClaudeUsagePanel` owns
+the parsing and imports Foundation only, so the hard part is testable without
+spawning anything.
 
-```ts
-type RateLimit = { utilization: number | null,  // percentage 0–100
-                   resets_at:   string | null } // ISO 8601
-type Utilization = {
-  five_hour?, seven_day?, seven_day_oauth_apps?, seven_day_opus?, seven_day_sonnet?,
-  extra_usage?: { is_enabled, monthly_limit, used_credits, utilization }
-}
+**What this buys.** No Keychain prompt, no token of our own, no `setup-token` step,
+nothing of Claude Code's to keep in sync, and no undocumented endpoint to be a good
+guest at — the CLI makes that call on its own terms, with its own caching.
+
+**What it costs, stated plainly:**
+
+- **Whole percentages.** The panel prints `7%`, never `7.3%`. Everything that needed
+  a fraction of a point is gone with it — see below.
+- **No typed failures.** 401, 403 and 429 were three different decisions; through a
+  terminal they are one absent regex match. What survives is what is visible from
+  outside the process: no binary, no trusted directory, a timeout, a login prompt,
+  an unparseable screen. Only the first two are fatal.
+- **A UI is the contract.** Claude Code ships weekly and the panel has no
+  compatibility promise. Two real quirks are already handled: the CLI positions the
+  cursor instead of emitting padding, so stripping escapes welds `Current session`
+  into `Currentsession` and `Resets Sep 22 at 1am` into `ResetsSep22at1am` — every
+  pattern treats whitespace as optional and re-spaces stamps on letter/digit
+  boundaries. `PanelTests` pins both shapes against a captured render.
+- **Cached first, fresh second.** The panel paints a cached figure, then repaints
+  when the refresh lands, and nothing in the output says which is which. The reader
+  waits for the screen to stop changing and the parser takes the *last* match.
+- **An untrusted directory blocks it.** The CLI draws "is this a project you trust?"
+  instead of the panel, so the working directory is taken from the first project in
+  `~/.claude.json` with `hasTrustDialogAccepted`.
+- **A GUI app has no PATH.** launchd gives it `/usr/bin:/bin:/usr/sbin:/sbin`, so the
+  binary is found by looking in the known install locations, or `BURNTRACKER_CLAUDE_BIN`.
+
+### What whole percentages cost: calibration is gone
+
+The previous design anchored on a float from the endpoint and interpolated between
+anchors from local token deltas, calibrating the conversion from consecutive pairs:
+
+```
+anchor A: 11%  ──  W weighted tokens logged locally  ──  anchor B: 15%
+                   ⇒ weightedPerPercent = W / (15 − 11)
 ```
 
-Gating: returns `{}` unless the session is a managed OAuth subscriber holding the `user:profile` scope. API-key users get nothing, so the log-derived fallback still has to exist.
+That cannot survive rounding. At a 5-minute cadence the true delta is routinely
+under one point, so the rounded delta is `0`, every pair is discarded, and the
+conversion is never measured. `LimitsCalibration`, `LimitsRefreshPolicy` and
+`LiveLimitsTracker` are deleted rather than kept limping — a calibration fed
+rounded inputs is not a degraded measurement, it is a fabricated one.
 
-**Keychain access is a user-visible cost.** The item belongs to Claude Code, so macOS prompts the
-first time Burn Tracker reads it — *"BurnTracker wants to use the 'Claude Code-credentials' keychain
-item"* — and the ACL is keyed to the code signature. Consequences:
+So the pill now shows the **last reading**, unmoved between runs, and `PanelPoller`
+keeps that honest: it refuses to run without local token activity, which is exactly
+when a frozen number is the correct one. The one thing inferred without a reading is
+a reset — the window is simply empty, no conversion required.
 
-- **Ad-hoc signing re-prompts on every rebuild** — the ACL is keyed to the designated
-  requirement, and an ad-hoc one is `cdhash H"…"`, a fresh identity every build. `make app` now
-  signs with the first identity `security find-identity -p codesigning` reports, so the requirement
-  is the stable `certificate leaf[subject.CN]` form and "Always Allow" survives rebuilds. The
-  prompt returns once when the identity itself changes. `make app SIGN=-` goes back to ad-hoc.
-- **No file fallback on macOS.** `~/.claude/.credentials.json` does not exist here; the Keychain is
-  the only source. The file path is still read for installs that have one.
-- **Denial must not be terminal.** A denied prompt, a missing sign-in and an expired token all
-  resolve without any action from this app, so they back off rather than disabling live limits.
-  Only `403` — a scope or plan refusal — stops us asking for good.
-- **The token is read, never refreshed.** The blob carries a refresh token, but spending it rotates
-  the pair and could sign Claude Code itself out. When the token is expired we wait for Claude Code
-  to renew it.
-- Worth evaluating: `claude setup-token` mints a long-lived token intended for external tooling,
-  which would sidestep the Keychain prompt entirely — if it is accepted by this endpoint.
+`BurnRate` loses its calibrated input and falls back to `ceiling.weightedTokens / 100`
+from `CeilingEstimator`, which is the path API-key users were always on.
 
-Codex needs no network at all — its rollout logs already carry `rate_limits` with `used_percent`, `window_minutes` and `resets_at`.
+### Cadence
 
-### Network policy — the endpoint is undocumented, treat it as a guest
+Five minutes, activity-gated, exponential backoff to an hour on failure, persisted
+across launches. There is no network etiquette left to enforce — the constraint is
+local: each run boots a whole Claude Code process for four seconds, which is far too
+much to spend on a machine nobody is typing at. An idle machine spawns nothing.
 
-The 5s tick stays **local only**. Log reading is free; the network call is not, and hammering an
-undocumented endpoint is how an account or IP earns a block. Rules, enforced in one place:
-
-1. **Activity-gated.** A call is only made when local logs show new token events since the last one.
-   Utilization cannot move without them. An idle machine makes **zero** requests.
-2. **Hard floor of 10 minutes between routine calls**, with jitter so installs don't synchronise.
-   A heavy 8-hour day is ≤48 calls; an idle day is 0. Threshold confirmations may jump the queue on
-   a 2-minute floor — set `confirmFloor = floor` to make every call strictly 10 minutes apart.
-3. **Anchor + interpolate.** The API result is an anchor: utilization *u* at time *T*. Between calls
-   the pill extrapolates from local weighted-token deltas since *T*, so it still moves every 5s
-   while the network is touched at most once per 10 minutes.
-
-   Consecutive anchors also *calibrate* the conversion — the quantity `CeilingEstimator` could only
-   guess at:
-
-   ```
-   anchor A: 11%  ──  W weighted tokens logged locally  ──  anchor B: 15%
-                      ⇒ weightedPerPercent = W / (15 − 11)
-   ```
-
-   Pairs that span a reset, or that saw no local tokens, teach nothing and are discarded. Accuracy
-   between anchors is bounded by usage this machine cannot see — other devices, claude.ai, the web
-   app — which the next anchor corrects.
-4. **A reset costs no request.** `resets_at` is already known and the extrapolation restarts from
-   zero on its own, so an idle machine stays silent straight through a rollover.
-5. **Backoff by status.** 429/5xx → exponential backoff with jitter, honouring `Retry-After`.
-   401 → stop and fall back to inference (a token problem; retrying cannot fix it).
-   403 → stop for the session, do not retry.
-6. **One in-flight request**, coalesced. No concurrency, no retry storms.
-7. **Sleep-aware.** No polling while the display is asleep; one fetch on wake.
-8. **Serve stale on failure** with an age indicator. Never spin trying to refresh.
-
-Failure is never fatal: `CeilingEstimator` remains the fallback, so the app degrades to log-only
-rather than breaking. The live source is a Preferences toggle (default on) so it can be turned off
-outright.
-
-Standing caveat: this endpoint is community-discovered, not a published API. It may change or be
-restricted without notice. The requests are the user's own token against the same endpoint their own
-client calls, which is the defensible position — but the fallback path is what makes it safe to ship.
+Codex needs none of this — its rollout logs already carry `rate_limits` with
+`used_percent`, `window_minutes` and `resets_at`.
 
 ### What each layer is actually for
 
 | Value | Source |
 |---|---|
-| 5-hour %, 7-day %, per-model weekly %, reset times | **Claude: OAuth usage endpoint. Codex: rollout logs.** |
-| Monthly credit spend | `extra_usage` — free, no Console admin key |
+| 5-hour %, 7-day %, reset times | **Claude: the CLI's `/usage` panel, to the whole percent. Codex: rollout logs.** |
+| Monthly credit spend | the panel's `Usage credits` row — free, no Console admin key |
 | Burn rate, sparkline, headroom | Log token counts (the API gives no rate of change) |
 | Splits by model / project / surface | Log token counts (the API gives no attribution) |
 | 30-day history | Log token counts |
-| Fallback % for API-key users | `CeilingEstimator` over observed windows |
+| Fallback % when the CLI cannot be read | `CeilingEstimator` over observed windows |
 
-So log parsing stays — it answers everything the endpoint cannot — but it stops being the source of the headline number.
+So log parsing stays — it answers everything the panel cannot — but it stops being the source of the headline number.
 
 ### Log formats (verified on this machine)
 
@@ -121,9 +112,9 @@ Toolchain: Xcode 27, Swift 6.4. **Deployment target macOS 15+**.
 
 - **Codex ships in phase 1**, not phase 5 — two conformances prove the seam instead of guessing it, and Codex's authoritative `used_percent` is a free correctness check on Claude's inferred one.
 - **macOS 15+**.
-- **API spend gauge**: cut as a *Console Admin API* feature, then restored — `extra_usage` on the
-  OAuth endpoint carries monthly credit spend for free. The panel draws it only when the account has
-  extra usage enabled.
+- **API spend gauge**: cut as a *Console Admin API* feature, then restored — the `Usage credits` row
+  of the CLI's own panel carries monthly credit spend for free, currency symbol and all. Drawn only
+  when the account has extra usage enabled.
 - **Instrument Sans bundled** (OFL) + SF Mono for numerics, matching the design's metrics exactly.
 
 ## 1. Architecture
@@ -250,13 +241,13 @@ BurnTracker/              the target's sources, named for it rather than "Source
   Core/
     Model/                UsageEvent.swift · UsageSnapshot.swift · TokenCounts.swift · SourceID.swift
     Ingest/               UsageSource.swift · ClaudeCodeSource.swift · CodexSource.swift
-                          ClaudeUsageAPI.swift · JSONLReader.swift
+                          ClaudeUsagePanel.swift · JSONLReader.swift
     Engine/               WindowCalculator.swift · CeilingEstimator.swift · BurnRate.swift
                           Aggregator.swift · TokenWeights.swift · AlertPolicy.swift
-                          LiveLimitsTracker.swift · LimitsCalibration.swift · LimitsRefreshPolicy.swift
+                          PanelPoller.swift
     Store/                UsageStore.swift · Archive.swift
     Log.swift
-  Services/               ClaudeCredentials.swift · Notifier.swift · LaunchAtLogin.swift
+  Services/               ClaudeCLI.swift · Notifier.swift · LaunchAtLogin.swift
                           Preferences.swift · SingleInstance.swift · Updater.swift
   DesignSystem/           Tokens.swift · ToneScale.swift · Typography.swift · Format.swift
                           OdometerText.swift · UsageRing.swift · CapBar.swift
@@ -283,7 +274,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 |---|---|---|
 | 0 | Notch panel: borderless `NSPanel`, `LSUIElement`, click passthrough, re-anchoring | ✅ done |
 | 1 | `JSONLReader` + both sources + window/ceiling/burn engine, `--probe` | ✅ done |
-| 1.5 | **Live limits** — OAuth usage endpoint, Keychain, calibration, 10-min activity-gated polling, attention badge, single-instance guard | ✅ done (unplanned; see §0) |
+| 1.5 | **Live limits** — the CLI's `/usage` panel over a pty, 5-min activity-gated polling, attention badge, single-instance guard | ✅ done (unplanned; see §0) |
 | 2 | Design system + the remaining pill states + spring morph | ✅ done |
 | 3 | Warning auto-expand, pinned panel, context menu | ✅ done |
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done |
@@ -291,8 +282,9 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 6 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
 
 Phase 1.5 was not in the original plan. It exists because the limits source was wrong: the first
-version inferred a ceiling from log volume, and the endpoint that publishes the real figures was
-found later. It absorbed most of the time since phase 1.
+version inferred a ceiling from log volume. It was then rebuilt twice — first onto the OAuth usage
+endpoint read with the user's own Keychain token, then onto the CLI's `/usage` panel, which reaches
+the same figures without asking for a credential at all. It absorbed most of the time since phase 1.
 
 ### Carried out of phase 3
 
@@ -302,18 +294,14 @@ found later. It absorbed most of the time since phase 1.
   decision, not by oversight; the row is gone from Preferences with it.
 - ~~**Nothing survives a relaunch.**~~ ✅ fixed: one archive, two files — `state.json` for the
   limits state, `events.json` for events and cursors. What it closed:
-  - Calibration accumulates across launches, so `weightedPerPercent` is finally
-    reachable — `samples=0` on every earlier run was the tracker restarting, not
-    the calibration failing.
-  - The 10-minute floor survives, so a relaunch no longer jumps the queue.
+  - The refresh floor survives, so a relaunch no longer spawns a CLI straight away.
   - Pause survives.
   - The cold start: 4171ms → 305ms (§4.1).
   - It also uncovered a latent bug worth remembering: a cold start replays every
-    retained event, and counting that as "usage since the anchor"
-    (`weighted=527694804` in the log) would have taught calibration a conversion
-    out by orders of magnitude the moment two anchors survived together. Only
-    events newer than the anchor count, and the running total is deliberately
-    not archived.
+    retained event, and counting that as "usage since the last reading"
+    (`weighted=527694804` in the log) reads as activity on a machine that has been
+    idle for weeks. Only events newer than the last run count, and the running
+    total is deliberately not archived.
 - **By surface** — the design's third split. Nothing local can tell claude.ai from
   the web app, so it splits by CLI instead; revisit if the endpoint ever says.
 - **History is relative.** The grid shades each day against the busiest in range;
@@ -365,8 +353,9 @@ One-time setup, in order:
    installed copy can ever be updated again — back it up with
    `generate_keys -x` before the first release.
 
-Signing the first release also resets the Keychain grant on Claude Code's
-credentials once, because the designated requirement changes with the identity.
+Signing the first release changes the designated requirement once. Nothing is
+keyed to it any more now that the Keychain is out of the picture, but Sparkle's
+update path is — an installed copy will only accept an update signed the same way.
 
 ### Standing design decisions
 
@@ -377,7 +366,7 @@ credentials once, because the designated requirement changes with the identity.
   so a scheduled find speaks through the threshold banner and only a check the user asked for opens
   the panel.
 - **The bundle id stays `com.redevify.tokenburn`.** Decided at the last moment it was free to change:
-  after a public release it is what every install, preference file and Keychain grant is keyed to.
+  after a public release it is what every install and preference file is keyed to.
 - **Instrument Sans is bundled** and registered twice over (`ATSApplicationFontsPath` for the bundle,
   `CTFontManagerRegisterFontsForURL` for `swift run`). Availability decides whether it is used, never
   the registration return value — a silent fallback to the system face is how a design drifts.
@@ -397,13 +386,15 @@ credentials once, because the designated requirement changes with the identity.
 
 ### Verified on hardware
 
-- Live endpoint request succeeds; hover reads `reported`, matching Claude Code's own `/usage` panel.
+- `/usage` panel read over a pty: 4.1s, 4.2KB, parsed to 7% session / 19% weekly / S$11.99 of S$12.00,
+  matching what the CLI draws on screen. `--probe` reports `[authoritative]`.
 - Single instance enforced, including a raw binary launched past LaunchServices.
 - Shadow follows the clipped shape; headroom no longer outlasts its window.
 - Collapsed pill and hover card, on screen, against live figures.
 - Context menu on right-click — and the reason it first rendered white-on-white: `.regularMaterial`
   follows the desktop appearance. Nothing in this app may track the system scheme.
-- `make app` signs with a real identity, so the Keychain grant survives a rebuild.
+- `make app` signs with a real identity. This no longer guards a Keychain grant — nothing is read
+  from the Keychain any more — but the stable designated requirement still matters for updates.
 - Preferences, the dual-handle alert scale and the reset, on screen.
 - The border chase, and the two bugs behind it: a gradient stroke fades by position in the *view*,
   so the light vanished down the left and right edges; and animating a `phase` from 0 to 1 animates
@@ -422,11 +413,11 @@ credentials once, because the designated requirement changes with the identity.
 - **Notch hardware.** Every run so far has been on an external display with no notch, so the
   no-notch fallback is what has been exercised. The notch path has unit tests only.
 - **Menu-bar click passthrough** and full-screen / space-switch behaviour.
-- ~~**Calibration over time**~~ ✅ measured. Persistence was the blocker: `perPercent=0 samples=0`
-  on every earlier run was the tracker restarting, not the calibration failing. The probe now reads
-  a conversion near 190k weighted a point against an inferred ceiling of 324k — so the ceiling is
-  roughly 70% too high, which is §4.1's outlier problem quantified rather than argued. Calibration
-  already wins wherever both exist; the ceiling still decides for API-key users.
+- ~~**Calibration over time**~~ — gone with the endpoint. Before it was removed it measured a
+  conversion near 190k weighted a point against an inferred ceiling of 324k, so **the ceiling reads
+  roughly 70% too high**: §4.1's outlier problem quantified rather than argued, and the one finding
+  worth keeping from that design. `CeilingEstimator` is now the only conversion there is — it feeds
+  headroom for everyone — so that 70% is a live inaccuracy, not a footnote.
 - **The warning state on screen** — it needs a window past 90% to appear, which no run has reached.
   Every other state has now been seen, and with it the ring pop, which shares the crossing.
 
@@ -435,9 +426,10 @@ credentials once, because the designated requirement changes with the identity.
 - 5s polling timer, not FSEvents — a 5-hour window does not need sub-second freshness, and a watcher on `~/.claude/projects` fires constantly.
 - 5-minute buckets, not raw event persistence — caps disk and memory regardless of usage volume.
 - Full-screen detection by menu-bar visibility (`screen.visibleFrame.maxY == screen.frame.maxY`) rather than window enumeration — no Screen Recording permission needed. `ponytail:` heuristic; upgrade to `CGWindowListCopyWindowInfo` only if it misfires.
-- ~~No network, no credentials, no Keychain~~ — overtaken by phase 1.5. The app reads the OAuth usage
-  endpoint with the user's own token, read-only, activity-gated, with a 10-minute floor. It still
-  degrades to log-only inference when that fails.
+- **No network, no credentials, no Keychain** — held, after a detour. Phase 1.5 briefly read the OAuth
+  usage endpoint with the user's own token out of the Keychain; that is gone. The app now spawns the
+  user's own CLI and reads the panel it draws, so it holds no secret and opens no socket of its own.
+  It still degrades to log-only inference when the CLI cannot be read.
 - The panel aggregates straight from the 30 days of events the store already holds, rather than the
   planned persisted 5-minute buckets. Cheap per refresh, and it leaves the cold start unfixed —
   `BucketArchive` is still the answer to §4.1, not a second copy of the buckets.

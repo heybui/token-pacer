@@ -6,7 +6,7 @@ import SwiftUI
 final class NotchController {
     private let model = PillModel()
     private let store = UsageStore(
-        usageAPI: ClaudeUsageAPI(token: ClaudeCredentials.tokenProvider)
+        usagePanel: ClaudeUsagePanel(read: ClaudeCLI.reader)
     )
     private let preferences = Preferences()
     private let notifier = Notifier()

@@ -6,8 +6,15 @@ import Foundation
 enum Probe {
     static func run() async {
         let store = await UsageStore(
-            usageAPI: ClaudeUsageAPI(token: ClaudeCredentials.tokenProvider)
+            usagePanel: ClaudeUsagePanel(read: ClaudeCLI.reader)
         )
+        await store.refresh()
+        // The reading is launched, not awaited, so the first refresh only starts
+        // the CLI. Wait for it, then refresh again to fold it into the snapshot.
+        let deadline = Date().addingTimeInterval(45)
+        while await store.isReadingLimits, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
         await store.refresh()
 
         for id in SourceID.allCases {

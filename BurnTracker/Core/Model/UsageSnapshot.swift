@@ -74,8 +74,7 @@ enum SnapshotBuilder {
         activity: LogActivity? = nil,
         ceiling: Ceiling,
         at now: Date,
-        weights: TokenWeights = .default,
-        weightedPerPercent: Double? = nil
+        weights: TokenWeights = .default
     ) -> UsageSnapshot {
         let windows = WindowCalculator.windows(from: events, weights: weights)
         let current = WindowCalculator.current(in: windows, at: now)
@@ -119,7 +118,6 @@ enum SnapshotBuilder {
         snapshot.burn = BurnRateCalculator.rate(
             events: events, window: current, ceiling: ceiling, at: now, weights: weights,
             currentPercent: snapshot.sessionPercent,
-            weightedPerPercent: weightedPerPercent,
             windowEndsAt: snapshot.resetsAt
         )
         return snapshot
