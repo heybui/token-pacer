@@ -291,7 +291,8 @@ the same figures without asking for a credential at all. It absorbed most of the
 - **⌘⇧B — cut.** The design's global shortcut for the panel. A system-wide hotkey
   needs a Carbon registration (the `NSEvent` route would demand Accessibility
   permission for one shortcut), and the pill is a click away. Out of scope by
-  decision, not by oversight; the row is gone from Preferences with it.
+  decision, not by oversight; the row is gone from Preferences with it, and from
+  the board, so it stops reading as an unbuilt feature.
 - ~~**Nothing survives a relaunch.**~~ ✅ fixed: one archive, two files — `state.json` for the
   limits state, `events.json` for events and cursors. What it closed:
   - The refresh floor survives, so a relaunch no longer spawns a CLI straight away.
@@ -315,6 +316,10 @@ the same figures without asking for a credential at all. It absorbed most of the
   through `AlertPolicy` → `UNUserNotificationCenter`, and only when the notch is
   hidden — a full-screen app or another space — because a pill already showing
   93% does not need to be told.
+- **The Windows group — cut.** The design's reset hour and time zone. Neither is
+  ours to set: the window opens on first use and the CLI states when it resets,
+  so a picker here would either be ignored or disagree with the countdown beside
+  it. Removed from the board along with the group that held them.
 - **One scale, two handles.** The design's two sliders became a single 0–100
   track with a warn handle and a critical one, clamped so warn can never pass
   critical. Reset restores that scale and nothing else; the other rows are

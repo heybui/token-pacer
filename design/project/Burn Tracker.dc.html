@@ -568,7 +568,7 @@ class Component extends DCLogic {
           'Banner only appears instead when you are full-screen in another app.'] },
         { name: 'Pinned panel', size: '752 × 540', mock: this.mockPill('pinned'), rules: [
           'Everything stacked, no tabs: session ring, weekly cap, burn sparkline, three splits, history, API budget.',
-          'Stays until dismissed with ✕ or Esc; ⌘⇧B opens and focuses it from the keyboard.',
+          'Stays until dismissed with ✕ or Esc.',
           'Read-only by design — settings live in Preferences.'] },
         { name: 'Exhausted', size: '226 × 36', mock: this.mockPill('exhausted'), rules: [
           'At 100% the pill goes red and shows only the countdown to reset.',
@@ -589,13 +589,9 @@ class Component extends DCLogic {
           { label: 'Warn at', control: this.prefSlider('75%', .75) },
           { label: 'Critical at', control: this.prefSlider('90%', .9) },
           { label: 'Sound on threshold', control: this.prefToggle(true) }] },
-        { title: 'Windows', rows: [
-          { label: 'Reset hour', control: this.prefSelect('09:00') },
-          { label: 'Time zone', control: this.prefSelect('Asia/Hong Kong') }] },
         { title: 'General', rows: [
           { label: 'Launch at login', control: this.prefToggle(true) },
-          { label: 'Hide pill when dormant', control: this.prefToggle(true) },
-          { label: 'Open panel', control: this.prefKey('⌘⇧B') }] }
+          { label: 'Hide pill when dormant', control: this.prefToggle(true) }] }
       ],
       notes: [
         { tag: 'host', title: 'Borderless NSPanel', bullets: [

@@ -22,8 +22,8 @@ final class NotchPanel: NSPanel {
         animationBehavior = .none
     }
 
-    // Needed for Esc and ⌘⇧B on the pinned panel. `.nonactivatingPanel` keeps this
-    // from stealing activation from the frontmost app.
+    // Needed for Esc on the pinned panel. `.nonactivatingPanel` keeps this from
+    // stealing activation from the frontmost app.
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
