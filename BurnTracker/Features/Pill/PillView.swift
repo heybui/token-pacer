@@ -71,16 +71,26 @@ struct PillView: View {
     private var shell: some View {
         let shellSize = state.size(around: band)
         return ZStack(alignment: .bottom) {
-            // Cross-faded, not swapped. The shell's frame springs open over
-            // ~400ms; content that appears at full opacity on the first frame
-            // reads as a jump no matter how smooth the box is.
+            // Revealed, not cross-faded, and above all not rebuilt. The shell's
+            // frame springs open and the whole thing is clipped to that shape,
+            // so content that stays put is uncovered as the box grows — one
+            // object expanding.
+            //
+            // No `.id(state)` here. Keying the content on the state gave it a
+            // fresh identity on every change, so SwiftUI tore the subtree down
+            // and built a new one — and every rebuilt child then replayed its
+            // own entrance: `OdometerText` fades in over 0.34s, `UsageRing` and
+            // `CapBar` sweep their value up from zero. The band row is the same
+            // row in all three states, so the ring and the countdown blanked for
+            // a few frames and faded back in while the box grew. Without the id
+            // that row is never removed; only the body below it swaps, and it
+            // swaps instantly.
             content
                 // Top-aligned: a flank-filling state is shorter than its shell by
                 // the overhang, and that slack belongs below the band, not split
                 // either side of it.
                 .frame(width: shellSize.width, height: shellSize.height, alignment: .top)
-                .id(state)
-                .transition(.opacity.animation(.easeInOut(duration: 0.22)))
+                .transition(.identity)
         }
             .frame(width: shellSize.width, height: shellSize.height, alignment: .bottom)
             .clipShape(shape)
