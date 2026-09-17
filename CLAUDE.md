@@ -17,7 +17,7 @@ macOS notch usage tracker. See `PLAN.md` for architecture and phases.
 
 - `swift build` / `swift test` — fast CLI loop.
 - `xcodebuild -scheme BurnTracker build|test` — the shipping path (signing, entitlements, Sparkle later).
-- Both read the same `BurnTracker/` and `Tests/` folders, so they cannot drift. Adding a file needs no project edit: the Xcode target uses synchronized folder groups.
+- Both read the same `BurnTracker/` and `BurnTrackerTests/` folders, so they cannot drift. Adding a file needs no project edit: the Xcode target uses synchronized folder groups.
 
 ## Code
 

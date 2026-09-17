@@ -9,28 +9,37 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B0E400000000000000000008 /* BurnTracker */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B0E400000000000000000040 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
 			path = BurnTracker;
 			sourceTree = "<group>";
 		};
-		B0E400000000000000000009 /* Tests */ = {
+		B0E400000000000000000009 /* BurnTrackerTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Tests;
+			path = BurnTrackerTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B0E400000000000000000040 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				BurnTracker.entitlements,
+			);
+			target = B0E400000000000000000002 /* BurnTracker */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXBuildFile section */
-		B0E400000000000000000020 /* BurnTracker.icns in Resources */ = {isa = PBXBuildFile; fileRef = B0E400000000000000000021 /* BurnTracker.icns */; };
-		B0E400000000000000000022 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = B0E400000000000000000023 /* Fonts */; };
 		B0E400000000000000000030 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B0E400000000000000000032 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		B0E400000000000000000021 /* BurnTracker.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = BurnTracker.icns; path = Resources/BurnTracker.icns; sourceTree = "<group>"; };
-		B0E400000000000000000023 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = Resources/Fonts; sourceTree = "<group>"; };
 		B0E400000000000000000004 /* BurnTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BurnTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0E400000000000000000005 /* BurnTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BurnTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		B0E40000000000000000001C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; };
 		B0E40000000000000000001D /* PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PLAN.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -39,10 +48,7 @@
 			isa = PBXGroup;
 			children = (
 				B0E400000000000000000008 /* BurnTracker */,
-				B0E400000000000000000009 /* Tests */,
-				B0E40000000000000000001C /* Info.plist */,
-				B0E400000000000000000021 /* BurnTracker.icns */,
-				B0E400000000000000000023 /* Fonts */,
+				B0E400000000000000000009 /* BurnTrackerTests */,
 				B0E40000000000000000001D /* PLAN.md */,
 				B0E400000000000000000007 /* Products */,
 			);
@@ -73,8 +79,6 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		B0E40000000000000000000C /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
-				B0E400000000000000000020 /* BurnTracker.icns in Resources */,
-				B0E400000000000000000022 /* Fonts in Resources */,
 			); runOnlyForDeploymentPostprocessing = 0; };
 		B0E40000000000000000000F /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
@@ -132,7 +136,7 @@
 				B0E400000000000000000019 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				B0E400000000000000000009 /* Tests */,
+				B0E400000000000000000009 /* BurnTrackerTests */,
 			);
 			name = BurnTrackerTests;
 			productName = BurnTrackerTests;
@@ -215,16 +219,14 @@
 		B0E400000000000000000015 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Resources/BurnTracker.entitlements;
+				CODE_SIGN_ENTITLEMENTS = BurnTracker/BurnTracker.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Resources/Info.plist;
+				INFOPLIST_FILE = BurnTracker/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = ( "$(inherited)", "@executable_path/../Frameworks" );
-				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.redevify.tokenburn;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -234,16 +236,14 @@
 		B0E400000000000000000016 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Resources/BurnTracker.entitlements;
+				CODE_SIGN_ENTITLEMENTS = BurnTracker/BurnTracker.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Resources/Info.plist;
+				INFOPLIST_FILE = BurnTracker/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = ( "$(inherited)", "@executable_path/../Frameworks" );
-				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.redevify.tokenburn;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

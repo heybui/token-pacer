@@ -10,7 +10,10 @@
 	<key>CFBundleShortVersionString</key><string>0.1.0</string>
 	<key>CFBundleVersion</key><string>1</string>
 	<key>LSMinimumSystemVersion</key><string>15.0</string>
-	<key>ATSApplicationFontsPath</key><string>Fonts</string>
+	<!-- "." is Contents/Resources itself. Xcode's synchronized group flattens a
+	     folder of resources into it, so a `Fonts` subdirectory would exist on the
+	     Makefile path and not the Xcode one. -->
+	<key>ATSApplicationFontsPath</key><string>.</string>
 	<key>CFBundleIconFile</key><string>BurnTracker</string>
 	<key>LSUIElement</key><true/>
 

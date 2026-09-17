@@ -13,13 +13,16 @@ let package = Package(
         .executableTarget(
             name: "BurnTracker",
             dependencies: [.product(name: "Sparkle", package: "Sparkle")],
-            path: "BurnTracker"
+            path: "BurnTracker",
+            // Xcode's synchronized group picks these up; SPM only builds the
+            // binary and would warn about every file it cannot compile.
+            exclude: ["Resources", "Info.plist", "BurnTracker.entitlements"]
         ),
         // Fixtures are read from disk via #filePath, not from a bundle.
         .testTarget(
             name: "BurnTrackerTests",
             dependencies: ["BurnTracker"],
-            path: "Tests",
+            path: "BurnTrackerTests",
             exclude: ["Fixtures"]
         ),
     ]

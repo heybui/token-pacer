@@ -232,31 +232,48 @@ Two build systems over one set of folders:
 Neither carries a file list, so they cannot drift.
 
 ```
-BurnTracker.xcodeproj     synchronized groups → BurnTracker/, Tests/
+BurnTracker.xcodeproj     synchronized groups → BurnTracker/, BurnTrackerTests/
 Package.swift             same folders, CLI loop
-BurnTracker/               the target's sources; named for it, not "Sources"
-  App/                 BurnTrackerApp.swift · AppDelegate.swift · Composition.swift
-  Notch/               NotchPanel.swift · NotchAnchor.swift · PassthroughHostingView.swift · ScreenObserver.swift
+BurnTracker/              the target's sources, named for it rather than "Sources"
+  Info.plist              build inputs, not bundle resources: the synchronized
+  BurnTracker.entitlements  group carries a membership exception for both
+  Resources/              InstrumentSans.ttf · BurnTracker.icns
+  App/                    main.swift · AppDelegate.swift · Probe.swift
+  Notch/                  NotchPanel.swift · NotchController.swift · NotchAnchor.swift
+                          PassthroughHostingView.swift
   Features/
-    Pill/              PillView.swift · PillState.swift
-    HoverCard/         HoverCardView.swift
-    Panel/             PinnedPanelView.swift · WeeklyCapSection.swift · BurnSparklineSection.swift
-                       SplitsSection.swift · HistorySection.swift
-    Warning/           WarningView.swift · WarningPolicy.swift
-    ContextMenu/       NotchContextMenu.swift
-    Preferences/       PreferencesWindow.swift · PreferencesView.swift
+    Pill/                 PillView.swift · PillState.swift · PillStateResolver.swift
+                          PillModel.swift · PillRootView.swift
+    Panel/                PinnedPanelView.swift
+    Menu/                 NotchMenuView.swift · UsageClipboard.swift
+    Preferences/          PreferencesWindow.swift · PreferencesView.swift
   Core/
-    Model/             UsageEvent.swift · UsageBucket.swift · UsageSnapshot.swift · SourceID.swift
-    Ingest/            UsageSource.swift · ClaudeCodeSource.swift · CodexSource.swift · JSONLReader.swift
-    Engine/            WindowCalculator.swift · CeilingEstimator.swift · BurnRate.swift · Aggregator.swift · TokenWeights.swift
-    Store/             UsageStore.swift · BucketArchive.swift
-    Services/          Notifier.swift · LaunchAtLogin.swift · Preferences.swift · FullScreenDetector.swift
-  DesignSystem/        Tokens.swift · OdometerText.swift · UsageRing.swift · CapBar.swift · Sparkline.swift
-Resources/             Assets.xcassets · InstrumentSans/ · Info.plist · BurnTracker.entitlements
-Tests/
-  Fixtures/            claude-session.jsonl · codex-rollout.jsonl (trimmed real logs)
-  EngineTests.swift · SourceTests.swift · PillStateTests.swift
+    Model/                UsageEvent.swift · UsageSnapshot.swift · TokenCounts.swift · SourceID.swift
+    Ingest/               UsageSource.swift · ClaudeCodeSource.swift · CodexSource.swift
+                          ClaudeUsageAPI.swift · JSONLReader.swift
+    Engine/               WindowCalculator.swift · CeilingEstimator.swift · BurnRate.swift
+                          Aggregator.swift · TokenWeights.swift · AlertPolicy.swift
+                          LiveLimitsTracker.swift · LimitsCalibration.swift · LimitsRefreshPolicy.swift
+    Store/                UsageStore.swift · Archive.swift
+    Log.swift
+  Services/               ClaudeCredentials.swift · Notifier.swift · LaunchAtLogin.swift
+                          Preferences.swift · SingleInstance.swift · Updater.swift
+  DesignSystem/           Tokens.swift · ToneScale.swift · Typography.swift · Format.swift
+                          OdometerText.swift · UsageRing.swift · CapBar.swift
+                          PulsingDot.swift · ChasingBorder.swift · AttentionBadge.swift
+BurnTrackerTests/
+  Fixtures/               claude-session.jsonl · codex-rollout.jsonl (trimmed real logs)
+  EngineTests.swift · SourceTests.swift · PillStateTests.swift · ArchiveTests.swift · …
 ```
+
+No `Resources/` at the repo root and no file lists anywhere: everything the app
+ships lives under `BurnTracker/`, and the synchronized group registers it. Adding
+a font or an icon needs no project edit. `Info.plist` and the entitlements sit
+beside it as build-setting inputs, excluded from the group's membership so they
+are not also copied in as resources, and from SPM's target so it does not warn
+about files it cannot compile. `ATSApplicationFontsPath` is `.` rather than
+`Fonts`, because a synchronized group flattens a folder of resources into
+`Contents/Resources` and the Makefile has to land them in the same place.
 
 Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no AppKit. That single constraint is what makes the engine testable and the Codex source a drop-in.
 

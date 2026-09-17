@@ -18,9 +18,7 @@ enum Typography {
     /// Call once at launch, before any view is built.
     static func register(bundle: Bundle = .main) {
         guard !registered else { return }
-        guard let url = bundle.url(forResource: "InstrumentSans", withExtension: "ttf")
-                ?? bundle.url(forResource: "InstrumentSans", withExtension: "ttf", subdirectory: "Fonts")
-        else {
+        guard let url = bundle.url(forResource: "InstrumentSans", withExtension: "ttf") else {
             Log.notch.notice("Instrument Sans not bundled; falling back to the system face")
             return
         }

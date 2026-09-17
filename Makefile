@@ -13,7 +13,7 @@ DEST := build/$(APP).app
 
 ## Marketing version from the plist; build number from the commit count, so it
 ## only ever goes up. Sparkle compares CFBundleVersion, not the pretty one.
-VERSION ?= $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Resources/Info.plist)
+VERSION ?= $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" BurnTracker/Info.plist)
 BUILD   ?= $(shell git rev-list --count HEAD)
 DMG     := build/$(APP)-$(VERSION).dmg
 
@@ -50,9 +50,9 @@ app: build
 	rm -rf $(DEST)
 	mkdir -p $(DEST)/Contents/MacOS $(DEST)/Contents/Resources
 	cp $(BIN) $(DEST)/Contents/MacOS/$(APP)
-	cp Resources/Info.plist $(DEST)/Contents/Info.plist
-	cp -R Resources/Fonts $(DEST)/Contents/Resources/Fonts
-	cp Resources/BurnTracker.icns $(DEST)/Contents/Resources/BurnTracker.icns
+	cp BurnTracker/Info.plist $(DEST)/Contents/Info.plist
+	cp BurnTracker/Resources/InstrumentSans.ttf $(DEST)/Contents/Resources/
+	cp BurnTracker/Resources/BurnTracker.icns $(DEST)/Contents/Resources/BurnTracker.icns
 	mkdir -p $(DEST)/Contents/Frameworks
 	cp -R $(SPARKLE) $(DEST)/Contents/Frameworks/
 	install_name_tool -add_rpath @executable_path/../Frameworks $(DEST)/Contents/MacOS/$(APP)
@@ -85,7 +85,7 @@ check-devid:
 ## No --deep — it signs nested code wrong, and Apple's own advice is against it.
 release-app: check-devid
 	$(MAKE) app SIGN=$(DEVID) SIGNFLAGS="--options runtime --timestamp" \
-	            ENTITLE="--entitlements Resources/BurnTracker.entitlements"
+	            ENTITLE="--entitlements BurnTracker/BurnTracker.entitlements"
 	codesign --verify --strict --deep --verbose=2 $(DEST)
 
 ## Drag-to-Applications disk image. No create-dmg dependency: a staging folder
