@@ -13,7 +13,7 @@ let package = Package(
         .executableTarget(
             name: "BurnTracker",
             dependencies: [.product(name: "Sparkle", package: "Sparkle")],
-            path: "Sources"
+            path: "BurnTracker"
         ),
         // Fixtures are read from disk via #filePath, not from a bundle.
         .testTarget(

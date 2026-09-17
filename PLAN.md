@@ -226,15 +226,15 @@ Font: design uses Instrument Sans (OFL). Bundle it to match pixel-for-pixel; SF 
 **One Xcode target, folders only.** No SPM multi-module split until build times actually hurt — the layering below is enforced by import discipline and tests, not by module boundaries.
 
 Two build systems over one set of folders:
-- `BurnTracker.xcodeproj` — the shipping path (Info.plist, entitlements, hardened runtime, signing, Sparkle in phase 6). Uses Xcode 16+ **synchronized folder groups**, so `Sources/` and `Tests/` are picked up wholesale and new files never need registering.
+- `BurnTracker.xcodeproj` — the shipping path (Info.plist, entitlements, hardened runtime, signing, Sparkle in phase 6). Uses Xcode 16+ **synchronized folder groups**, so `BurnTracker/` and `Tests/` are picked up wholesale and new files never need registering.
 - `Package.swift` — fast terminal loop (`swift build` ≈ 1.5s, `swift test`).
 
 Neither carries a file list, so they cannot drift.
 
 ```
-BurnTracker.xcodeproj     synchronized groups → Sources/, Tests/
+BurnTracker.xcodeproj     synchronized groups → BurnTracker/, Tests/
 Package.swift             same folders, CLI loop
-Sources/
+BurnTracker/               the target's sources; named for it, not "Sources"
   App/                 BurnTrackerApp.swift · AppDelegate.swift · Composition.swift
   Notch/               NotchPanel.swift · NotchAnchor.swift · PassthroughHostingView.swift · ScreenObserver.swift
   Features/

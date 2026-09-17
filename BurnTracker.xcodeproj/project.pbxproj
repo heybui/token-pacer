@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B0E400000000000000000008 /* Sources */ = {
+		B0E400000000000000000008 /* BurnTracker */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Sources;
+			path = BurnTracker;
 			sourceTree = "<group>";
 		};
 		B0E400000000000000000009 /* Tests */ = {
@@ -22,6 +22,7 @@
 /* Begin PBXBuildFile section */
 		B0E400000000000000000020 /* BurnTracker.icns in Resources */ = {isa = PBXBuildFile; fileRef = B0E400000000000000000021 /* BurnTracker.icns */; };
 		B0E400000000000000000022 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = B0E400000000000000000023 /* Fonts */; };
+		B0E400000000000000000030 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B0E400000000000000000032 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,7 +38,7 @@
 		B0E400000000000000000006 = {
 			isa = PBXGroup;
 			children = (
-				B0E400000000000000000008 /* Sources */,
+				B0E400000000000000000008 /* BurnTracker */,
 				B0E400000000000000000009 /* Tests */,
 				B0E40000000000000000001C /* Info.plist */,
 				B0E400000000000000000021 /* BurnTracker.icns */,
@@ -64,7 +65,9 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		B0E40000000000000000000B /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		B0E40000000000000000000B /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (
+				B0E400000000000000000030 /* Sparkle in Frameworks */,
+			); runOnlyForDeploymentPostprocessing = 0; };
 		B0E40000000000000000000E /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
@@ -106,9 +109,12 @@
 			buildRules = ();
 			dependencies = ();
 			fileSystemSynchronizedGroups = (
-				B0E400000000000000000008 /* Sources */,
+				B0E400000000000000000008 /* BurnTracker */,
 			);
 			name = BurnTracker;
+			packageProductDependencies = (
+				B0E400000000000000000032 /* Sparkle */,
+			);
 			productName = BurnTracker;
 			productReference = B0E400000000000000000004 /* BurnTracker.app */;
 			productType = "com.apple.product-type.application";
@@ -154,6 +160,9 @@
 			mainGroup = B0E400000000000000000006;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			packageReferences = (
+				B0E400000000000000000033 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			productRefGroup = B0E400000000000000000007 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -291,6 +300,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B0E400000000000000000033 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B0E400000000000000000032 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B0E400000000000000000033 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B0E400000000000000000001 /* Project object */;
 }
