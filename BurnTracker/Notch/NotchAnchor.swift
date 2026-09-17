@@ -18,6 +18,8 @@ struct ScreenMetrics: Equatable, Sendable {
 /// The strip the shell lives in, and the hardware it works around.
 struct NotchBand: Equatable, Sendable {
     /// The physical notch: dead space, no content ever laid out across it.
+    /// Zero off a notched screen, where the row is still there and only the
+    /// hardware is missing.
     var notchWidth: CGFloat = 0
     /// The menu bar row, which is a point taller than the notch it wraps.
     ///
@@ -65,15 +67,22 @@ enum NotchAnchor {
     /// the hardware rather than grown out of it.
     ///
     /// Measured per screen, never assumed. The same panel reports 220x38 scaled
-    /// and 185x32 at default, so a constant would be wrong on most Macs and on
-    /// every external display, where it is 0.
+    /// and 185x32 at default, so a constant would be wrong on most Macs.
     /// See crestnotch.app/macbook-notch-dimensions.
+    ///
+    /// Measured on every screen, notch or none. An external display has no
+    /// hardware to reach around but it still has a menu bar row, and that row is
+    /// what the shell's height answers to — it is taller on a scaled 5K panel
+    /// than on a 1080p one, so the board's 36pt is wrong on both. AppKit reports
+    /// the row in points already, which is the resolution and the backing scale
+    /// resolved: `frame - visibleFrame` needs no DPI arithmetic on top of it.
     static func band(_ m: ScreenMetrics) -> NotchBand {
-        guard let width = notchWidth(m) else { return NotchBand() }
         // The safe area is the floor, not the answer: with the menu bar set to
         // hide automatically the row measures zero, and the hardware is still
         // there.
-        return NotchBand(notchWidth: width, height: max(m.safeAreaTop, m.menuBarHeight))
+        let height = max(m.safeAreaTop, m.menuBarHeight)
+        guard height > 0 else { return NotchBand() }
+        return NotchBand(notchWidth: notchWidth(m) ?? 0, height: height)
     }
 
     /// Fixed-size host frame in global screen coordinates: top-centred, top edge

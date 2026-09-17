@@ -12,12 +12,14 @@ private let builtIn = ScreenMetrics(
     isBuiltIn: true
 )
 
-// External display to the right of the built-in: no notch, negative-origin frame.
+// External display to the right of the built-in: no notch, negative-origin
+// frame, and a 24pt menu bar row of its own.
 private let external = ScreenMetrics(
     frame: CGRect(x: 1512, y: -98, width: 2560, height: 1440),
     safeAreaTop: 0,
     auxiliaryTopLeft: nil,
-    auxiliaryTopRight: nil
+    auxiliaryTopRight: nil,
+    menuBarHeight: 24
 )
 
 @Test func notchWidthFromAuxiliaryAreas() {
@@ -36,8 +38,9 @@ private let external = ScreenMetrics(
     var phantom = builtIn
     phantom.isBuiltIn = false
     #expect(NotchAnchor.notchWidth(phantom) == nil)
-    #expect(PillState.collapsed.size(around: NotchAnchor.band(phantom))
-            == PillState.collapsed.size)
+    #expect(NotchAnchor.band(phantom).notchWidth == 0)
+    #expect(PillState.collapsed.size(around: NotchAnchor.band(phantom)).width
+            == PillState.collapsed.size.width)
 }
 
 @Test func noNotchWhenSafeAreaIsZero() {
@@ -98,10 +101,30 @@ private let external = ScreenMetrics(
     #expect(PillState.dormant.size(around: NotchAnchor.band(builtIn)) == PillState.dormant.size)
 }
 
-/// Nothing to wrap on a screen without a notch: every shell is the size the
-/// board drew, and meets the menu bar.
-@Test func theShellIsUnchangedWithoutANotch() {
-    #expect(NotchAnchor.band(external).isEmpty)
+/// An external display has no hardware to reach around, but it has a menu bar
+/// row and the shell still has to end at the bottom of it. The board's 36pt
+/// collapsed pill hung a finger's width below the row on every external screen.
+@Test func theShellMeetsTheMenuBarWithoutANotch() {
+    let band = NotchAnchor.band(external)
+    #expect(band.notchWidth == 0)
+    #expect(band.height == external.menuBarHeight)
+
+    for state in PillState.allCases where state != .dormant {
+        // No notch, no flanks to measure: the width is the one the board drew.
+        #expect(state.size(around: band).width == state.size.width)
+    }
+    // The states that live in the row are exactly the row tall — no more.
+    for state in PillState.allCases where state.fillsFlanks {
+        #expect(state.size(around: band).height == external.menuBarHeight)
+    }
+}
+
+/// Nothing reported at all — no safe area, no row — and there is nothing to
+/// measure against, so the board stands.
+@Test func theShellIsUnchangedWithoutABand() {
+    var blank = external
+    blank.menuBarHeight = 0
+    #expect(NotchAnchor.band(blank).isEmpty)
     for state in PillState.allCases {
         #expect(state.size(around: NotchBand()) == state.size)
     }

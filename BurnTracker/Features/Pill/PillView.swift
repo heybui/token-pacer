@@ -14,7 +14,8 @@ struct PillView: View {
     var menuItems: [NotchMenuItem] = []
     var onCloseMenu: () -> Void = {}
     var onHoverChange: (Bool) -> Void = { _ in }
-    /// The band the shell wraps. Empty off a notched screen.
+    /// The menu bar row the shell sits in, and the notch it wraps when there is
+    /// one. Empty only on a screen reporting no row at all.
     var band = NotchBand()
 
     /// Whether this state is drawn around the notch at all. Dormant never is:

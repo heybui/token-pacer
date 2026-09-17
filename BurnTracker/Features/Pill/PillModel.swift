@@ -96,8 +96,9 @@ final class PillModel {
             update(snapshot: inputs.snapshot)
         }
     }
-    /// The band on the screen the pill is docked to. Empty on external displays
-    /// and pre-notch Macs, where the shell is the size the board drew.
+    /// The band on the screen the pill is docked to — the menu bar row, with a
+    /// notch across it on a screen that has one. Empty only where no row is
+    /// reported, and there the shell is the size the board drew.
     var band = NotchBand() { didSet { publishChrome() } }
 
     /// Called whenever the host's geometry or keyboard needs change.

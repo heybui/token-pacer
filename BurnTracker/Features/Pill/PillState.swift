@@ -69,13 +69,20 @@ enum PillState: String, CaseIterable, Sendable {
     /// Dormant is the exception and keeps the board's hairline: "no activity"
     /// means the notch reads as stock hardware, and a black bar beside the
     /// camera is the one thing that would give it away.
+    ///
+    /// A notchless screen has a band too — the menu bar row — and it is the one
+    /// that matters there: the board's 36pt collapsed pill hung below the row on
+    /// an external display, its bottom edge lining up with nothing.
     func size(around band: NotchBand) -> CGSize {
         guard !band.isEmpty, self != .dormant else { return size }
         // Hovering changes the height, never the width. The shell is one object
         // growing downward out of the notch, and a pill that widened as well read
         // as a second one sliding in behind the first. The panel is the exception:
         // it is a sheet, not a widened pill.
-        let banded = band.notchWidth + 2 * PillState.flank
+        // Off a notched screen there is no hardware to reach around and no
+        // flanks to measure, so the board's width stands; the row only ever sets
+        // the height there.
+        let banded = band.notchWidth > 0 ? band.notchWidth + 2 * PillState.flank : size.width
         return CGSize(
             width: self == .pinned ? max(size.width, banded) : banded,
             height: band.height + (fillsFlanks ? 0 : size.height - PillState.reclaimedTop)
