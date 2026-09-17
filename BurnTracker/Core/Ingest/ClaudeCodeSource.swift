@@ -11,13 +11,34 @@ actor ClaudeCodeSource: UsageSource {
     private var scanner = LogScanner()
 
     private let cutoff: Date?
+    private let changed: ChangeGate?
+    private var lastScan = Date.distantPast
+
+    /// A full scan runs at least this often whatever the gate says.
+    ///
+    /// FSEvents can drop events — a busy volume, a watcher started mid-write. A
+    /// dropped one has to cost a minute of staleness, not the rest of the
+    /// session, so the timer stays as the floor underneath it.
+    private static let scanAtLeastEvery: TimeInterval = 60
 
     init(
         root: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/projects"),
-        retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600
+        retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600,
+        changed: ChangeGate? = nil
     ) {
         self.root = root
         self.cutoff = retention.map { Date().addingTimeInterval(-$0) }
+        self.changed = changed
+    }
+
+    /// Nothing written and the floor not yet up: skip the walk.
+    ///
+    /// The events are what the scan is for, and there are none — but `activity`
+    /// is a running answer, not a fresh reading, so the last one still stands and
+    /// the ring does not blink off between beats of work.
+    private func canSkipScan(at now: Date) -> Bool {
+        guard let changed, !changed() else { return false }
+        return now.timeIntervalSince(lastScan) < Self.scanAtLeastEvery
     }
 
     func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {
@@ -27,6 +48,11 @@ actor ClaudeCodeSource: UsageSource {
     func cursors() -> [String: JSONLReader.Cursor] { scanner.cursors }
 
     func poll() throws -> SourceSnapshot {
+        let now = Date()
+        guard !canSkipScan(at: now) else {
+            return SourceSnapshot(source: .claude, events: [], limits: nil, activity: scanner.activity)
+        }
+        lastScan = now
         let events = try scanner.scan(root: root, since: cutoff, decode: Self.decode)
         return SourceSnapshot(source: .claude, events: events, limits: nil, activity: scanner.activity)
     }

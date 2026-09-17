@@ -118,3 +118,43 @@ private func assistant(_ stopReason: String, at date: Date) -> String {
     ])
     #expect(try #require(done).isAwaitingResponse == false)
 }
+
+// MARK: - skipping the walk when nothing was written
+
+/// The gate decides whether a tick walks the tree and stats every log. Get it
+/// stuck closed and the app reads nothing for the rest of the session while
+/// showing a figure that looks live, so the floor underneath it is what is
+/// actually being checked here.
+@Test func aClosedGateSkipsTheScanButNeverForLong() async throws {
+    let root = try #require(FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first)
+        .appending(path: "burntracker-gate-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let line = """
+    {"type":"assistant","timestamp":"2026-09-17T10:00:00.000Z","requestId":"r1",\
+    "message":{"id":"m1","model":"claude-opus-5","usage":{"input_tokens":10,"output_tokens":20}}}
+    """
+    try (line + "\n").write(to: root.appending(path: "a.jsonl"), atomically: true, encoding: .utf8)
+
+    // Gate open: the log is read.
+    let open = ClaudeCodeSource(root: root, retention: nil, changed: { true })
+    #expect(try await open.poll().events.count == 1)
+
+    // A cold source always scans: `lastScan` starts at distantPast, so a machine
+    // that was quiet before launch still shows its window rather than nothing.
+    let shut = ClaudeCodeSource(root: root, retention: nil, changed: { false })
+    #expect(try await shut.poll().events.count == 1)
+
+    // Only now does the gate hold it shut. A second log appears and is not read,
+    // because nothing said anything had changed.
+    try (line.replacingOccurrences(of: "r1", with: "r2")
+            .replacingOccurrences(of: "m1", with: "m2") + "\n")
+        .write(to: root.appending(path: "b.jsonl"), atomically: true, encoding: .utf8)
+    #expect(try await shut.poll().events.isEmpty)
+
+    // An open gate picks it straight up.
+    let open2 = ClaudeCodeSource(root: root, retention: nil, changed: { true })
+    _ = try await open2.poll()
+    #expect(try await open2.poll().events.isEmpty)   // cursors: read once, not twice
+}

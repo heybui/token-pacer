@@ -5,9 +5,10 @@ import SwiftUI
 @MainActor
 final class NotchController {
     private let model = PillModel()
-    private let store = UsageStore(
-        usagePanel: ClaudeUsagePanel(read: ClaudeCLI.reader)
-    )
+    /// Retained: releasing the watcher stops its stream, and its gate would then
+    /// say "nothing changed" for the rest of the run.
+    private let watchers: [LogWatcher]
+    private let store: UsageStore
     private let preferences = Preferences()
     private let notifier = Notifier()
     private var alerts = AlertPolicy()
@@ -23,6 +24,13 @@ final class NotchController {
     private var escapeMonitor: Any?
 
     init() {
+        let watched = LogWatcher.watchedSources()
+        watchers = watched.watchers
+        store = UsageStore(
+            sources: watched.sources,
+            usagePanel: ClaudeUsagePanel(read: ClaudeCLI.reader)
+        )
+
         let size = PillState.hostSize
         panel = NotchPanel(contentRect: NSRect(origin: .zero, size: size))
         host = PassthroughHostingView(rootView: PillRootView(

@@ -1,5 +1,13 @@
 import Foundation
 
+/// Has anything under a source's root changed since the last poll?
+///
+/// Discovery is what a poll costs — walking the tree and stat-ing every log runs
+/// whether or not a byte was written. Something outside Core watches the
+/// filesystem and answers this. Nil means nothing is watching, and the scan runs
+/// every tick as it always did.
+typealias ChangeGate = @Sendable () -> Bool
+
 /// One local CLI's logs. Two conformances today; the shapes differ enough that
 /// the protocol earns its keep.
 protocol UsageSource: Actor {

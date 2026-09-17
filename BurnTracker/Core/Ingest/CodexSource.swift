@@ -15,13 +15,21 @@ actor CodexSource: UsageSource {
     private var latestLimits: RateLimits?
 
     private let cutoff: Date?
+    private let changed: ChangeGate?
+    private var lastScan = Date.distantPast
+
+    /// As Claude's: the watcher is a shortcut, never the only way a write is
+    /// noticed. See `ClaudeCodeSource.scanAtLeastEvery`.
+    private static let scanAtLeastEvery: TimeInterval = 60
 
     init(
         root: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/sessions"),
-        retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600
+        retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600,
+        changed: ChangeGate? = nil
     ) {
         self.root = root
         self.cutoff = retention.map { Date().addingTimeInterval(-$0) }
+        self.changed = changed
     }
 
     func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {
@@ -31,6 +39,17 @@ actor CodexSource: UsageSource {
     func cursors() -> [String: JSONLReader.Cursor] { scanner.cursors }
 
     func poll() throws -> SourceSnapshot {
+        // A machine with Codex installed but unused still had its tree walked
+        // every five seconds, for ever. The limits are the last reading either
+        // way — nothing was written, so nothing has moved.
+        let now = Date()
+        if let changed, !changed(), now.timeIntervalSince(lastScan) < Self.scanAtLeastEvery {
+            return SourceSnapshot(
+                source: .codex, events: [], limits: latestLimits, activity: scanner.activity
+            )
+        }
+        lastScan = now
+
         // Detached copy: `decode` mutates self, so the scanner cannot also be
         // held as an inout on self at the same time.
         var local = scanner
