@@ -75,9 +75,14 @@ enum SnapshotBuilder {
         ceiling: Ceiling,
         at now: Date,
         weights: TokenWeights = .default,
-        panelMovedAt: Date? = nil
+        panelMovedAt: Date? = nil,
+        panel: PanelData? = nil,
+        windows: [SessionWindow]? = nil
     ) -> UsageSnapshot {
-        let windows = WindowCalculator.windows(from: events, weights: weights)
+        // Handed in when the caller already has them: the store computes exactly
+        // these for the ceiling estimate, and walking every retained event twice
+        // a tick for the same answer is the poll's largest avoidable cost.
+        let windows = windows ?? WindowCalculator.windows(from: events, weights: weights)
         let current = WindowCalculator.current(in: windows, at: now)
 
         var snapshot = UsageSnapshot(source: source)
@@ -117,7 +122,11 @@ enum SnapshotBuilder {
             snapshot.weeklyResetsAt = secondary.resetsAt
         }
 
-        snapshot.panel = Aggregator.panel(
+        // Handed in when the caller still has a recent one. Aggregating it walks
+        // every retained event — thirty days of them — and it feeds the pinned
+        // panel alone, which is shut almost always. On the 5s tick it was the
+        // most expensive thing the app did, and it grew with the history.
+        snapshot.panel = panel ?? Aggregator.panel(
             events: events, window: current, at: now, weights: weights
         )
 

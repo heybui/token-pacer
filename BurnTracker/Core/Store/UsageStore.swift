@@ -35,6 +35,15 @@ final class UsageStore {
     /// Claude Design write no log here, so without this the pill withdrew to its
     /// 3pt sliver ten minutes into a browser session and hid a climbing figure.
     private var panelMovedAt: [SourceID: Date] = [:]
+    /// When each source's panel aggregation was last rebuilt.
+    ///
+    /// It is a 30-day grid, a sparkline and the splits, and only the pinned panel
+    /// shows any of it. Rebuilding that on every 5s tick cost more than the rest
+    /// of the app put together once a few weeks of history had built up.
+    private var panelBuiltAt: [SourceID: Date] = [:]
+    /// The coarsest thing the panel draws is a day, the finest a sparkline bucket.
+    /// A minute is invisible in both and cuts the work by twelve.
+    private static let panelInterval: TimeInterval = 60
     /// Last known state of each source's newest log line. A poll that reads no
     /// new lines says nothing about activity, so the previous answer stands.
     private var activities: [SourceID: LogActivity] = [:]
@@ -58,6 +67,16 @@ final class UsageStore {
     /// of them at once.
     private(set) var bySource: [UsageSplit] = []
     private var pump: Task<Void, Never>?
+
+    /// Does appending these break the order of what is already held?
+    ///
+    /// Cheap: the fresh batch is a handful of lines, and the only other place
+    /// order can break is where it joins the tail.
+    static func isDisordered(_ fresh: [UsageEvent], after newest: Date?) -> Bool {
+        guard let first = fresh.first else { return false }
+        if let newest, newest > first.timestamp { return true }
+        return zip(fresh, fresh.dropFirst()).contains { $0.timestamp > $1.timestamp }
+    }
 
     /// Raw events are kept only long enough to serve the history grid.
     private static let retention = TimeInterval(Aggregator.historyDays) * 24 * 3600
@@ -196,9 +215,26 @@ final class UsageStore {
             do {
                 let fresh = try await source.poll()
                 var merged = events[source.id] ?? []
+                let newest = merged.last?.timestamp
                 merged.append(contentsOf: fresh.events)
-                merged.removeAll { $0.timestamp < now.addingTimeInterval(-Self.retention) }
-                merged.sort { $0.timestamp < $1.timestamp }
+
+                // Sorted already, and fresh lines arrive in order, so the join is
+                // the only place order can break — a resumed session replaying
+                // history behind what is already held. Sorting every retained
+                // event on each 5s tick to append a handful of new ones was the
+                // most expensive thing in the poll, and it grew with the history.
+                if Self.isDisordered(fresh.events, after: newest) {
+                    merged.sort { $0.timestamp < $1.timestamp }
+                }
+
+                // Expiry is a prefix of a sorted array, so this walks only what it
+                // drops — nothing, on almost every tick — rather than all of it.
+                let cutoff = now.addingTimeInterval(-Self.retention)
+                if let firstKept = merged.firstIndex(where: { $0.timestamp >= cutoff }) {
+                    merged.removeFirst(firstKept)
+                } else if merged.last.map({ $0.timestamp < cutoff }) == true {
+                    merged.removeAll()
+                }
                 events[source.id] = merged
                 if let activity = fresh.activity { activities[source.id] = activity }
 
@@ -214,6 +250,11 @@ final class UsageStore {
                 errors[source.id] = Self.simulatedError ?? limitsErrors[source.id]
                 refreshLimits(for: source.id, events: fresh.events, now: now)
 
+                let panelIsStale = now.timeIntervalSince(
+                    panelBuiltAt[source.id] ?? .distantPast
+                ) >= Self.panelInterval
+                if panelIsStale { panelBuiltAt[source.id] = now }
+
                 snapshots[source.id] = SnapshotBuilder.build(
                     source: source.id,
                     // A source that states its own limits wins; otherwise use the
@@ -224,7 +265,12 @@ final class UsageStore {
                     ceiling: ceiling,
                     at: now,
                     weights: weights,
-                    panelMovedAt: panelMovedAt[source.id]
+                    panelMovedAt: panelMovedAt[source.id],
+                    panel: panelIsStale ? nil : snapshots[source.id]?.panel,
+                    // Computed once above for the ceiling. Building them a second
+                    // time inside the builder doubled the per-tick walk over every
+                    // retained event for an identical answer.
+                    windows: windows
                 )
                 if source.id == activeSource, let snapshot = snapshots[source.id] {
                     onSnapshot?(snapshot)

@@ -385,3 +385,47 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
     )
     #expect(snapshot.lastActivity == now.addingTimeInterval(-1800))
 }
+
+/// The panel is a 30-day grid nobody is looking at: it feeds the pinned sheet
+/// alone. Rebuilt on every 5s tick it was the most expensive thing the app did,
+/// and it grew with the history, so a handed-in one has to be used as given.
+@Test func ahandedInPanelIsUsedInsteadOfAggregatingAgain() {
+    let now = Date(timeIntervalSince1970: 1_789_000_000)
+    let events = (1...200).map { event(Double(-$0) / 6) }
+    let fresh = SnapshotBuilder.build(
+        source: .claude, limits: nil, events: events, ceiling: .unknown, at: now
+    )
+    #expect(fresh.panel != PanelData())
+
+    let reused = SnapshotBuilder.build(
+        source: .claude, limits: nil, events: events, ceiling: .unknown, at: now,
+        panel: PanelData()
+    )
+    #expect(reused.panel == PanelData())
+    // Everything else still comes off the events, so a stale panel never staled
+    // the figure beside it.
+    #expect(reused.sessionTokens == fresh.sessionTokens)
+    #expect(reused.lastActivity == fresh.lastActivity)
+}
+
+// MARK: - the poll's own cost
+
+/// The retained array is kept sorted and re-sorting it on every 5s tick is what
+/// the poll spent most of its time on, so the sort is now skipped when the fresh
+/// batch appends cleanly. Get this wrong and events land out of order, which
+/// silently mis-builds every window downstream — so it is checked at the join
+/// and within the batch, not assumed.
+@MainActor
+@Test func onlyOutOfOrderArrivalsForceASort() {
+    let ordered = [event(1), event(2), event(3)]
+
+    // The ordinary case: newer lines appended to older history.
+    #expect(UsageStore.isDisordered(ordered, after: t0) == false)
+    #expect(UsageStore.isDisordered([], after: t0) == false)
+    #expect(UsageStore.isDisordered(ordered, after: nil) == false)
+
+    // A resumed session replays history behind what is already held.
+    #expect(UsageStore.isDisordered(ordered, after: t0.addingTimeInterval(10 * 3600)))
+    // ...and a batch can be ragged within itself.
+    #expect(UsageStore.isDisordered([event(3), event(1)], after: t0))
+}
