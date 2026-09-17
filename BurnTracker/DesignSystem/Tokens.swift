@@ -20,7 +20,12 @@ enum Tokens {
     static let shellRingIdle = Color.white.opacity(0.06)
     static let shellRingOpen = Color.white.opacity(0.13)
 
-    static let spring = Animation.interpolatingSpring(stiffness: 220, damping: 24)
+    /// The shell opening and closing. Stated as a duration, not as a stiffness:
+    /// how long the expansion reads for is the thing being tuned, and
+    /// `interpolatingSpring(stiffness:damping:)` hides that behind two figures
+    /// that have to be solved for it. `bounce` holds the old settle — 0.18 is
+    /// the damping ratio the 220/24 pair worked out to, just stretched in time.
+    static let spring = Animation.spring(duration: 0.6, bounce: 0.18)
 }
 
 extension Color {
