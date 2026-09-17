@@ -14,6 +14,18 @@ struct PillView: View {
     var menuItems: [NotchMenuItem] = []
     var onCloseMenu: () -> Void = {}
     var onHoverChange: (Bool) -> Void = { _ in }
+    /// The band the shell wraps. Empty off a notched screen.
+    var band = NotchBand()
+
+    /// Whether this state is drawn around the notch at all. Dormant never is:
+    /// "no activity" means the notch reads as stock hardware.
+    private var spansNotch: Bool { !band.isEmpty && state != .dormant }
+
+    /// The board's 26pt was clearance for the notch. With a band above carrying
+    /// that, the body opens right under the hardware instead.
+    private var bodyTop: CGFloat {
+        spansNotch ? PillState.bandedBodyTop : PillState.boardBodyTop
+    }
     /// Nil until the first poll lands. On a cold start that reads hundreds of
     /// megabytes it is several seconds, and a fake 0% would be a lie.
     var isLoading: Bool { snapshot == nil }
@@ -49,22 +61,27 @@ struct PillView: View {
         .onHover(perform: onHoverChange)
         .animation(.easeOut(duration: 0.16), value: isMenuOpen)
         .frame(
-            width: PillState.hostSize.width, height: PillState.hostSize.height,
+            width: PillState.hostSize(around: band).width,
+            height: PillState.hostSize(around: band).height,
             alignment: .top
         )
     }
 
     private var shell: some View {
-        ZStack(alignment: .top) {
+        let shellSize = state.size(around: band)
+        return ZStack(alignment: .bottom) {
             // Cross-faded, not swapped. The shell's frame springs open over
             // ~400ms; content that appears at full opacity on the first frame
             // reads as a jump no matter how smooth the box is.
             content
-                .frame(width: state.size.width, height: state.size.height)
+                // Top-aligned: a flank-filling state is shorter than its shell by
+                // the overhang, and that slack belongs below the band, not split
+                // either side of it.
+                .frame(width: shellSize.width, height: shellSize.height, alignment: .top)
                 .id(state)
                 .transition(.opacity.animation(.easeInOut(duration: 0.22)))
         }
-            .frame(width: state.size.width, height: state.size.height)
+            .frame(width: shellSize.width, height: shellSize.height, alignment: .bottom)
             .clipShape(shape)
             // The shadow is cast by the shape itself, never by the composited
             // content. Flattening the content works only while SwiftUI can
@@ -85,7 +102,8 @@ struct PillView: View {
                 // round it is a screensaver, and the panel is for reading.
                 if chasesBorder {
                     ChasingBorder(
-                        shape: shape, tone: tone, isRunning: snapshot?.isBurning == true
+                        cornerRadius: state.cornerRadius, tone: tone,
+                        isRunning: snapshot?.isBurning == true
                     )
                 }
             }
@@ -103,8 +121,57 @@ struct PillView: View {
         )
     }
 
+    /// The band that spans the hardware, and the body that hangs below it.
+    ///
+    /// Every state shows the same figures in the flanks, because the strips
+    /// either side of the notch are the one part of the shell that does not
+    /// change size. States that fit there have no body at all.
     @ViewBuilder
     private var content: some View {
+        if spansNotch {
+            // The shell's width, never the board's: the band fixed the width at
+            // the flanks, and a body still cut to 404 overflowed it by 18pt each
+            // side — clipped by the shell, so the first and last characters of
+            // every line were simply gone.
+            let shell = state.size(around: band)
+            VStack(spacing: 0) {
+                notchBand
+                if !state.fillsFlanks {
+                    stateBody.frame(width: shell.width, height: shell.height - band.height)
+                }
+            }
+        } else {
+            stateBody.frame(width: state.size.width, height: state.size.height)
+        }
+    }
+
+    private var notchBand: some View {
+        Group {
+            switch state {
+            case .paused: pausedPill
+            case .exhausted: exhaustedPill
+            default: collapsed
+            }
+        }
+        .frame(height: band.height)
+    }
+
+    /// The hardware's own footprint, held open in the middle of the band.
+    /// Content is laid out either side of it, never across it. Off a notched
+    /// screen it collapses to the gap the board drew.
+    @ViewBuilder
+    private var notchGap: some View {
+        Spacer(minLength: spansNotch ? 0 : 12)
+        if spansNotch {
+            Color.clear.frame(width: band.notchWidth)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// What the state draws below the band — or, off a notched screen, the whole
+    /// shell.
+    @ViewBuilder
+    private var stateBody: some View {
         switch state {
         case .dormant: Color.clear
         case .paused: pausedPill
@@ -113,7 +180,8 @@ struct PillView: View {
         case .hover: hoverCard
         case .pinned:
             PinnedPanelView(
-                snapshot: snapshot, bySource: bySource, attention: attention, onClose: onClose
+                snapshot: snapshot, bySource: bySource, attention: attention,
+                topInset: bodyTop, onClose: onClose
             )
         default: collapsed
         }
@@ -130,7 +198,7 @@ struct PillView: View {
             Text("paused")
                 .font(.system(size: 11.5, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.45))
-            Spacer(minLength: 0)
+            notchGap
         }
         .padding(.horizontal, 11)
     }
@@ -140,6 +208,7 @@ struct PillView: View {
         HStack(spacing: 10) {
             Circle().fill(Tokens.red).frame(width: 6, height: 6)
             OdometerText(text: Format.countdown(to: snapshot?.resetsAt), size: 12, color: Tokens.red)
+            notchGap
         }
         .padding(.horizontal, 16)
     }
@@ -159,25 +228,26 @@ struct PillView: View {
 
     private var collapsed: some View {
         HStack(spacing: 8) {
-            UsageRing(
-                percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
-                tone: tone, size: 17, lineWidth: 3
-            )
+            // The ring waits for a figure to mirror. Drawn while the logs are
+            // still being read it is an empty track next to the word "reading",
+            // and the pair does not fit a flank that holds one or the other.
             if isLoading {
-                Text("reading logs")
+                Text("reading…")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.4))
             } else {
+                UsageRing(
+                    percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
+                    tone: tone, size: 17, lineWidth: 3,
+                    isBurning: snapshot?.isBurning == true
+                )
                 OdometerText(text: headline, size: 12, color: tone)
             }
 
-            Spacer(minLength: 12)
+            notchGap
 
             if let attention {
                 AttentionBadge(message: attention, size: 10)
-            } else if !isGhost {
-                // Always present; it pulses only while the logs are growing.
-                PulsingDot(color: tone, isPulsing: snapshot?.isBurning == true)
             }
             if isGhost {
                 Text("week")
@@ -201,7 +271,10 @@ struct PillView: View {
     /// re-fires for this window.
     private var warningCard: some View {
         HStack(spacing: 16) {
-            UsageRing(percent: snapshot?.sessionPercent, tone: Tokens.red, size: 48, lineWidth: 6)
+            UsageRing(
+                percent: snapshot?.sessionPercent, tone: Tokens.red, size: 48, lineWidth: 6,
+                isBurning: snapshot?.isBurning == true
+            )
             VStack(alignment: .leading, spacing: 4) {
                 OdometerText(text: headline, size: 26, color: Tokens.red)
                 Text(warningLine)
@@ -211,7 +284,7 @@ struct PillView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.top, 26)
+        .padding(.top, bodyTop)
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
     }
@@ -227,21 +300,24 @@ struct PillView: View {
 
     private var hoverCard: some View {
         HStack(spacing: 15) {
-            UsageRing(
-                percent: snapshot?.sessionPercent, tone: tone,
-                size: 46, lineWidth: 6,
-                label: isLoading ? nil : headline
-            )
+            // Off a notched screen the card carries its own ring and countdown.
+            // On one the band above already has both, and a second copy 15pt
+            // below the first is just the same number twice.
+            if !spansNotch {
+                UsageRing(
+                    percent: snapshot?.sessionPercent, tone: tone,
+                    size: 46, lineWidth: 6,
+                    label: isLoading ? nil : headline,
+                    isBurning: snapshot?.isBurning == true
+                )
+            }
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(statusLine)
                         .font(Typography.sans(13, .semibold))
                         .foregroundStyle(.white)
                     Spacer(minLength: 14)
-                    HStack(spacing: 7) {
-                        // Carried over from the collapsed pill: the countdown keeps
-                        // its activity dot when the shell grows.
-                        PulsingDot(color: tone, isPulsing: snapshot?.isBurning == true)
+                    if !spansNotch {
                         HStack(spacing: 4) {
                             OdometerText(
                                 text: Format.countdown(to: snapshot?.resetsAt),
@@ -272,7 +348,7 @@ struct PillView: View {
                 }
             }
         }
-        .padding(.top, 26)
+        .padding(.top, bodyTop)
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
     }

@@ -7,7 +7,9 @@ private let builtIn = ScreenMetrics(
     frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
     safeAreaTop: 32,
     auxiliaryTopLeft: CGRect(x: 0, y: 950, width: 655, height: 32),
-    auxiliaryTopRight: CGRect(x: 857, y: 950, width: 655, height: 32)
+    auxiliaryTopRight: CGRect(x: 857, y: 950, width: 655, height: 32),
+    menuBarHeight: 33,
+    isBuiltIn: true
 )
 
 // External display to the right of the built-in: no notch, negative-origin frame.
@@ -26,6 +28,18 @@ private let external = ScreenMetrics(
     #expect(NotchAnchor.notchWidth(external) == nil)
 }
 
+/// An external display reports a top safe area for its menu bar and fills in
+/// both auxiliary areas with it — notch-shaped, on hardware that has none. Left
+/// unchecked the shell sized its flanks around a phantom and came out far wider
+/// than the board ever drew.
+@Test func noNotchOnADisplayThatOnlyLooksLikeOne() {
+    var phantom = builtIn
+    phantom.isBuiltIn = false
+    #expect(NotchAnchor.notchWidth(phantom) == nil)
+    #expect(PillState.collapsed.size(around: NotchAnchor.band(phantom))
+            == PillState.collapsed.size)
+}
+
 @Test func noNotchWhenSafeAreaIsZero() {
     var faked = builtIn
     faked.safeAreaTop = 0
@@ -36,6 +50,61 @@ private let external = ScreenMetrics(
     let frame = NotchAnchor.hostFrame(for: builtIn, size: PillState.hostSize)
     #expect(frame.midX == builtIn.frame.midX)
     #expect(frame.maxY == builtIn.frame.maxY)
+}
+
+/// The shell wraps the hardware: up behind it, past it on both sides, and down
+/// to the end of the menu bar row. The figures go in the strips that leaves,
+/// which is the whole point — grow the shell without moving the content and the
+/// ring sits behind the camera.
+@Test func theShellSpansTheBandAndLeavesFlanksToFill() {
+    let band = NotchAnchor.band(builtIn)
+    #expect(band.notchWidth == 202)
+    // The row, not the notch: they differ by a point, and a shell cut to the
+    // notch ends its bottom edge on the chin.
+    #expect(band.height == builtIn.menuBarHeight)
+    #expect(band.height > builtIn.safeAreaTop)
+
+    for state in PillState.allCases where state != .dormant {
+        let drawn = state.size(around: band)
+        #expect(drawn.width >= band.notchWidth + 2 * PillState.flank)   // room either side
+        #expect(drawn.height
+                == band.height
+                + (state.fillsFlanks ? 0 : state.size.height - PillState.reclaimedTop))
+        // The light runs the bottom edge, so that edge is never on the chin.
+        #expect(drawn.height > builtIn.safeAreaTop)
+    }
+    // Hovering grows the shell downward and nothing else: one object, one width.
+    let widths = Set(PillState.allCases.filter { $0 != .dormant && $0 != .pinned }
+        .map { $0.size(around: band).width })
+    #expect(widths.count == 1)
+    #expect(PillState.pinned.size(around: band).width == PillState.pinned.size.width)
+
+    #expect(PillState.hostSize(around: band).height - PillState.hostSize.height == band.height)
+    #expect(PillState.hostSize(around: band).width >= band.notchWidth + 2 * PillState.flank)
+}
+
+/// A menu bar set to hide automatically measures zero. The hardware is still
+/// there, so the safe area is the floor the band never drops below.
+@Test func aHiddenMenuBarFallsBackToTheNotch() {
+    var hidden = builtIn
+    hidden.menuBarHeight = 0
+    #expect(NotchAnchor.band(hidden).height == builtIn.safeAreaTop)
+}
+
+/// "No activity" means the notch reads as stock hardware. A black bar beside the
+/// camera is the one thing that would give it away, so dormant keeps the board's
+/// hairline and stays behind the hardware.
+@Test func dormantNeverSpansTheNotch() {
+    #expect(PillState.dormant.size(around: NotchAnchor.band(builtIn)) == PillState.dormant.size)
+}
+
+/// Nothing to wrap on a screen without a notch: every shell is the size the
+/// board drew, and meets the menu bar.
+@Test func theShellIsUnchangedWithoutANotch() {
+    #expect(NotchAnchor.band(external).isEmpty)
+    for state in PillState.allCases {
+        #expect(state.size(around: NotchBand()) == state.size)
+    }
 }
 
 /// The regression that matters on multi-monitor: a screen whose origin is not (0,0).
@@ -87,7 +156,8 @@ private let external = ScreenMetrics(
     let laptop = ScreenMetrics(
         frame: CGRect(x: 0, y: -1000, width: 1512, height: 982), safeAreaTop: 37,
         auxiliaryTopLeft: CGRect(x: 0, y: 0, width: 640, height: 37),
-        auxiliaryTopRight: CGRect(x: 872, y: 0, width: 640, height: 37)
+        auxiliaryTopRight: CGRect(x: 872, y: 0, width: 640, height: 37),
+        isBuiltIn: true
     )
 
     #expect(NotchAnchor.preferred(from: [external, laptop], main: external) == laptop)

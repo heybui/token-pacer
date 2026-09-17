@@ -48,7 +48,8 @@ struct PillRootView: View {
             isMenuOpen: model.isMenuOpen,
             menuItems: menuItems,
             onCloseMenu: { model.closeMenu() },
-            onHoverChange: { model.setPointerInside($0) }
+            onHoverChange: { model.setPointerInside($0) },
+            band: model.band
         )
             .onAppear { model.menuHeight = PillState.menuHeight(items: menuItems.count) }
             .onChange(of: store.snapshot) { _, snapshot in

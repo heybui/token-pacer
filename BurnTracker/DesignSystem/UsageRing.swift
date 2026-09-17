@@ -11,6 +11,13 @@ struct UsageRing: View {
     /// hold it — the 17px pill ring is not, so its figure sits alongside instead.
     var label: String?
     var labelSize: CGFloat = 11
+    /// Tokens are flowing right now. The ring breathes while they are.
+    ///
+    /// It has to read at 0%, where there is no arc yet — a fresh window is
+    /// exactly when you look — so the track carries the breath and the arc only
+    /// takes the glow. This replaced a separate activity dot; it keeps the dot's
+    /// 2.6s cycle, 1.3s each way, because that pairing was set on the board.
+    var isBurning: Bool = false
 
     /// "On reset the ring fills green and pops once." A reset is the only thing
     /// that takes the figure sharply *down* — usage never falls on its own — so
@@ -18,14 +25,32 @@ struct UsageRing: View {
     /// jitter from setting it off.
     private static let resetDrop: Double = 15
     @State private var resets = 0
+    @State private var inhaled = false
+
+    private var breath: Animation {
+        .easeInOut(duration: 1.3).repeatForever(autoreverses: true)
+    }
+
+    /// Toned while burning, plain while idle: at 0% the track is the whole ring,
+    /// so it is the only thing that can say anything is happening.
+    private var trackColor: Color {
+        guard isBurning else { return .white.opacity(0.14) }
+        return tone.opacity(inhaled ? 0.40 : 0.15)
+    }
 
     var body: some View {
         ZStack {
-            Circle().stroke(Color.white.opacity(0.14), lineWidth: lineWidth)
+            Circle().stroke(trackColor, lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: (percent ?? 0) / 100)
                 .stroke(tone, style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
                 .rotationEffect(.degrees(-90))
+                // Cast by the arc, so it grows with the figure instead of sitting
+                // in the middle of the hole.
+                .shadow(
+                    color: tone.opacity(isBurning && inhaled ? 0.85 : 0),
+                    radius: lineWidth * 0.9
+                )
             if let label {
                 OdometerText(text: label, size: labelSize, color: tone)
                     .lineLimit(1)
@@ -44,6 +69,17 @@ struct UsageRing: View {
         }
         .onChange(of: percent ?? 0) { was, now in
             if was - now >= Self.resetDrop { resets += 1 }
+        }
+        .onAppear { breathe(isBurning) }
+        .onChange(of: isBurning) { _, burning in breathe(burning) }
+    }
+
+    private func breathe(_ burning: Bool) {
+        if burning {
+            withAnimation(breath) { inhaled = true }
+        } else {
+            // Settle back to the plain track rather than freezing mid-breath.
+            withAnimation(.easeOut(duration: 0.2)) { inhaled = false }
         }
     }
 }

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// `BurnTracker --probe` — read the real logs once and print what the engine makes
@@ -40,6 +41,31 @@ enum Probe {
         }
         for (id, message) in await store.errors {
             print("error \(id.rawValue): \(message)")
+        }
+        await MainActor.run { screens() }
+    }
+
+    /// What the anchor reads off every attached display, and the shell each one
+    /// would get. The figures differ by model, by scaling and by display, so a
+    /// report of "it looks wrong on my monitor" is unanswerable without them.
+    @MainActor
+    static func screens() {
+        let all = NSScreen.screens.map(\.metrics)
+        let chosen = NotchAnchor.preferred(from: all, main: NSScreen.main?.metrics)
+        for (screen, m) in zip(NSScreen.screens, all) {
+            let band = NotchAnchor.band(m)
+            let collapsed = PillState.collapsed.size(around: band)
+            print("""
+            screen    \(screen.localizedName)\(m == chosen ? "   <- the pill docks here" : "")
+              frame     \(Int(m.frame.width))x\(Int(m.frame.height)) at \(Int(m.frame.minX)),\(Int(m.frame.minY)) @\(screen.backingScaleFactor)x
+              safeArea  top \(m.safeAreaTop)
+              aux       L \(m.auxiliaryTopLeft.map { "\(Int($0.width))" } ?? "nil") \
+            R \(m.auxiliaryTopRight.map { "\(Int($0.width))" } ?? "nil")
+              menuBar   \(m.menuBarHeight)
+              band      \(band.isEmpty ? "none" : "notch \(Int(band.notchWidth)) wide, row \(Int(band.height)) tall")
+              collapsed \(Int(collapsed.width))x\(Int(collapsed.height)) \
+            (board \(Int(PillState.collapsed.size.width))x\(Int(PillState.collapsed.size.height)))
+            """)
         }
     }
 

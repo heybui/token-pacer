@@ -132,8 +132,12 @@ final class NotchController {
         guard let metrics = NotchAnchor.preferred(
             from: NSScreen.screens.map(\.metrics), main: NSScreen.main?.metrics
         ) else { return }
-        panel.setFrame(NotchAnchor.hostFrame(for: metrics, size: PillState.hostSize), display: true)
-        model.hasNotch = NotchAnchor.notchWidth(metrics) != nil
+        let band = NotchAnchor.band(metrics)
+        panel.setFrame(
+            NotchAnchor.hostFrame(for: metrics, size: PillState.hostSize(around: band)),
+            display: true
+        )
+        model.band = band
         panel.orderFrontRegardless()
     }
 
@@ -147,7 +151,21 @@ extension NSScreen {
             frame: frame,
             safeAreaTop: safeAreaInsets.top,
             auxiliaryTopLeft: auxiliaryTopLeftArea,
-            auxiliaryTopRight: auxiliaryTopRightArea
+            auxiliaryTopRight: auxiliaryTopRightArea,
+            // `visibleFrame` is the screen less the menu bar and the Dock, so the
+            // gap at the top is the row itself. An accessory app has no main menu
+            // to ask, and `NSStatusBar.thickness` answers a different question.
+            menuBarHeight: frame.maxY - visibleFrame.maxY,
+            isBuiltIn: isBuiltIn
         )
+    }
+
+    /// The one fact AppKit will not state: `safeAreaInsets` and the auxiliary
+    /// areas describe a menu bar as readily as a notch. CoreGraphics knows which
+    /// panel is wired into the lid.
+    private var isBuiltIn: Bool {
+        guard let number = deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        else { return false }
+        return CGDisplayIsBuiltin(CGDirectDisplayID(number.uint32Value)) != 0
     }
 }

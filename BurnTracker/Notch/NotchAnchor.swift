@@ -7,6 +7,27 @@ struct ScreenMetrics: Equatable, Sendable {
     var safeAreaTop: CGFloat
     var auxiliaryTopLeft: CGRect?
     var auxiliaryTopRight: CGRect?
+    /// Height of the menu bar row on this screen. 39pt beside a 38pt notch —
+    /// they are not the same figure, and the shell answers to this one.
+    var menuBarHeight: CGFloat = 0
+    /// Only the panel wired into the Mac can have a notch. Nothing else in these
+    /// metrics can tell an external display apart from the built-in one.
+    var isBuiltIn: Bool = false
+}
+
+/// The strip the shell lives in, and the hardware it works around.
+struct NotchBand: Equatable, Sendable {
+    /// The physical notch: dead space, no content ever laid out across it.
+    var notchWidth: CGFloat = 0
+    /// The menu bar row, which is a point taller than the notch it wraps.
+    ///
+    /// The shell's band is this, never the notch's own height. Deeper and the
+    /// pill hangs below the menu bar with its bottom edge lining up with
+    /// nothing; shallower and its edge sits on the chin, where the running
+    /// light is drawn along the hardware instead of below it.
+    var height: CGFloat = 0
+
+    var isEmpty: Bool { height <= 0 }
 }
 
 /// Where the panel sits. Pure geometry — no AppKit.
@@ -15,7 +36,12 @@ enum NotchAnchor {
     /// pre-2021 Macs). The pill still docks top-centre there; it just isn't hidden
     /// behind hardware.
     static func notchWidth(_ m: ScreenMetrics) -> CGFloat? {
-        guard m.safeAreaTop > 0,
+        // The built-in check is the load-bearing one. A external display reports a
+        // top safe area for the menu bar and fills in both auxiliary areas with
+        // it, which is the same shape a notch makes — and the shell then sized
+        // itself around hardware that is not there.
+        guard m.isBuiltIn,
+              m.safeAreaTop > 0,
               let left = m.auxiliaryTopLeft,
               let right = m.auxiliaryTopRight
         else { return nil }
@@ -29,6 +55,25 @@ enum NotchAnchor {
     /// Clamshell or a desktop Mac falls back to the main screen.
     static func preferred(from screens: [ScreenMetrics], main: ScreenMetrics?) -> ScreenMetrics? {
         screens.first { notchWidth($0) != nil } ?? main ?? screens.first
+    }
+
+    /// The hardware itself: the hole the shell reaches around, and the one
+    /// rectangle no content may be laid out in.
+    ///
+    /// Not an offset. Hanging the shell off the notch's chin instead leaves
+    /// wallpaper either side of the camera and the card reads as floating under
+    /// the hardware rather than grown out of it.
+    ///
+    /// Measured per screen, never assumed. The same panel reports 220x38 scaled
+    /// and 185x32 at default, so a constant would be wrong on most Macs and on
+    /// every external display, where it is 0.
+    /// See crestnotch.app/macbook-notch-dimensions.
+    static func band(_ m: ScreenMetrics) -> NotchBand {
+        guard let width = notchWidth(m) else { return NotchBand() }
+        // The safe area is the floor, not the answer: with the menu bar set to
+        // hide automatically the row measures zero, and the hardware is still
+        // there.
+        return NotchBand(notchWidth: width, height: max(m.safeAreaTop, m.menuBarHeight))
     }
 
     /// Fixed-size host frame in global screen coordinates: top-centred, top edge

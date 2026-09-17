@@ -252,12 +252,34 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(model.state == .dormant)
 }
 
-/// The tail runs behind the head, so its position is negative for part of every
-/// lap. A plain `truncatingRemainder` keeps the sign, and `trim(from:to:)` with a
-/// negative bound draws nothing — the tail would vanish once per cycle.
-@MainActor
-@Test func theTailWrapsRoundThePathRatherThanGoingNegative() {
-    #expect(ChasingBorder<Circle>.wrapped(-0.25) == 0.75)
-    #expect(ChasingBorder<Circle>.wrapped(1.25) == 0.25)
-    #expect(ChasingBorder<Circle>.wrapped(0.5) == 0.5)
+private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], Int) {
+    var points: [CGPoint] = []
+    var subpaths = 0
+    track.path(in: rect).forEach { element in
+        switch element {
+        case .move(let p): subpaths += 1; points.append(p)
+        case .line(let p): points.append(p)
+        case .quadCurve(let p, let c): points.append(contentsOf: [c, p])
+        case .curve(let p, let c1, let c2): points.append(contentsOf: [c1, c2, p])
+        case .closeSubpath: Issue.record("the track is open, or the light laps the notch")
+        }
+    }
+    return (points, subpaths)
 }
+
+/// The light runs left to right along an open track. The top edge is the one
+/// stretch it must never touch: that edge sits against the notch, where half the
+/// glow is behind the hardware and the rest reads as a seam.
+@MainActor
+@Test func theTrackStartsAndEndsAtTheTopAndNeverCrossesIt() {
+    let rect = CGRect(x: 0, y: 0, width: 404, height: 136)
+    let (points, subpaths) = trackPoints(ShellTrack(cornerRadius: 26, inset: 0.75), in: rect)
+
+    #expect(subpaths == 1)          // one straight sweep, never a climb round the notch
+    #expect(points.first!.y == rect.minY)                    // enters top-left
+    #expect(points.last!.y == rect.minY)                     // leaves top-right
+    #expect(points.first!.x < points.last!.x)                // left to right
+    // Everything in between is below the top edge, by a corner radius or more.
+    #expect(points.dropFirst().dropLast().allSatisfy { $0.y >= 26 })
+}
+

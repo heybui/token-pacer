@@ -17,7 +17,7 @@ final class PillModel {
 
     /// Shell plus menu: what the host must let clicks through to.
     var liveSize: CGSize {
-        let shell = state.size
+        let shell = state.size(around: band)
         guard isMenuOpen else { return shell }
         return CGSize(
             width: max(shell.width, PillState.menuWidth),
@@ -96,9 +96,9 @@ final class PillModel {
             update(snapshot: inputs.snapshot)
         }
     }
-    /// False on external displays and pre-notch Macs — the pill docks to the menu
-    /// bar there instead of hiding behind hardware.
-    var hasNotch: Bool = true
+    /// The band on the screen the pill is docked to. Empty on external displays
+    /// and pre-notch Macs, where the shell is the size the board drew.
+    var band = NotchBand() { didSet { publishChrome() } }
 
     /// Called whenever the host's geometry or keyboard needs change.
     @ObservationIgnored var onChromeChange: ((CGSize, Bool) -> Void)?

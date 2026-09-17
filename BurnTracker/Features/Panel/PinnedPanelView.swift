@@ -7,6 +7,9 @@ struct PinnedPanelView: View {
     /// Cross-source split — the only figure the per-source snapshot cannot hold.
     let bySource: [UsageSplit]
     var attention: String?
+    /// Where the panel's first row starts: under the band on a notched screen,
+    /// under the notch itself on one without.
+    var topInset: CGFloat = PillState.boardBodyTop
     let onClose: () -> Void
 
     @Environment(\.tone) private var toneScale
@@ -23,8 +26,9 @@ struct PinnedPanelView: View {
             divider
             footer
         }
-        // Same clearance the hover card uses: the first 26pt sit under the notch.
-        .padding(.top, 26)
+        // Same clearance the hover card uses: under the band, or under the notch
+        // itself on a screen that has none.
+        .padding(.top, topInset)
         .padding(.horizontal, 22)
         .padding(.bottom, 22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -38,7 +42,6 @@ struct PinnedPanelView: View {
 
     private var header: some View {
         HStack(spacing: 7) {
-            PulsingDot(color: tone, isPulsing: snapshot?.isBurning == true)
             Text(headerLabel)
                 .font(Typography.mono(9.5))
                 .tracking(1.4)
@@ -71,7 +74,8 @@ struct PinnedPanelView: View {
             VStack(spacing: 10) {
                 UsageRing(
                     percent: snapshot?.sessionPercent, tone: tone, size: 118, lineWidth: 12,
-                    label: heroLabel, labelSize: 30
+                    label: heroLabel, labelSize: 30,
+                    isBurning: snapshot?.isBurning == true
                 )
                 .overlay(alignment: .bottom) {
                     Text("5-HOUR")
