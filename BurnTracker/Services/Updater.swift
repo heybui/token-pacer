@@ -47,7 +47,7 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
         guard !state.userInitiated else { return }
         notifier.alert(
             title: "Burn Tracker \(update.displayVersionString) is available",
-            body: "Right-click the notch and choose Check for updates… to install it.",
+            body: "Right-click the notch and choose Check for updates to install it.",
             sound: false, whenNotchHidden: false
         )
     }

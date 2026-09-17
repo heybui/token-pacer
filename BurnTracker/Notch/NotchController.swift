@@ -110,7 +110,7 @@ final class NotchController {
         }
     }
 
-    /// The menu advertises ⌘C and ⌘Q, so they have to work wherever it can be
+    /// The menu advertises ⌘, and ⌘Q, so they have to work wherever it can be
     /// seen. An app with no menu bar has no responder chain to route them.
     private func handle(_ event: NSEvent) -> NSEvent? {
         if event.keyCode == 53 {                                     // Esc
@@ -121,7 +121,6 @@ final class NotchController {
         guard event.modifierFlags.contains(.command) else { return event }
         switch event.charactersIgnoringModifiers {
         case ",": preferencesWindow.show(preferences: preferences); model.closeMenu()
-        case "c": UsageClipboard.copy(store.snapshot); model.closeMenu()
         case "q": NSApp.terminate(nil)
         default: return event
         }

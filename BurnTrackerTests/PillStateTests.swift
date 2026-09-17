@@ -206,17 +206,6 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(model.liveSize.height <= PillState.hostSize.height)
 }
 
-@Test func theCopiedSummaryReadsAsASentence() {
-    var s = snapshot(percent: 62, weekly: 41)
-    s.resetsAt = now.addingTimeInterval(2 * 3600 + 4 * 60)
-    s.burn = BurnRate(weightedPerHour: 1000, headroomMinutes: 45)
-
-    #expect(Format.usageSummary(s, at: now) == """
-        Claude Code · 62% of the 5-hour window, resets in 2h 04m
-        Week 41% · ~45 min headroom
-        """)
-    #expect(Format.usageSummary(nil).hasPrefix("Burn Tracker is still"))
-}
 
 // MARK: - the ghost's exit
 

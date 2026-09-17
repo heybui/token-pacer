@@ -53,24 +53,6 @@ enum Format {
         burn.headroomMinutes.map { "~\($0) min headroom" }
     }
 
-    /// What "Copy usage summary" puts on the clipboard: two lines, no jargon,
-    /// pasteable straight into a message.
-    static func usageSummary(_ snapshot: UsageSnapshot?, at now: Date = Date()) -> String {
-        guard let snapshot else { return "Burn Tracker is still reading the logs." }
-        let headline = snapshot.sessionPercent == nil
-            ? "\(tokens(snapshot.sessionTokens)) tokens this window"
-            : "\(percent(snapshot.sessionPercent)) of the 5-hour window"
-
-        var second = ["Week \(percent(snapshot.weeklyPercent))"]
-        if let burn = burn(snapshot.burn) { second.append(burn) }
-        if snapshot.origin == .inferred { second.append("estimated") }
-
-        return """
-            \(snapshot.source.displayName) · \(headline), resets in \(countdown(to: snapshot.resetsAt, from: now))
-            \(second.joined(separator: " · "))
-            """
-    }
-
     /// Shown instead of a percentage until a ceiling has been observed.
     static func tokens(_ count: Int) -> String {
         switch count {
