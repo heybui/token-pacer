@@ -350,3 +350,38 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
     #expect(SnapshotBuilder.isBurning(activity: stopped, lastEvent: nil,
                                       at: t0.addingTimeInterval(2 * 60)))
 }
+
+// MARK: - usage that leaves no log here
+
+/// Web and Claude Design spend the same session limit and write nothing to
+/// ~/.claude. Dormancy runs off `lastActivity`, so on the logs alone the pill
+/// withdrew to its 3pt sliver ten minutes into a browser session and hid a
+/// figure that was still climbing.
+@Test func aMovedPanelCountsAsActivityWhenTheLogsAreSilent() {
+    let now = Date(timeIntervalSince1970: 1_789_000_000)
+    let moved = now.addingTimeInterval(-60)
+
+    let snapshot = SnapshotBuilder.build(
+        source: .claude, limits: nil, events: [], ceiling: .unknown, at: now,
+        panelMovedAt: moved
+    )
+
+    #expect(snapshot.lastActivity == moved)
+    #expect(PillStateResolver.resolve(
+        PillInputs(snapshot: snapshot), at: now) != .dormant)
+
+    // ...but the ring still answers to the logs. A reading proves work happened
+    // somewhere in the last half hour, not that tokens are flowing this second.
+    #expect(snapshot.isBurning == false)
+}
+
+/// With logs to go on, the newer of the two wins — a panel read half an hour ago
+/// must not make a session that stopped five minutes ago look older than it is.
+@Test func loggedActivityStillWinsWhenItIsNewer() {
+    let now = Date(timeIntervalSince1970: 1_789_000_000)
+    let snapshot = SnapshotBuilder.build(
+        source: .claude, limits: nil, events: [], ceiling: .unknown, at: now,
+        panelMovedAt: now.addingTimeInterval(-1800)
+    )
+    #expect(snapshot.lastActivity == now.addingTimeInterval(-1800))
+}

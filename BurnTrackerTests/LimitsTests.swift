@@ -11,10 +11,30 @@ private func at(_ minutes: Double) -> Date { t0.addingTimeInterval(minutes * 60)
     #expect(PanelPoller().shouldRun(at: at(0)))
 }
 
-@Test func anIdleMachineNeverRuns() {
+/// Quiet logs buy a long wait, not silence forever. The web app and Claude
+/// Design burn the same limit and write no JSONL here, so a poller that only
+/// ever ran on local tokens froze the figure at launch for a whole browser
+/// session — the app's one job, failing in the one case it exists for.
+@Test func anIdleMachineWaitsOutTheIdleFloorThenChecksAnyway() {
     var poller = PanelPoller()
     poller.ran(at: at(0))
-    #expect(poller.shouldRun(at: at(600)) == false)     // ten hours, no tokens
+    #expect(poller.shouldRun(at: at(29)) == false)      // no tokens, floor not up
+    #expect(poller.shouldRun(at: at(30)))               // check regardless
+}
+
+/// A reading that rose with nothing in the logs to explain it means the work is
+/// happening off-CLI. Track it at the normal cadence — on the idle floor alone
+/// the pill would go dormant for twenty minutes out of every thirty.
+@Test func offLogActivityPollsAtTheNormalFloor() {
+    var poller = PanelPoller()
+    poller.ran(at: at(0))
+    poller.offLogActivity = true
+    #expect(poller.shouldRun(at: at(4)) == false)       // still the 5 min floor
+    #expect(poller.shouldRun(at: at(5)))
+
+    // A flat reading ends it, and the long wait comes back.
+    poller.offLogActivity = false
+    #expect(poller.shouldRun(at: at(5)) == false)
 }
 
 @Test func activityInsideTheFloorStillWaits() {

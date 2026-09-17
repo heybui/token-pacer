@@ -29,6 +29,12 @@ final class UsageStore {
     /// in its logs, so it never spawns anything.
     private var pollers: [SourceID: PanelPoller] = [:]
     private var liveLimits: [SourceID: RateLimits] = [:]
+    /// When a reading last came back higher than the one before it.
+    ///
+    /// The only evidence this app gets of work done outside the CLI. Web and
+    /// Claude Design write no log here, so without this the pill withdrew to its
+    /// 3pt sliver ten minutes into a browser session and hid a climbing figure.
+    private var panelMovedAt: [SourceID: Date] = [:]
     /// Last known state of each source's newest log line. A poll that reads no
     /// new lines says nothing about activity, so the previous answer stands.
     private var activities: [SourceID: LogActivity] = [:]
@@ -217,7 +223,8 @@ final class UsageStore {
                     activity: fresh.activity ?? activities[source.id],
                     ceiling: ceiling,
                     at: now,
-                    weights: weights
+                    weights: weights,
+                    panelMovedAt: panelMovedAt[source.id]
                 )
                 if source.id == activeSource, let snapshot = snapshots[source.id] {
                     onSnapshot?(snapshot)
@@ -270,21 +277,27 @@ final class UsageStore {
 
         Log.usage.info("run \(id.rawValue, privacy: .public) waited=\(waited, privacy: .public)s weighted=\(Int(poller.pendingWeighted), privacy: .public)")
         limitsInFlight.insert(id)
+        // Captured before the run clears it: a reading that moves without this
+        // is the signature of usage from a surface that logs nothing here.
+        let hadLocalActivity = poller.hasNewActivity
 
         Task { [weak self] in
             let started = Date()
             do {
                 let limits = try await usagePanel.fetch(now: Date())
-                self?.applyLimits(.success(limits), for: id, startedAt: started)
+                self?.applyLimits(.success(limits), for: id, startedAt: started,
+                                  hadLocalActivity: hadLocalActivity)
             } catch {
-                self?.applyLimits(.failure(error), for: id, startedAt: started)
+                self?.applyLimits(.failure(error), for: id, startedAt: started,
+                                  hadLocalActivity: hadLocalActivity)
             }
         }
     }
 
     /// The tail of a reading, back on the main actor.
     private func applyLimits(
-        _ result: Result<RateLimits, any Error>, for id: SourceID, startedAt: Date
+        _ result: Result<RateLimits, any Error>, for id: SourceID, startedAt: Date,
+        hadLocalActivity: Bool = false
     ) {
         limitsInFlight.remove(id)
         var poller = pollers[id] ?? PanelPoller()
@@ -294,6 +307,13 @@ final class UsageStore {
         switch result {
         case .success(let limits):
             poller.ran(at: now)
+            // A rise is proof work happened, whatever surface produced it. Only a
+            // rise: a reset drops the figure, and an empty window is not activity.
+            var rose = false
+            if let was = liveLimits[id]?.primary?.usedPercent,
+               let is_ = limits.primary?.usedPercent { rose = is_ > was }
+            if rose { panelMovedAt[id] = now }
+            poller.offLogActivity = rose && !hadLocalActivity
             pollers[id] = poller
             liveLimits[id] = limits
             limitsErrors[id] = nil

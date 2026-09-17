@@ -20,6 +20,20 @@ struct PanelPoller: Sendable, Codable {
     /// cadence buys resolution the source does not have.
     var floor: TimeInterval = 300
 
+    /// Re-read on this floor even with nothing in the logs.
+    ///
+    /// Quiet logs do not mean an idle account. The web app and Claude Design
+    /// burn the same session limit and write no JSONL here at all, so the
+    /// activity gate below never opened and the figure simply froze at whatever
+    /// it was when the app launched — while the real one climbed.
+    var idleFloor: TimeInterval = 1800
+
+    /// The last reading moved with no local tokens to explain it: work is
+    /// happening somewhere that writes no log here. Poll at the normal floor
+    /// until a reading comes back flat, so an off-CLI session is tracked as
+    /// closely as a CLI one and an idle machine still spawns almost nothing.
+    var offLogActivity = false
+
     private(set) var lastRunAt: Date?
     /// Weighted tokens logged since the last run — the evidence that the number
     /// could have moved at all.
@@ -37,8 +51,9 @@ struct PanelPoller: Sendable, Codable {
     /// machine would otherwise display nothing until someone typed.
     func shouldRun(at now: Date) -> Bool {
         guard let lastRunAt else { return true }
-        guard hasNewActivity else { return false }
-        return now.timeIntervalSince(lastRunAt) >= backoffFloor
+        let since = now.timeIntervalSince(lastRunAt)
+        guard hasNewActivity || offLogActivity || since >= idleFloor else { return false }
+        return since >= backoffFloor
     }
 
     /// Exponential, capped at an hour, so a CLI that is broken or mid-upgrade is

@@ -74,7 +74,8 @@ enum SnapshotBuilder {
         activity: LogActivity? = nil,
         ceiling: Ceiling,
         at now: Date,
-        weights: TokenWeights = .default
+        weights: TokenWeights = .default,
+        panelMovedAt: Date? = nil
     ) -> UsageSnapshot {
         let windows = WindowCalculator.windows(from: events, weights: weights)
         let current = WindowCalculator.current(in: windows, at: now)
@@ -82,8 +83,15 @@ enum SnapshotBuilder {
         var snapshot = UsageSnapshot(source: source)
         snapshot.sessionTokens = current?.counts.total ?? 0
         snapshot.isActive = current != nil
-        snapshot.lastActivity = windows.last?.lastActivity
-        snapshot.isBurning = Self.isBurning(activity: activity, lastEvent: snapshot.lastActivity, at: now)
+        // Burning is asked of the logs alone. A panel reading proves work happened
+        // somewhere in the last half hour, not that tokens are flowing this second,
+        // and the ring claims the second.
+        let logged = windows.last?.lastActivity
+        snapshot.isBurning = Self.isBurning(activity: activity, lastEvent: logged, at: now)
+        // Dormancy is asked of both. Web and Claude Design write nothing here, so
+        // on the logs alone the pill withdrew mid-session and took a climbing
+        // figure with it — the one moment it exists to be on screen for.
+        snapshot.lastActivity = [logged, panelMovedAt].compactMap(\.self).max()
         snapshot.planType = limits?.planType
         snapshot.spend = limits?.spend.flatMap { $0.isEnabled ? $0 : nil }
 
