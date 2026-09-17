@@ -272,3 +272,19 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
     #expect(points.dropFirst().dropLast().allSatisfy { $0.y >= 26 })
 }
 
+
+/// The shell is only ever shadowed when it floats. Every small state sits flush
+/// in the menu bar row, continuous with the notch's own black, and a 31pt shadow
+/// under one reads as a seam across the top of the screen.
+@Test func onlyTheFloatingStatesCastAShadow() {
+    for state in PillState.allCases {
+        #expect(state.castsShadow == !(state.fillsFlanks || state == .dormant))
+    }
+    #expect(PillState.collapsed.castsShadow == false)
+    #expect(PillState.hover.castsShadow)
+    #expect(PillState.pinned.castsShadow)
+
+    // The host still has to clear the shadow of the states that do cast one.
+    #expect(PillState.hostSize.height - PillState.pinned.size.height
+            >= PillState.shadowReach + PillState.shadowOffsetY)
+}

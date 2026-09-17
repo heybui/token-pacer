@@ -23,6 +23,20 @@ enum PillState: String, CaseIterable, Sendable {
         }
     }
 
+    /// A shadow is cast by something floating above the screen, and the small
+    /// states are not floating: they sit flush in the menu bar row, continuous
+    /// with the notch's own black. A 31pt shadow under them reads as a seam
+    /// across the top of the screen rather than as depth.
+    ///
+    /// It is also an offscreen render pass, and the collapsed pill is on screen
+    /// for hours at a time.
+    var castsShadow: Bool {
+        switch self {
+        case .hover, .warning, .pinned: true
+        case .dormant, .ghost, .collapsed, .paused, .exhausted: false
+        }
+    }
+
     /// Smallest strip either side of the notch the figures fit in, and no wider.
     ///
     /// The widest each side has to hold: on the left an 11pt gutter, the 17pt

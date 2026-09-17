@@ -89,12 +89,19 @@ struct PillView: View {
             // cannot be, so the group falls back to a layer shadow on its
             // bounding box and the square corners show through.
             .background {
-                shape
-                    .fill(.black)
-                    .shadow(
-                        color: .black.opacity(0.66),
-                        radius: PillState.shadowRadius, y: PillState.shadowOffsetY
-                    )
+                // Not applied at all when the state does not cast one, rather
+                // than applied clear: a `.shadow` is an offscreen pass whether or
+                // not anything comes out of it.
+                if state.castsShadow {
+                    shape
+                        .fill(.black)
+                        .shadow(
+                            color: .black.opacity(0.66),
+                            radius: PillState.shadowRadius, y: PillState.shadowOffsetY
+                        )
+                } else {
+                    shape.fill(.black)
+                }
             }
             .overlay { shape.strokeBorder(state == .collapsed ? Tokens.shellRingIdle : Tokens.shellRingOpen, lineWidth: 1) }
             .overlay {
