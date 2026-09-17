@@ -136,8 +136,13 @@ extension UsageLimitsResponse: Decodable {
             else { continue }
 
             windows[key.stringValue] = Window(
-                // Some fields come back as a 0–1 fraction rather than a percentage.
-                utilization: min(100, max(0, utilization > 0 && utilization <= 1 ? utilization * 100 : utilization)),
+                // Clamped, never rescaled. This used to guess that a value in
+                // (0, 1] was a 0–1 fraction and multiply it by 100 — which turned
+                // a genuine 1% into 100%, and a five-hour window sits under 1%
+                // for the first minutes of every window it opens. Claude Code's
+                // own usage.ts types this field `utilization: number | null` with
+                // the comment "percentage 0–100"; there is nothing to detect.
+                utilization: min(100, max(0, utilization)),
                 resetsAt: raw.resets_at.flatMap(ISO8601.parse)
             )
         }

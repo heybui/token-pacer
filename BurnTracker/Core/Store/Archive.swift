@@ -11,7 +11,14 @@ import os
 struct ArchivedState: Codable, Sendable {
     /// Bumped when a field's meaning changes. A state file from a newer version
     /// is ignored rather than guessed at.
-    static let currentVersion = 1
+    ///
+    /// 2: every anchor written before this read the endpoint's percentages
+    /// through a fraction guess that turned a genuine 1% into 100%, and the
+    /// calibration those anchors taught is wrong in the same way. There is no
+    /// repairing them in place, so they are dropped and re-measured. The event
+    /// archive is a separate file and keeps its cursors, so this costs no cold
+    /// start.
+    static let currentVersion = 2
 
     var version = currentVersion
     var trackers: [SourceID: LiveLimitsTracker] = [:]
@@ -59,8 +66,12 @@ struct Archive: Sendable {
         guard let data = try? Data(contentsOf: url) else { return nil }
         do {
             let state = try JSONDecoder.archive.decode(ArchivedState.self, from: data)
-            guard state.version <= ArchivedState.currentVersion else {
-                Log.ingest.notice("archive from a newer version \(state.version, privacy: .public), ignored")
+            // Exact, not "no newer than": an older file is what a bump exists to
+            // reject. This state re-measures itself within one refresh, so
+            // dropping it costs ten minutes. The *events* archive keeps the
+            // looser guard — rebuilding that costs a 700MB cold start.
+            guard state.version == ArchivedState.currentVersion else {
+                Log.ingest.notice("archive version \(state.version, privacy: .public) is not \(ArchivedState.currentVersion, privacy: .public), ignored")
                 return nil
             }
             return state

@@ -109,11 +109,6 @@ private func api(
     #expect(response.windows.count == 1)
 }
 
-@Test func treatsFractionsAsPercentages() async throws {
-    let response = try await api(body: #"{"five_hour":{"utilization":0.42,"resets_at":null}}"#).fetch()
-    #expect(response.session?.utilization == 42)
-}
-
 @Test func clampsOutOfRangeUtilization() async throws {
     let response = try await api(body: #"{"five_hour":{"utilization":140,"resets_at":null}}"#).fetch()
     #expect(response.session?.utilization == 100)
@@ -205,4 +200,17 @@ private actor Captured {
 
 @Test func aTokenWithoutAnExpiryIsAccepted() {
     #expect(ClaudeCredentials.Token(accessToken: "a", expiresAt: nil).isExpired(at: now) == false)
+}
+
+/// The bug this closes: the pill read 100% while Claude's own panel read 0%.
+/// A window that has just opened is under 1% for its first minutes, which is
+/// exactly the range the old fraction guess rescaled.
+@Test func aSubOnePercentWindowIsNotMistakenForAFraction() async throws {
+    let body = """
+    {"five_hour":{"utilization":1,"resets_at":null},
+     "seven_day":{"utilization":0.4,"resets_at":null}}
+    """
+    let response = try await api(body: body).fetch()
+    #expect(response.session?.utilization == 1)
+    #expect(response.weekly?.utilization == 0.4)
 }
