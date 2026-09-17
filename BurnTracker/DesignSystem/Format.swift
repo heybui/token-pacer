@@ -46,6 +46,13 @@ enum Format {
         return "projected \(amount(projected)) by month end"
     }
 
+    /// The one thing burn has to say, and only when it is true: how long is left
+    /// at this pace. Nil when the window does not run out, where a projection
+    /// would only restate the countdown printed beside it.
+    static func burn(_ burn: BurnRate) -> String? {
+        burn.headroomMinutes.map { "~\($0) min headroom" }
+    }
+
     /// What "Copy usage summary" puts on the clipboard: two lines, no jargon,
     /// pasteable straight into a message.
     static func usageSummary(_ snapshot: UsageSnapshot?, at now: Date = Date()) -> String {
@@ -55,12 +62,7 @@ enum Format {
             : "\(percent(snapshot.sessionPercent)) of the 5-hour window"
 
         var second = ["Week \(percent(snapshot.weeklyPercent))"]
-        if let rate = snapshot.burn.percentPerHour, rate > 0 {
-            second.append("\(Int(rate.rounded()))%/hr")
-        }
-        if let headroom = snapshot.burn.headroomMinutes {
-            second.append("~\(headroom) min headroom")
-        }
+        if let burn = burn(snapshot.burn) { second.append(burn) }
         if snapshot.origin == .inferred { second.append("estimated") }
 
         return """

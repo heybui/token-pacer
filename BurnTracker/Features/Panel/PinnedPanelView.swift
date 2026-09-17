@@ -126,13 +126,8 @@ struct PinnedPanelView: View {
             return "no headroom · resets in \(Format.countdown(to: snapshot?.resetsAt))"
         }
         guard let burn = snapshot?.burn else { return "—" }
-        var parts: [String] = []
-        if let rate = burn.percentPerHour, rate > 0 {
-            parts.append("\(Int(rate.rounded()))%/hr")
-        }
-        parts.append(burn.headroomMinutes.map { "~\($0) min headroom" }
-            ?? (snapshot?.isActive == true ? "no limit in sight" : "window empty"))
-        return parts.joined(separator: " · ")
+        return Format.burn(burn)
+            ?? (snapshot?.isActive == true ? "no limit in sight" : "window empty")
     }
 
     private func captionRow(_ label: String, _ value: String, tone: Color? = nil) -> some View {

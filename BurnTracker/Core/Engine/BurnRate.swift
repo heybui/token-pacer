@@ -4,23 +4,23 @@ import Foundation
 struct BurnRate: Equatable, Sendable {
     /// Weighted tokens per hour over the trailing sample.
     let weightedPerHour: Double
-    /// Percent of the window consumed per hour, or nil while the ceiling is unknown.
-    let percentPerHour: Double?
-    /// Minutes of headroom left at this rate, or nil when idle or unmeasurable.
+    /// Minutes of headroom left at this rate, or nil when idle, unmeasurable, or
+    /// simply not running out this window.
     let headroomMinutes: Int?
 
-    static let idle = BurnRate(weightedPerHour: 0, percentPerHour: nil, headroomMinutes: nil)
+    static let idle = BurnRate(weightedPerHour: 0, headroomMinutes: nil)
 }
 
 enum BurnRateCalculator {
     static let sample: TimeInterval = 30 * 60
 
-    /// How far a rate measured over `sample` may be projected.
+    /// How far a rate measured over `sample` may be projected. Bounds both
+    /// answers this type gives.
     ///
     /// Four times the sample. Past that the figure is arithmetic rather than
     /// information: at 0.3% used it reported 269 minutes — a half-hour burst
     /// extrapolated across nearly the whole window, which no session sustains.
-    /// Headroom is for the stretch where it changes what you do next.
+    /// Burn is for the stretch where it changes what you do next.
     static let horizon: TimeInterval = 4 * sample
 
     /// - Parameters:
@@ -52,7 +52,7 @@ enum BurnRateCalculator {
         guard let perPercent = ceiling.weightedTokens.map({ $0 / 100 }),
               perPercent > 0, perHour > 0
         else {
-            return BurnRate(weightedPerHour: perHour, percentPerHour: nil, headroomMinutes: nil)
+            return BurnRate(weightedPerHour: perHour, headroomMinutes: nil)
         }
 
         let percentPerHour = perHour / perPercent
@@ -63,17 +63,14 @@ enum BurnRateCalculator {
         // Past the reset the window refills, so "you run out in N minutes" is only
         // true while N fits inside the window. Otherwise there is no headroom
         // figure to give — you simply do not run out this time.
-        let ceilingOnAnswer = min(horizon / 60, windowEndsAt.map { $0.timeIntervalSince(now) / 60 } ?? .infinity)
+        let minutesToReset = windowEndsAt.map { $0.timeIntervalSince(now) / 60 } ?? .infinity
+        let ceilingOnAnswer = min(horizon / 60, minutesToReset)
         guard minutesToEmpty < ceilingOnAnswer else {
-            return BurnRate(
-                weightedPerHour: perHour, percentPerHour: percentPerHour, headroomMinutes: nil
-            )
+            // Not running out this window. There is nothing to say about that
+            // the countdown beside it does not already say.
+            return BurnRate(weightedPerHour: perHour, headroomMinutes: nil)
         }
 
-        return BurnRate(
-            weightedPerHour: perHour,
-            percentPerHour: percentPerHour,
-            headroomMinutes: Int(minutesToEmpty.rounded())
-        )
+        return BurnRate(weightedPerHour: perHour, headroomMinutes: Int(minutesToEmpty.rounded()))
     }
 }

@@ -301,12 +301,7 @@ struct PillView: View {
         case .unknown: "no ceiling yet"
         }
         var parts = ["Week \(Format.percent(snapshot.weeklyPercent))"]
-        if let rate = snapshot.burn.percentPerHour, rate > 0 {
-            parts.append("\(Int(rate.rounded()))%/hr")
-        }
-        if let headroom = snapshot.burn.headroomMinutes {
-            parts.append("~\(headroom) min headroom")
-        }
+        if let burn = Format.burn(snapshot.burn) { parts.append(burn) }
         parts.append(origin)
         return parts.joined(separator: " · ")
     }

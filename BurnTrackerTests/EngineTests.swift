@@ -215,7 +215,7 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
         windowEndsAt: now.addingTimeInterval(157 * 60)
     )
     #expect(rate.headroomMinutes == nil)
-    #expect(rate.percentPerHour != nil)      // the rate itself is still known
+    #expect(rate.weightedPerHour > 0)        // the rate itself is still known
 }
 
 @Test func headroomIsReportedWhenItFitsInsideTheWindow() {
@@ -245,8 +245,9 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
         windowEndsAt: now.addingTimeInterval(298 * 60)   // room to spare
     )
     #expect(rate.headroomMinutes == nil)
-    #expect(rate.percentPerHour != nil)
+    #expect(rate.weightedPerHour > 0)
 }
+
 
 /// Headroom is measured from the figure on screen, not from a second opinion.
 @Test func headroomFollowsTheReportedPercentage() {
