@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // screen while they do.
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         Typography.register()   // before any view is built
+        LaunchAtLogin().enableOnFirstLaunch()
         notch = NotchController()
     }
 
