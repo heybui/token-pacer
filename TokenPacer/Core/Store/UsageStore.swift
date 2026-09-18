@@ -59,9 +59,6 @@ final class UsageStore {
     /// One reading per source at a time. The panel is read off the main actor, so
     /// without this a slow CLI would be respawned on the next tick.
     private var limitsInFlight: Set<SourceID> = []
-    /// Exposed: an unconfident ceiling is why the pill shows raw tokens instead
-    /// of a percentage.
-    private(set) var ceilings: [SourceID: Ceiling] = [:]
     /// Which CLI the tokens went through, across every source. The per-source
     /// splits live on the snapshot; this one is the only figure that needs all
     /// of them at once.
@@ -239,10 +236,6 @@ final class UsageStore {
                 if let activity = fresh.activity { activities[source.id] = activity }
 
                 let windows = WindowCalculator.windows(from: merged, weights: weights)
-                let ceiling = CeilingEstimator.estimate(
-                    windows: windows, at: now, previous: ceilings[source.id] ?? .unknown
-                )
-                ceilings[source.id] = ceiling
 
                 // The limits failure is re-applied rather than cleared: a healthy
                 // log poll used to wipe the message on the very next tick, so
@@ -262,14 +255,13 @@ final class UsageStore {
                     limits: fresh.limits ?? currentLimits(for: source.id, at: now),
                     events: merged,
                     activity: fresh.activity ?? activities[source.id],
-                    ceiling: ceiling,
                     at: now,
                     weights: weights,
                     panelMovedAt: panelMovedAt[source.id],
                     panel: panelIsStale ? nil : snapshots[source.id]?.panel,
-                    // Computed once above for the ceiling. Building them a second
-                    // time inside the builder doubled the per-tick walk over every
-                    // retained event for an identical answer.
+                    // Computed once above. Building them a second time inside the
+                    // builder doubled the per-tick walk over every retained event
+                    // for an identical answer.
                     windows: windows
                 )
                 if source.id == activeSource, let snapshot = snapshots[source.id] {

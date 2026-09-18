@@ -79,11 +79,10 @@ final class NotchController {
             thresholds: [preferences.criticalAt]
         ) != nil else { return }
 
-        let left = snapshot.burn.headroomMinutes.map { "~\($0) min left" }
-            ?? "\(Format.countdown(to: snapshot.resetsAt)) to the reset"
         notifier.alert(
             title: "Over",
-            body: "\(Format.percent(snapshot.sessionPercent)) used, \(left). "
+            body: "\(Format.percent(snapshot.sessionPercent)) used, "
+                + "\(Format.countdown(to: snapshot.resetsAt)) to the reset. "
                 + "Consider finishing the current task before starting anything big.",
             sound: preferences.soundOnThreshold,
             whenNotchHidden: false

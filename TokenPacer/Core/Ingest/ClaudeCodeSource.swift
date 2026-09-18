@@ -3,7 +3,8 @@ import Foundation
 /// Reads `~/.claude/projects/<slug>/<uuid>.jsonl`.
 ///
 /// Claude Code publishes no rate-limit state in its logs, so `limits` is always
-/// nil here and the percentage has to be inferred — see `CeilingEstimator`.
+/// nil here: the percentage comes from the CLI's own `/usage` panel instead, and
+/// what this reads is everything the panel cannot say — volume, models, projects.
 actor ClaudeCodeSource: UsageSource {
     nonisolated let id = SourceID.claude
 

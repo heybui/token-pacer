@@ -107,8 +107,9 @@ struct PinnedPanelView: View {
         }
     }
 
-    /// The ring carries the percentage; with no ceiling yet it carries raw tokens,
-    /// which do not fit — so the hero falls back to the count alone.
+    /// The ring carries the provider's percentage. With no reading yet there is
+    /// none to carry: the window's own token count goes in its place, which is a
+    /// measurement rather than a percentage worked out here.
     private var heroLabel: String? {
         guard let snapshot else { return nil }
         return snapshot.sessionPercent == nil
@@ -127,11 +128,10 @@ struct PinnedPanelView: View {
 
     private var burnCaption: String {
         if isExhausted {
-            return "no headroom · resets in \(Format.countdown(to: snapshot?.resetsAt))"
+            return "spent · resets in \(Format.countdown(to: snapshot?.resetsAt))"
         }
         guard let burn = snapshot?.burn else { return "—" }
-        return Format.burn(burn)
-            ?? (snapshot?.isActive == true ? "no limit in sight" : "window empty")
+        return Format.burn(burn) ?? (snapshot?.isActive == true ? "idle" : "window empty")
     }
 
     private func captionRow(_ label: String, _ value: String, tone: Color? = nil) -> some View {

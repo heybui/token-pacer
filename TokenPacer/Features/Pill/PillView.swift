@@ -345,13 +345,10 @@ struct PillView: View {
         .padding(.bottom, 16)
     }
 
-    /// Headroom when it can be measured, the reset when it can't — never both,
-    /// and never a bare "wrap up soon" with no figure behind it.
+    /// The reset, never a projection of when the window runs dry: that needed a
+    /// conversion from tokens to points that no provider publishes.
     private var warningLine: String {
-        if let headroom = snapshot?.burn.headroomMinutes {
-            return "~\(headroom) min left · wrap up soon"
-        }
-        return "\(Format.countdown(to: snapshot?.resetsAt)) to reset · wrap up soon"
+        "\(Format.countdown(to: snapshot?.resetsAt)) to reset · wrap up soon"
     }
 
     private var hoverCard: some View {
@@ -427,14 +424,9 @@ struct PillView: View {
         if let attention { return attention }
         guard let snapshot else { return "reading logs…" }
 
-        let origin = switch snapshot.origin {
-        case .authoritative: reportedLabel(snapshot)
-        case .inferred: "estimated"
-        case .unknown: "no ceiling yet"
-        }
         var parts = ["Week \(Format.percent(snapshot.weeklyPercent))"]
         if let burn = Format.burn(snapshot.burn) { parts.append(burn) }
-        parts.append(origin)
+        if snapshot.sessionPercent != nil { parts.append(reportedLabel(snapshot)) }
         return parts.joined(separator: " · ")
     }
 }

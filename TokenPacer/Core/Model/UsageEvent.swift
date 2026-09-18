@@ -21,8 +21,9 @@ struct UsageEvent: Equatable, Sendable, Identifiable, Codable {
     let counts: TokenCounts
 }
 
-/// Rate limits a CLI states outright. Codex publishes these; Claude does not,
-/// which is why `CeilingEstimator` exists.
+/// Rate limits a provider states outright. Codex writes them into its rollout
+/// logs; Claude states them only in its `/usage` panel. Nothing else is a source
+/// of a percentage — an absent reading leaves the figure absent.
 struct RateLimitWindow: Equatable, Sendable, Codable {
     let usedPercent: Double
     let windowMinutes: Int

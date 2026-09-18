@@ -46,14 +46,15 @@ enum Format {
         return "projected \(amount(projected)) by month end"
     }
 
-    /// The one thing burn has to say, and only when it is true: how long is left
-    /// at this pace. Nil when the window does not run out, where a projection
-    /// would only restate the countdown printed beside it.
+    /// What the logs recorded, per hour. Nil while nothing is flowing — a rate
+    /// of zero is what the idle line already says.
     static func burn(_ burn: BurnRate) -> String? {
-        burn.headroomMinutes.map { "~\($0) min headroom" }
+        guard burn.weightedPerHour > 0 else { return nil }
+        return "\(tokens(Int(burn.weightedPerHour)))/hr"
     }
 
-    /// Shown instead of a percentage until a ceiling has been observed.
+    /// Volume, where a percentage is not the question: burn rate, and the tokens
+    /// a window has taken.
     static func tokens(_ count: Int) -> String {
         switch count {
         case 1_000_000...: String(format: "%.2fM", Double(count) / 1_000_000)

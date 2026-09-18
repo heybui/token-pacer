@@ -2,20 +2,9 @@ import Foundation
 
 /// Everything the UI binds to, for one source.
 struct UsageSnapshot: Equatable, Sendable {
-    /// Where the headline percentage came from. The UI is honest about this:
-    /// an inferred number is an estimate and says so.
-    enum Origin: Equatable, Sendable {
-        /// The CLI published its own limits (Codex).
-        case authoritative
-        /// Computed against a ceiling learned from observed windows (Claude).
-        case inferred
-        /// Not enough history to infer a ceiling — show raw tokens, not a percentage.
-        case unknown
-    }
-
     var source: SourceID
-    var origin: Origin = .unknown
-    /// Nil while `origin == .unknown`.
+    /// The provider's own figure, or nil. There is no third state: a percentage
+    /// this app worked out for itself is one the provider never agreed to.
     var sessionPercent: Double?
     var sessionTokens: Int = 0
     var resetsAt: Date?
@@ -66,22 +55,22 @@ enum SnapshotBuilder {
     /// CLI leaves its last line looking like a turn that never ended.
     static let inFlightWindow: TimeInterval = 15 * 60
 
-    /// Authoritative limits win when present and fresh; otherwise infer.
+    /// The provider's own limits when they are present and fresh; otherwise the
+    /// percentage is simply absent.
     static func build(
         source: SourceID,
         limits: RateLimits?,
         events: [UsageEvent],
         activity: LogActivity? = nil,
-        ceiling: Ceiling,
         at now: Date,
         weights: TokenWeights = .default,
         panelMovedAt: Date? = nil,
         panel: PanelData? = nil,
         windows: [SessionWindow]? = nil
     ) -> UsageSnapshot {
-        // Handed in when the caller already has them: the store computes exactly
-        // these for the ceiling estimate, and walking every retained event twice
-        // a tick for the same answer is the poll's largest avoidable cost.
+        // Handed in when the caller already has them: walking every retained
+        // event twice a tick for the same answer is the poll's largest avoidable
+        // cost.
         let windows = windows ?? WindowCalculator.windows(from: events, weights: weights)
         let current = WindowCalculator.current(in: windows, at: now)
 
@@ -104,16 +93,12 @@ enum SnapshotBuilder {
         // longer exists; it is not "0% used", it is out of date.
         let primary = limits?.primary.flatMap { $0.resetsAt > now ? $0 : nil }
         if let primary {
-            snapshot.origin = .authoritative
             snapshot.sessionPercent = primary.usedPercent
             snapshot.resetsAt = primary.resetsAt
             snapshot.confirmedAt = limits?.observedAt
-        } else if let percent = current.flatMap({ ceiling.percent(of: $0.weighted) }) {
-            snapshot.origin = .inferred
-            snapshot.sessionPercent = percent
-            snapshot.resetsAt = current?.end
         } else {
-            snapshot.origin = .unknown
+            // No reading, so no percentage — the window's own end is still worth
+            // having, since it comes from the logs rather than from a limit.
             snapshot.resetsAt = current?.end
         }
 
@@ -130,13 +115,7 @@ enum SnapshotBuilder {
             events: events, window: current, at: now, weights: weights
         )
 
-        // Burn is computed last so headroom agrees with the percentage on screen
-        // and with the reset the user is reading next to it.
-        snapshot.burn = BurnRateCalculator.rate(
-            events: events, window: current, ceiling: ceiling, at: now, weights: weights,
-            currentPercent: snapshot.sessionPercent,
-            windowEndsAt: snapshot.resetsAt
-        )
+        snapshot.burn = BurnRateCalculator.rate(events: events, at: now, weights: weights)
         return snapshot
     }
 }

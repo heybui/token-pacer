@@ -9,7 +9,6 @@ private func snapshot(
     percent: Double? = 40, lastActivity: Date? = now, weekly: Double? = nil
 ) -> UsageSnapshot {
     var s = UsageSnapshot(source: .claude)
-    s.origin = percent == nil ? .unknown : .authoritative
     s.sessionPercent = percent
     s.weeklyPercent = weekly
     s.lastActivity = lastActivity

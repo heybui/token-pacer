@@ -120,8 +120,8 @@ private func at(_ minutes: Double) -> Date { t0.addingTimeInterval(minutes * 60)
     #expect(rolled.usedPercent == 42)         // the fresher figure still lands
 }
 
-/// The whole point: a reset must not drop the source back to inference just
-/// because the next run is minutes away. The window emptying needs no reading.
+/// The whole point: a reset must not drop the reported figure just because the
+/// next run is minutes away. The window emptying needs no reading.
 @Test func theReportedFigureSurvivesAReset() {
     let anchored = RateLimitWindow(usedPercent: 88, windowMinutes: 300, resetsAt: at(300))
     let now = at(310)
@@ -131,9 +131,8 @@ private func at(_ minutes: Double) -> Date { t0.addingTimeInterval(minutes * 60)
             primary: anchored.rolled(to: now, usedPercent: 0),
             secondary: nil, planType: nil, observedAt: at(0)
         ),
-        events: [], ceiling: Ceiling(weightedTokens: 1_000_000, observedWindows: 9), at: now
+        events: [], at: now
     )
-    #expect(snapshot.origin == .authoritative)
     #expect(snapshot.sessionPercent == 0)
     #expect(snapshot.resetsAt == at(600))
 }
@@ -144,7 +143,7 @@ private func at(_ minutes: Double) -> Date { t0.addingTimeInterval(minutes * 60)
         secondary: nil, planType: nil, observedAt: at(0)
     )
     let snapshot = SnapshotBuilder.build(
-        source: .claude, limits: limits, events: [], ceiling: .unknown, at: at(6)
+        source: .claude, limits: limits, events: [], at: at(6)
     )
     #expect(snapshot.confirmedAt == at(0))
 }

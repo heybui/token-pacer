@@ -20,9 +20,9 @@ struct ArchivedState: Codable, Sendable {
     var version = currentVersion
     var pollers: [SourceID: PanelPoller] = [:]
     /// The last reading itself, not just the tracker around it. Without it a
-    /// relaunch has an anchor but nothing to report, so the pill falls back to
-    /// the inferred ceiling until the next request is due — ten minutes of a
-    /// worse number, right after launch, for no reason.
+    /// relaunch has an anchor but nothing to report, so the pill has no figure
+    /// at all until the next request is due — ten minutes of a blank, right
+    /// after launch, for no reason.
     var limits: [SourceID: RateLimits] = [:]
     var isPaused = false
     var savedAt = Date()

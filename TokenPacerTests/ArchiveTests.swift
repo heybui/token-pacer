@@ -193,7 +193,7 @@ private func line(id: String, output: Int, at date: Date) -> String {
 }
 
 /// Without the reading itself, a relaunch has nothing to report and the pill
-/// drops to the inferred ceiling — a worse number — until the next run is due.
+/// carries no figure at all until the next run is due.
 @Test func theLastReadingSurvivesARelaunch() throws {
     let limits = RateLimits(
         primary: RateLimitWindow(usedPercent: 25, windowMinutes: 300,
