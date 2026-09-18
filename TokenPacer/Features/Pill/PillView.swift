@@ -314,6 +314,9 @@ struct PillView: View {
                 // pill exists to answer at a glance.
                 CapsuleBar(
                     percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
+                    // Ghost is already showing the week; a hollow marker on top of
+                    // it would be the same figure twice.
+                    weekPercent: isGhost ? nil : snapshot?.weeklyPercent,
                     isBurning: snapshot?.isBurning == true
                 )
                 OdometerText(text: headline, size: 12, color: tone)
@@ -415,26 +418,15 @@ struct PillView: View {
     /// provider rather than sitting once at the bottom, where it silently belonged
     /// to whichever source happened to be active.
     private var scaleLines: [ScaleLine] {
-        providers.flatMap { provider -> [ScaleLine] in
-            var lines = [ScaleLine(
-                id: "\(provider.source.rawValue).session",
+        providers.map { provider in
+            ScaleLine(
+                id: provider.source.rawValue,
                 label: provider.source.wordmark,
                 percent: provider.sessionPercent,
                 resetsAt: provider.resetsAt,
+                weekPercent: provider.weeklyPercent,
                 isBurning: provider.isBurning
-            )]
-            // Only when the provider actually states one. An empty week under a
-            // live window reads as a cap of zero rather than as no answer.
-            if provider.weeklyPercent != nil {
-                lines.append(ScaleLine(
-                    id: "\(provider.source.rawValue).week",
-                    label: "WEEK",
-                    percent: provider.weeklyPercent,
-                    resetsAt: provider.weeklyResetsAt,
-                    isSecondary: true
-                ))
-            }
-            return lines
+            )
         }
     }
 
@@ -471,10 +463,9 @@ struct ScaleLine: Identifiable {
     let label: String
     let percent: Double?
     let resetsAt: Date?
+    /// The provider's weekly cap, drawn hollow on the same track.
+    var weekPercent: Double?
     var isBurning = false
-    /// A window that belongs to the row above it — a provider's weekly cap under
-    /// its own session. Drawn quieter, so the eye groups them.
-    var isSecondary = false
 }
 
 private struct ScaleRow: View {
@@ -483,10 +474,11 @@ private struct ScaleRow: View {
 
     static let wordmarkWidth: CGFloat = 54
     static let percentWidth: CGFloat = 40
+    static let weekWidth: CGFloat = 34
     static let resetWidth: CGFloat = 52
     static let spacing: CGFloat = 8
     static var fixedColumns: CGFloat {
-        wordmarkWidth + percentWidth + resetWidth + spacing * 3
+        wordmarkWidth + percentWidth + weekWidth + resetWidth + spacing * 4
     }
 
     @Environment(\.tone) private var tone
@@ -494,26 +486,27 @@ private struct ScaleRow: View {
     var body: some View {
         HStack(spacing: Self.spacing) {
             Text(line.label)
-                .font(Typography.mono(line.isSecondary ? 8.5 : 9.5, .semibold))
+                .font(Typography.mono(9.5, .semibold))
                 .tracking(0.95)
-                .foregroundStyle(.white.opacity(line.isSecondary ? 0.4 : 0.62))
-                .padding(.leading, line.isSecondary ? 10 : 0)
+                .foregroundStyle(.white.opacity(0.62))
                 .frame(width: Self.wordmarkWidth, alignment: .leading)
 
             CapsuleBar(
                 percent: line.percent,
+                weekPercent: line.weekPercent,
                 width: barWidth,
-                height: line.isSecondary ? 3 : 4,
-                markerHeight: line.isSecondary ? 9 : 11,
                 isBurning: line.isBurning
             )
 
-            OdometerText(
-                text: Format.percent(line.percent),
-                size: line.isSecondary ? 10 : 11,
-                color: tone(line.percent)
-            )
-            .frame(width: Self.percentWidth, alignment: .leading)
+            OdometerText(text: Format.percent(line.percent), size: 11, color: tone(line.percent))
+                .frame(width: Self.percentWidth, alignment: .leading)
+
+            // The dot's own figure. Without it the second marker is a position
+            // with no number, which is half a reading.
+            Text(line.weekPercent == nil ? "" : Format.percent(line.weekPercent))
+                .font(Typography.mono(9.5))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: Self.weekWidth, alignment: .leading)
 
             Text(Format.countdown(to: line.resetsAt))
                 .font(Typography.mono(9.5))

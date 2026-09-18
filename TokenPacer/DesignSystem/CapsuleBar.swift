@@ -12,6 +12,15 @@ struct CapsuleBar: View {
     /// Nil draws the track with no marker on it: the zones are a scale whether or
     /// not anything has been reported against them.
     let percent: Double?
+    /// The same provider's weekly cap, riding the same track as a dot.
+    ///
+    /// One bar, two readings. A week is the same kind of fact as a five-hour
+    /// window — a share of a quota with a reset — so it belongs on the same scale
+    /// rather than on a row of its own. The two are told apart by *shape*: the
+    /// window is a rule through the track, the week is a dot sitting on it. Fill
+    /// and outline were the first idea and the wrong one — a 1.25pt hairline is
+    /// what dies first at menu-bar size.
+    var weekPercent: Double? = nil
     /// The board's own glyph width. 76 is what it calls the mark's appetite —
     /// "it wants 76px, which is what makes it expensive in a wing" — but that
     /// figure buys a 44pt wordmark beside it, and with one provider there is no
@@ -37,6 +46,9 @@ struct CapsuleBar: View {
             zone(from: 0, to: tone.warnAt - Self.gap, Tokens.green)
             zone(from: tone.warnAt + Self.gap, to: tone.critAt - Self.gap, Tokens.amber)
             zone(from: tone.critAt + Self.gap, to: 100, Tokens.red)
+            // The week first, so a session marker landing on the same point is
+            // the one you see.
+            if let weekPercent { weekMarker(at: weekPercent) }
             if let percent { marker(at: percent) }
         }
         // The marker overhangs the track top and bottom, so the row is as tall as
@@ -58,6 +70,26 @@ struct CapsuleBar: View {
             .frame(width: width * (end - start) / 100, height: height)
             .offset(x: width * start / 100)
     }
+
+    /// The week: a dot on the track, ringed in the shell's own black so it reads
+    /// against whichever capsule it lands on. A ring drawn as a second filled
+    /// circle rather than a shadow — a blur here is the offscreen pass that cost
+    /// this view seven times its CPU once already.
+    private func weekMarker(at percent: Double) -> some View {
+        let clamped = min(100, max(0, percent))
+        return ZStack {
+            Circle().fill(.black).frame(width: dotSize + 2, height: dotSize + 2)
+            Circle().fill(tone.light(clamped)).frame(width: dotSize, height: dotSize)
+        }
+        .offset(x: width * clamped / 100 - (dotSize + 2) / 2)
+        .animation(.easeOut(duration: 0.6), value: percent)
+    }
+
+    /// Wider than the track it sits on. At exactly the track's height the dark
+    /// ring around it read as a gap cut into the capsule rather than as a bead
+    /// lying on top of one — the board's own dot overhangs its ring for the same
+    /// reason.
+    private var dotSize: CGFloat { height + 2 }
 
     /// The reading itself, creeping while a model is answering.
     ///
