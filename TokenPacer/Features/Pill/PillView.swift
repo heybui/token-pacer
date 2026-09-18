@@ -208,7 +208,7 @@ struct PillView: View {
                 }
             }
             Text("paused")
-                .font(.system(size: 11.5, design: .monospaced))
+                .font(Typography.mono(11.5))
                 .foregroundStyle(.white.opacity(0.45))
             notchGap
         }
@@ -245,7 +245,7 @@ struct PillView: View {
             // and the pair does not fit a flank that holds one or the other.
             if isLoading {
                 Text("reading…")
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(Typography.mono(12))
                     .foregroundStyle(.white.opacity(0.4))
             } else {
                 UsageRing(
@@ -263,7 +263,7 @@ struct PillView: View {
             }
             if isGhost {
                 Text("week")
-                    .font(.system(size: 11.5, design: .monospaced))
+                    .font(Typography.mono(11.5))
                     .foregroundStyle(.white.opacity(0.4))
             } else {
                 OdometerText(

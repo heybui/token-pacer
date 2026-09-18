@@ -11,7 +11,7 @@ struct OdometerText: View {
     var color: Color
     var weight: Font.Weight = .medium
 
-    private var font: Font { .system(size: size, weight: weight, design: .monospaced) }
+    private var font: Font { Typography.mono(size, weight) }
     /// Matches the design's `.6em` digit cell.
     private var digitWidth: CGFloat { size * 0.6 }
     private var digitHeight: CGFloat { size * 1.2 }
