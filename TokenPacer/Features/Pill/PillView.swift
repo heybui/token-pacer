@@ -312,11 +312,11 @@ struct PillView: View {
                 // The board's default mark. The ring said how far along; this says
                 // that and where the boundaries are, which is the question the
                 // pill exists to answer at a glance.
+                // The window alone. A second marker in a 36pt bar with no room
+                // for its number is a dot nobody can read the meaning of, and the
+                // menu bar is the one place where less is the whole product.
                 CapsuleBar(
                     percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
-                    // Ghost is already showing the week; a hollow marker on top of
-                    // it would be the same figure twice.
-                    weekPercent: isGhost ? nil : snapshot?.weeklyPercent,
                     isBurning: snapshot?.isBurning == true
                 )
                 OdometerText(text: headline, size: 12, color: tone)
@@ -475,10 +475,14 @@ private struct ScaleRow: View {
     let line: ScaleLine
     let barWidth: CGFloat
 
-    static let wordmarkWidth: CGFloat = 54
-    static let percentWidth: CGFloat = 40
-    static let weekWidth: CGFloat = 34
-    static let resetWidth: CGFloat = 52
+    /// Each column is its widest content and no more, and the numeric ones are
+    /// trailing so what slack is left falls between the columns rather than
+    /// inside them. Left-aligned and oversized, every number sat at the far side
+    /// of its own gap and the row read as four islands.
+    static let wordmarkWidth: CGFloat = 48    // "COPILOT" at 9.5pt mono
+    static let percentWidth: CGFloat = 28     // "100%"
+    static let weekWidth: CGFloat = 28        // "100%"
+    static let resetWidth: CGFloat = 42       // "12d 07h"
     static let spacing: CGFloat = 8
     static var fixedColumns: CGFloat {
         wordmarkWidth + percentWidth + weekWidth + resetWidth + spacing * 4
@@ -494,21 +498,22 @@ private struct ScaleRow: View {
                 .foregroundStyle(.white.opacity(0.62))
                 .frame(width: Self.wordmarkWidth, alignment: .leading)
 
-            // No week dot here. The card has a column for that figure, and a
-            // marker that repeats a number sitting two columns away is clutter on
-            // the one surface with room to spell it out. The dot earns its place
-            // in the menu bar, where there is no room for a second number.
-            CapsuleBar(percent: line.percent, width: barWidth, isBurning: line.isBurning)
+            CapsuleBar(
+                percent: line.percent,
+                weekPercent: line.weekPercent,
+                width: barWidth,
+                isBurning: line.isBurning
+            )
 
             OdometerText(text: Format.percent(line.percent), size: 11, color: tone(line.percent))
-                .frame(width: Self.percentWidth, alignment: .leading)
+                .frame(width: Self.percentWidth, alignment: .trailing)
 
             // The dot's own figure. Without it the second marker is a position
             // with no number, which is half a reading.
             Text(line.weekPercent == nil ? "" : Format.percent(line.weekPercent))
                 .font(Typography.mono(9.5))
                 .foregroundStyle(.white.opacity(0.5))
-                .frame(width: Self.weekWidth, alignment: .leading)
+                .frame(width: Self.weekWidth, alignment: .trailing)
 
             Text(Format.countdown(to: line.resetsAt))
                 .font(Typography.mono(9.5))
