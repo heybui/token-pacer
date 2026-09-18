@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Design tokens lifted from `design/Token Pacer.dc.html`.
+/// Design tokens lifted from the board.
 enum Tokens {
     static let green = Color(hex: 0x3ec98a)
     static let amber = Color(hex: 0xe8b33c)
