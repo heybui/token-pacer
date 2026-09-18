@@ -710,13 +710,27 @@ update path is — an installed copy will only accept an update signed the same 
 ### Standing design decisions
 
 - **Reduce Motion** — deliberately not honoured, for the activity dot or the shell morph.
-- **Nothing permanently on screen gets a blur.** The menu-bar mark is drawn for hours at a
-  time, so a `.shadow` on it is an offscreen pass the machine pays for all day — and an
-  animation driving that pass runs it at the display's refresh rate. Measured: 1.5% of a
-  core before the capsule bar, **10.5%** with a drop shadow on its marker, **1.9%** with the
-  shadow gone and the marker still creeping. Contrast comes from a second filled shape
-  instead. Every new thing that draws in the band is measured before and after, not argued
-  about.
+- **Nothing in the band animates on its own.** Measured as CPU time over a window, on the
+  same machine, same build, one variable at a time:
+
+  | | % of one core |
+  |---|---|
+  | before the capsule bar | 0.63% |
+  | capsule bar, marker creeping (`repeatForever`) | **11.00%** |
+  | capsule bar, creep removed | 0.43% |
+  | today's build, steady | ~1% |
+
+  It is not the drawing that costs. The profile is `NSHostingView.layout()` on **every
+  display cycle**: an animated geometry modifier re-lays out the whole hosting view, and
+  this app's host is sized for the pinned panel whether or not the panel is open. So the
+  board's "every mark says working in its own movement" is unfunded until there is a way to
+  move something without touching layout, or until it rides the clock the border already
+  runs on. The border says it alone meanwhile.
+
+- **`ps %cpu` is a lifetime average, not a rate.** It reported a creeping marker at 0.2–0.4%
+  on a freshly launched process and that number went into a commit message and into this
+  plan as "the creep is free". It is not: measuring Δ CPU-time over a fixed window put it at
+  11%. Anything drawn in the band is measured that way, before and after, or not claimed.
 - **Sparkle ships alongside the cask, not instead of it.** `brew upgrade` covers people who install
   through the tap; the feed covers people who download the DMG. Gentle reminders are implemented
   because this app has no Dock icon and no menu bar — Sparkle's own panel would arrive from nowhere,

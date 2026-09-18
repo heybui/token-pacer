@@ -28,11 +28,12 @@ struct CapsuleBar: View {
     var width: CGFloat = 36
     var height: CGFloat = 4
     var markerHeight: CGFloat = 11
-    /// Creeps the marker while a model is answering. The mark's own way of saying
-    /// "working", which is what the board asks every mark to carry.
+    /// Accepted and ignored, for now. The board asks every mark to say "working"
+    /// in its own movement; the one implementation of that measured here cost
+    /// 10.5 points of a core, so the border says it instead until there is a
+    /// cheaper way. Kept in the signature because every caller already knows the
+    /// answer and the next attempt should not have to re-thread it.
     var isBurning: Bool = false
-
-    @State private var creeping = false
 
     @Environment(\.tone) private var tone
 
@@ -61,7 +62,6 @@ struct CapsuleBar: View {
         // offsets were measured from, and the over zone ran out past the end of
         // the bar into the percentage beside it.
         .frame(width: width, height: markerHeight, alignment: .leading)
-        .onChange(of: isBurning, initial: true) { creeping = isBurning }
     }
 
     private func zone(from start: Double, to end: Double, _ color: Color) -> some View {
@@ -91,26 +91,24 @@ struct CapsuleBar: View {
     /// reason.
     private var dotSize: CGFloat { height + 2 }
 
-    /// The reading itself, creeping while a model is answering.
+    /// The reading itself. It does not move on its own.
     ///
-    /// What the board asks for and this does not have is the marker's drop
-    /// shadow, measured rather than argued: a blur is an offscreen pass, and with
-    /// the creep driving it at the display's refresh rate on a view that is on
-    /// screen for hours, the pair took the app from 1.5% of a core to 10.5%. The
-    /// creep on its own is a transform on a 2pt capsule and costs nothing like
-    /// that; the shadow is what could not stay.
+    /// A `repeatForever` creep on this marker costs **10.5 points of a core** —
+    /// measured as CPU time over a window, after `ps %cpu` misled an earlier
+    /// attempt into calling it free. It is not the drawing that costs: the
+    /// profile is `NSHostingView.layout()` on every display cycle, because an
+    /// animated geometry modifier re-lays out the whole hosting view, and this
+    /// app's host is sized for the pinned panel whether or not the panel is open.
+    ///
+    /// Anything that moves in here has to be paid for in a modifier that does not
+    /// touch layout, or on the clock the border already runs on. Until then the
+    /// border carries "working" alone.
     private func marker(at percent: Double) -> some View {
         let clamped = min(100, max(0, percent))
         return Capsule()
             .fill(tone.light(clamped))
             .frame(width: 2, height: markerHeight)
-            .offset(x: width * clamped / 100 - 1 + (creeping ? 3 : 0))
-            .animation(
-                creeping
-                    ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
-                    : .easeOut(duration: 0.2),
-                value: creeping
-            )
+            .offset(x: width * clamped / 100 - 1)
             .animation(.easeOut(duration: 0.6), value: percent)
     }
 }
