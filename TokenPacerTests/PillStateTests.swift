@@ -339,6 +339,8 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 @Test func monoWidthMeasuresLettersRatherThanAssumingThem() {
     let digits = Typography.monoWidth("123456", size: 11.5)
     let letters = Typography.monoWidth("abcdef", size: 11.5)
-    #expect(digits == 6 * 11.5 * 0.6)
+    // Summed six times rather than multiplied once, so compare as the machine
+    // stores it and not as the arithmetic reads.
+    #expect(abs(digits - 6 * 11.5 * 0.6) < 0.001)
     #expect(letters > 0 && letters != digits)
 }
