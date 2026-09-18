@@ -336,3 +336,22 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
     #expect(abs(digits - 6 * 11.5 * 0.6) < 0.001)
     #expect(letters > 0 && letters != digits)
 }
+
+/// The figure is most of the leading wing, so switching it off has to take its
+/// width out of the band rather than leave a hole where it was.
+@MainActor @Test func hidingThePercentageNarrowsTheWings() {
+    let shown = PillState.Wings(
+        mark: .capsuleBar, headline: "100%", showsPercentage: true, tail: "4h 59m"
+    )
+    let hidden = PillState.Wings(
+        mark: .capsuleBar, headline: "100%", showsPercentage: false, tail: "4h 59m"
+    )
+    #expect(hidden.flank < shown.flank)
+
+    // And what is left still clears the mark and both gutters, whichever mark it is.
+    for mark in Mark.allCases {
+        let wings = PillState.Wings(mark: mark, showsPercentage: false, tail: "12d 07h")
+        #expect(wings.flank
+            >= PillState.leadingGutter + mark.width + PillState.notchClearance)
+    }
+}

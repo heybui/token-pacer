@@ -21,6 +21,9 @@ struct PillInputs: Equatable, Sendable {
     var hasAttention = false
     /// Which mark the wings carry, which is most of how wide they are.
     var mark: Mark = .capsuleBar
+    /// Whether the figure is carried beside it. Geometry as much as taste: the
+    /// headline is a third of the leading wing.
+    var showsPercentage = true
 }
 
 /// One function, no scattered booleans. The design's eight states are mutually

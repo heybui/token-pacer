@@ -44,6 +44,7 @@ struct PillRootView: View {
             snapshot: store.snapshot,
             providers: SourceID.allCases.compactMap { store.snapshots[$0] },
             mark: preferences.mark,
+            showsPercentage: preferences.showsPercentage,
             attention: store.errors[store.activeSource],
             bySource: store.bySource,
             onTogglePinned: { model.togglePinned() },
@@ -60,6 +61,10 @@ struct PillRootView: View {
             // Geometry inputs: both change how wide the wings have to be.
             .onChange(of: preferences.mark, initial: true) { _, mark in
                 model.inputs.mark = mark
+                model.update(snapshot: store.snapshot)
+            }
+            .onChange(of: preferences.showsPercentage, initial: true) { _, shows in
+                model.inputs.showsPercentage = shows
                 model.update(snapshot: store.snapshot)
             }
             .onChange(of: store.errors[store.activeSource] != nil, initial: true) { _, has in

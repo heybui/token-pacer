@@ -36,6 +36,16 @@ final class Preferences {
         didSet { store.set(mark.rawValue, forKey: Key.mark) }
     }
 
+    /// Whether the menu bar carries the figure as well as the mark.
+    ///
+    /// Off leaves the mark alone out there — which is the whole reading for
+    /// anyone who wants a glance rather than a number, and 30pt of menu bar back.
+    /// The card still spells every figure out; this is the strip, where less is
+    /// the product.
+    var showsPercentage: Bool {
+        didSet { store.set(showsPercentage, forKey: Key.showsPercentage) }
+    }
+
     private let store: UserDefaults
 
     init(store: UserDefaults = .standard) {
@@ -49,6 +59,8 @@ final class Preferences {
         hideWhenDormant = store.object(forKey: Key.hideWhenDormant) as? Bool
             ?? Default.hideWhenDormant
         mark = (store.string(forKey: Key.mark).flatMap(Mark.init(rawValue:))) ?? Default.mark
+        showsPercentage = store.object(forKey: Key.showsPercentage) as? Bool
+            ?? Default.showsPercentage
     }
 
     /// Back to the design board's own marks. Scoped to the scale it sits beside:
@@ -70,6 +82,7 @@ final class Preferences {
         static let soundOnThreshold = true
         static let hideWhenDormant = true
         static let mark = Mark.capsuleBar
+        static let showsPercentage = true
     }
 
     /// Clamped on the way out, so a hand-edited plist cannot invert the scale.
@@ -83,5 +96,6 @@ final class Preferences {
         static let soundOnThreshold = "pref.soundOnThreshold"
         static let hideWhenDormant = "pref.hideWhenDormant"
         static let mark = "pref.mark"
+        static let showsPercentage = "pref.showsPercentage"
     }
 }

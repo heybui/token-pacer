@@ -273,7 +273,9 @@ space is the constraint.
   your menu bar. The board's Safe / Watch / Over preview switch was replaced
   before it was built: the grid is **walked** from 0 to 100% instead, six seconds
   a lap, two of them in each zone, with the figure beside it (§0.7). The border
-  grid and the preview of both choices together are still unbuilt.
+  grid and the preview of both choices together are still unbuilt. The pane also
+  carries the one switch that changes what the menu bar *holds* rather than how
+  it looks: **percentage beside the mark**, on by default (§0.7).
 
 Settled by the board and now built: **the over banner fires alongside the notch**,
 not only when the notch is hidden. The notch carries the state, the banner carries
@@ -495,6 +497,14 @@ Two constants where there was one: `markGap` (12) is spacing between two figures
 `notchClearance` (12) is clearance from a piece of hardware. Same number, free to
 disagree. The outer gutters went 11/13 → **15/15**: equal, because a row centred
 on the notch with two different gutters reads as a mistake.
+
+### The figure is optional, and the band knows it
+
+`Preferences.showsPercentage` drops the headline from the row and its width from
+the wing — one measurement, so the shell narrows by exactly what left it rather
+than leaving a hole where the figure was. It sits in Appearance beside the mark
+grid, not in General: the mark and the figure are the two halves of the row and
+they cost about the same 30pt each.
 
 ### Twelve live drawings cost more than the thing they draw
 

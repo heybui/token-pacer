@@ -67,14 +67,27 @@ struct AppearancePane: View {
                 .font(Typography.sans(11))
                 .foregroundStyle(.white.opacity(0.4))
 
-            Text(
-                "The menu bar wears the mark you pick. The expanded card keeps the "
-                    + "capsule bar whatever it is: its rows are a comparison, and "
-                    + "position on a line is what compares."
-            )
-            .font(Typography.sans(11))
-            .foregroundStyle(.white.opacity(0.28))
-            .fixedSize(horizontal: false, vertical: true)
+            Divider().overlay(.white.opacity(0.08))
+
+            // The figure is the other half of the row, and it costs about as much
+            // menu bar as the mark does — so it belongs next to the choice that
+            // sets the rest of the width, not in General with the thresholds.
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Percentage beside the mark")
+                        .font(Typography.sans(12.5))
+                        .foregroundStyle(.white.opacity(0.85))
+                    Text(
+                        "Off leaves the mark on its own and gives the menu bar "
+                            + "back about 30pt. Every figure is still in the card."
+                    )
+                    .font(Typography.sans(11))
+                    .foregroundStyle(.white.opacity(0.28))
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Toggle("", isOn: $preferences.showsPercentage).labelsHidden()
+            }
         }
         // The user's own thresholds, so the tiles are coloured by the rule the
         // pill will apply rather than by the default one.

@@ -71,6 +71,8 @@ enum PillState: String, CaseIterable, Sendable {
     struct Wings: Equatable, Sendable {
         var mark: Mark = .capsuleBar
         var headline = "100%"
+        /// Off drops the figure from the row and its width from the wing.
+        var showsPercentage = true
         var tail = "12d 07h"
         var hasBadge = false
 
@@ -85,8 +87,8 @@ enum PillState: String, CaseIterable, Sendable {
             // not decoration and it is not optional: left it out, the formula came
             // up 12pt short a side, the row over-committed its shell, and the
             // countdown drew through its own gutter towards the edge.
-            let left = leadingGutter + mark.width + markGap
-                + Self.mono(headline, 12) + notchClearance
+            let figure = showsPercentage ? markGap + Self.mono(headline, 12) : 0
+            let left = leadingGutter + mark.width + figure + notchClearance
             let right = notchClearance + Self.mono(tail, 11.5)
                 + (hasBadge ? badgeSize + markGap : 0)
                 + trailingGutter
@@ -97,7 +99,8 @@ enum PillState: String, CaseIterable, Sendable {
         /// draws and what the shell is measured from. One function, so the two
         /// can never disagree about how much room a figure needs.
         static func of(
-            state: PillState, snapshot: UsageSnapshot?, mark: Mark, hasBadge: Bool
+            state: PillState, snapshot: UsageSnapshot?, mark: Mark,
+            hasBadge: Bool, showsPercentage: Bool = true
         ) -> Wings {
             let headline = switch state {
             case .ghost: Format.percent(snapshot?.weeklyPercent)
@@ -108,7 +111,10 @@ enum PillState: String, CaseIterable, Sendable {
             case .ghost: "week"
             default: Format.countdown(to: snapshot?.resetsAt)
             }
-            return Wings(mark: mark, headline: headline, tail: tail, hasBadge: hasBadge)
+            return Wings(
+                mark: mark, headline: headline, showsPercentage: showsPercentage,
+                tail: tail, hasBadge: hasBadge
+            )
         }
 
         /// What the host reserves: the widest either wing can ever be, so the

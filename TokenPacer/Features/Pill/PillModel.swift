@@ -19,8 +19,8 @@ final class PillModel {
     /// the rect that takes clicks is the rect that was drawn.
     var wings: PillState.Wings {
         .of(
-            state: state, snapshot: inputs.snapshot,
-            mark: inputs.mark, hasBadge: inputs.hasAttention
+            state: state, snapshot: inputs.snapshot, mark: inputs.mark,
+            hasBadge: inputs.hasAttention, showsPercentage: inputs.showsPercentage
         )
     }
 

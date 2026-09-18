@@ -9,11 +9,17 @@ struct PillView: View {
     /// The mark the user chose. One value reaches the band and every card row, so
     /// they cannot end up drawing progress two different ways.
     var mark: Mark = .capsuleBar
+    /// Whether the figure rides beside the mark out here. The card spells every
+    /// figure out either way.
+    var showsPercentage = true
 
     /// How wide the wings have to be for what is in them — the same measurement
     /// the model makes for the rect that takes clicks.
     private var wings: PillState.Wings {
-        .of(state: state, snapshot: snapshot, mark: mark, hasBadge: attention != nil)
+        .of(
+            state: state, snapshot: snapshot, mark: mark,
+            hasBadge: attention != nil, showsPercentage: showsPercentage
+        )
     }
     /// Non-nil when the last refresh failed. The figure stays; it is marked
     /// unverified rather than hidden.
@@ -348,7 +354,9 @@ struct PillView: View {
                     percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
                     isBurning: snapshot?.isBurning == true
                 )
-                OdometerText(text: wings.headline, size: 12, color: tone)
+                if showsPercentage {
+                    OdometerText(text: wings.headline, size: 12, color: tone)
+                }
             }
         }
     }
