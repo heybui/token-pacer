@@ -243,11 +243,12 @@ unchanged.
 
 ### The running border is a choice of twelve too
 
-Comet (the current one, and still the default), Dual comet, Zone sweep, Marching
-dashes, Pulse wave, Quarter trace, Counter pair, Breathe, Breathe glow, Edge
-runners, Side drip, Bottom sweep. All take their colour from the zone the panel is
-in; all leave the top edge dark, which `ShellTrack` already does. One switch gates
-the whole group. `ChasingBorder` is one of the twelve, not the only one.
+Comet (the default), Dual comet, Zone sweep, Marching dashes, Pulse wave, Quarter
+trace, Counter pair, Breathe, Breathe glow, Edge runners, Side drip, Bottom sweep.
+All take their colour from the zone the panel is in; all leave the top edge dark,
+which `ShellTrack` already does. One switch gates the whole group. All twelve are
+built (§0.7): `BorderEffect` describes a light as pieces and `BorderLight`
+installs them, so `ChasingBorder` is now the seam rather than the one light.
 
 ### The mark is chosen, and the card is not
 
@@ -264,18 +265,21 @@ space is the constraint.
 
 ### Preferences becomes two panes
 
-- **General** — *Zones*: the dual-handle track, relabelled "Watch starts at" /
-  "Over starts at", and now the source of every zone colour in the app rather than
-  only of alerts. *Alerts*: notify when over, sound when over. *App*: launch at
-  login, hide when nothing is running, restore defaults.
-- **Appearance** — two grids of twelve tiles, drawn live at real size. A popup
-  menu is ruled out by the board: "Eclipse" tells you nothing about what lands in
-  your menu bar. The board's Safe / Watch / Over preview switch was replaced
-  before it was built: the grid is **walked** from 0 to 100% instead, six seconds
-  a lap, two of them in each zone, with the figure beside it (§0.7). The border
-  grid and the preview of both choices together are still unbuilt. The pane also
-  carries the one switch that changes what the menu bar *holds* rather than how
-  it looks: **percentage beside the mark**, on by default (§0.7).
+- **General** — *Alerts*: the dual-handle track (Warn / Critical), the sentence
+  that says what the two numbers do, Reset beside it, and the sound. *Providers*:
+  one switch per provider — off means its CLI is not asked anything. *General*:
+  launch at login, hide pill when dormant. The board drew three groups named
+  Zones / Alerts / App and relabelled the handles "Watch starts at" / "Over starts
+  at"; the shipped pane stands and the board was changed to match it (§0.7).
+- **Appearance** — two grids of twelve tiles, drawn live at real size, and
+  between them the one switch that changes what the menu bar *holds* rather than
+  how it looks: **percentage beside the mark**, on by default. A popup menu is
+  ruled out by the board: "Eclipse" tells you nothing about what lands in your
+  menu bar. The board's Safe / Watch / Over preview switch was replaced before it
+  was built: the mark grid is **walked** from 0 to 100% instead, six seconds a
+  lap, two of them in each zone, with the figure beside it (§0.7). One switch
+  gates the whole border group and dims the grid rather than hiding it. The final
+  preview of both choices together is still unbuilt.
 
 Settled by the board and now built: **the over banner fires alongside the notch**,
 not only when the notch is hidden. The notch carries the state, the banner carries
@@ -512,6 +516,56 @@ than leaving a hole where the figure was. It sits in Appearance beside the mark
 grid, not in General: the mark and the figure are the two halves of the row and
 they cost about the same 30pt each.
 
+### The border is twelve too, and the engine is the same shape
+
+`BorderEffect` describes a light as *pieces* — a length, a trail, a speed, a
+segment of the outline — and `BorderLight` installs them as `CAShapeLayer`s with
+`strokeStart`/`strokeEnd` animations. One vocabulary covers a comet's twenty-two
+layers, a dash train's one and a glow's two, and it keeps the whole set where the
+comet already was: on the render server, with nothing per frame on the main
+thread. **Twelve of them running in the Appearance grid cost 0.1–0.2% of a core.**
+
+Three things the set forced out, each of them a bug the single comet had hidden:
+
+- **A layer built at zero bounds stays black.** `apply` runs before AppKit has
+  given the view any size, and the rebuild guard returned early; in the pill the
+  next state change healed it, and in a settings tile that change never comes, so
+  all twelve sat black. `layout()` now builds on the first real size.
+- **A piece confined to one edge measures itself against that edge.** A third of
+  the outline is most of a 34pt side and a quarter of the bottom, so the side
+  runners were longer than the sides they ran on and read as a lit outline.
+- **Every piece on a segment shares one lap length.** They travel at the same
+  speed, but each was restarting when it alone reached the end, so the zone
+  sweep's three colours drifted apart and opened gaps.
+
+And one crash worth writing down: `layer.lineDashPattern = dash.map(NSNumber.init)`
+compiles, picks an overload CoreAnimation cannot read back, and dies inside
+`-[CAShapeLayer _copyRenderLayer:]` — a trap with no mention of the line that set
+it. `map { NSNumber(value: Double($0)) }`.
+
+### Every expanded state leads with the mark
+
+The over card led with a red ring and the pinned panel with a 118pt one, which
+made them a second opinion on the reading the band had just given. `MarkHero`
+scales the chosen mark instead — a mark is a proportion, and the proportion is the
+reading. The panel's figure moves out from inside the ring to under the mark:
+only one of the twelve has a hole in the middle to put a number in.
+
+### A provider can be turned off, which means not polled
+
+One switch per provider in General. It reaches `UsageStore`, which skips untracked
+sources entirely — no log walk, no pty, no `/usage` — rather than filtering what
+they return, because the point of turning Claude off is that its CLI stops being
+asked anything. The band follows: a source that is no longer read cannot go on
+being the active one. The last one on cannot be turned off.
+
+### `swift build -c release` does not always rebuild
+
+It reported "Build complete" in half a second on changed sources more than once in
+this session, and the app then ran code that had been replaced — which is a very
+good way to conclude that a fix did not work. `touch` the changed file, or check
+the binary, before trusting a screenshot of a release build.
+
 ### Twelve live drawings cost more than the thing they draw
 
 The Appearance pane walks every tile from 0 to 100% and round again — six seconds,
@@ -729,7 +783,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done (old board) |
 | 5 | **Two wings** — the drop panel, the card as a list, the week on the bar (§0.6) | ✅ done |
 | 6 | **Marks** — all twelve drawn, `Mark` + `MarkView` the seam, widths measured from the drawings (§0.7) | ✅ done |
-| 7 | **Appearance** — the mark grid, live, with the preview lap (§0.7). Twelve border effects still unbuilt | 🔨 half |
+| 7 | **Appearance** — both grids live, the preview lap, the percentage switch, the border gate (§0.7) | ✅ done |
 | 8 | ~~**Copilot**~~ | ⛔ cut: nothing local states its quota (§0.5) |
 | 9 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
 

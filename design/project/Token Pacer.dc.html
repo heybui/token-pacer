@@ -458,7 +458,7 @@
     <div style="display: flex; flex-direction: column; gap: 22px;" data-screen-label="Preferences · Appearance">
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <h2 style="margin: 0; font-size: 18px; font-weight: 600;">Preferences · two panes</h2>
-        <p style="margin: 0; max-width: 70ch; font-size: 13.5px; line-height: 1.6; color: rgba(255,255,255,.5); text-wrap: pretty;">General holds everything numeric and behavioural — the zone boundaries, the sound, launch at login, hiding when nothing is running. Appearance holds the two choices made by eye. Both lists there are twelve items long, which rules out a popup menu: a name like “Eclipse” tells you nothing about what will sit in your menu bar. So each becomes a grid of the real thing at real size — mark tiles drawn at menu-bar scale, border tiles as actual panels hanging from the tile edge, animating. It is live: click any tile.</p>
+        <p style="margin: 0; max-width: 70ch; font-size: 13.5px; line-height: 1.6; color: rgba(255,255,255,.5); text-wrap: pretty;">General holds everything numeric and behavioural — the two zone boundaries and the sound they make, which providers are tracked at all, launch at login, hiding when nothing is running. Turning a provider off is not a filter on what is shown: its CLI stops being asked anything. Appearance holds the two choices made by eye. Both lists there are twelve items long, which rules out a popup menu: a name like “Eclipse” tells you nothing about what will sit in your menu bar. So each becomes a grid of the real thing at real size — mark tiles drawn at menu-bar scale, border tiles as actual panels hanging from the tile edge, animating. It is live: click any tile.</p>
       </div>
 
       <div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start;">
@@ -486,16 +486,16 @@
             <div style="padding: 20px 20px 22px; display: flex; flex-direction: column; gap: 22px;">
 
               <div style="display: flex; flex-direction: column; gap: 15px;">
-                <span style="font-size: 10.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.4);">Zones</span>
+                <span style="font-size: 10.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.4);">Alerts</span>
 
                 <div style="display: flex; flex-direction: column; gap: 10px;">
                   <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
                     <div style="display: flex; align-items: baseline; gap: 8px;">
-                      <span style="font-size: 14px; color: rgba(255,255,255,.92);">Watch starts at</span>
+                      <span style="font-size: 14px; color: rgba(255,255,255,.92);">Warn</span>
                       <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; font-weight: 500; color: #e8b33c;">75%</span>
                     </div>
                     <div style="display: flex; align-items: baseline; gap: 8px;">
-                      <span style="font-size: 14px; color: rgba(255,255,255,.92);">Over starts at</span>
+                      <span style="font-size: 14px; color: rgba(255,255,255,.92);">Critical</span>
                       <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; font-weight: 500; color: #e2543f;">90%</span>
                     </div>
                   </div>
@@ -516,52 +516,52 @@
                   </div>
                 </div>
 
-                <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.55); text-wrap: pretty;">Safe to 75%, watch from 75%, over from 90% — for the session window, the weekly cap and the history alike. The same two boundaries colour every mark and every border in Appearance.</p>
-              </div>
+                <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;">
+                  <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.55); text-wrap: pretty;">Amber from 75%, red from 90% — for the session ring, the weekly cap and the history alike. The warning card opens itself once per window at the critical mark.</p>
+                  <span style="font-size: 12.5px; color: rgba(255,255,255,.28); white-space: nowrap;">Reset</span>
+                </div>
 
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+                  <span style="font-size: 14px; color: rgba(255,255,255,.92);">Sound on threshold</span>
+                  <div style="box-sizing: border-box; width: 20px; height: 20px; border-radius: 5px; background: #3c3d43; box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; flex: 0 0 auto;">
+                    <span style="display: block; width: 10px; height: 5.5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px,-2px);"></span>
+                  </div>
+                </div>
+              </div>
               <div style="height: 1px; background: rgba(255,255,255,.06);"></div>
 
               <div style="display: flex; flex-direction: column; gap: 15px;">
-                <span style="font-size: 10.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.4);">Alerts</span>
+                <span style="font-size: 10.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.4);">Providers</span>
 
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
-                  <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
-                    <span style="font-size: 14px; color: rgba(255,255,255,.92);">Notify when over</span>
-                    <span style="font-size: 12px; color: rgba(255,255,255,.42); text-wrap: pretty;">Banner once per window</span>
-                  </div>
+                  <span style="font-size: 14px; color: rgba(255,255,255,.92);">Claude Code</span>
                   <div style="box-sizing: border-box; width: 20px; height: 20px; border-radius: 5px; background: #3c3d43; box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; flex: 0 0 auto;">
                     <span style="display: block; width: 10px; height: 5.5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px,-2px);"></span>
                   </div>
                 </div>
 
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
-                  <span style="font-size: 14px; color: rgba(255,255,255,.92);">Sound when over</span>
+                  <span style="font-size: 14px; color: rgba(255,255,255,.92);">Codex</span>
                   <div style="box-sizing: border-box; width: 20px; height: 20px; border-radius: 5px; background: #3c3d43; box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; flex: 0 0 auto;">
                     <span style="display: block; width: 10px; height: 5.5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px,-2px);"></span>
                   </div>
                 </div>
               </div>
-
               <div style="height: 1px; background: rgba(255,255,255,.06);"></div>
 
               <div style="display: flex; flex-direction: column; gap: 15px;">
-                <span style="font-size: 10.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.4);">App</span>
+                <span style="font-size: 10.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.4);">General</span>
 
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
                   <span style="font-size: 14px; color: rgba(255,255,255,.92);">Launch at login</span>
-                  <div style="box-sizing: border-box; width: 20px; height: 20px; border-radius: 5px; background: #3c3d43; box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; flex: 0 0 auto;">
-                    <span style="display: block; width: 10px; height: 5.5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px,-2px);"></span>
-                  </div>
-                </div>
-
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
-                  <span style="font-size: 14px; color: rgba(255,255,255,.92);">Hide when nothing is running</span>
                   <div style="box-sizing: border-box; width: 20px; height: 20px; border-radius: 5px; background: #222329; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); flex: 0 0 auto;"></div>
                 </div>
 
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
-                  <span style="font-size: 14px; color: rgba(255,255,255,.92);">Restore defaults</span>
-                  <span style="font-size: 12.5px; padding: 4px 12px; border-radius: 6px; color: rgba(255,255,255,.72); background: #2a2b31; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); white-space: nowrap;">Reset</span>
+                  <span style="font-size: 14px; color: rgba(255,255,255,.92);">Hide pill when dormant</span>
+                  <div style="box-sizing: border-box; width: 20px; height: 20px; border-radius: 5px; background: #3c3d43; box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; flex: 0 0 auto;">
+                    <span style="display: block; width: 10px; height: 5.5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px,-2px);"></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1414,6 +1414,7 @@ class Component extends DCLogic {
         'Only the selected mark tile animates its working motion, and border tiles animate: the mark is a reading you take, the border is motion you have to live with above your eyeline.',
         'One switch in the pane decides whether the menu bar carries the percentage at all: off leaves the mark on its own and the band narrows by exactly the figure\u2019s width. It sits with the mark grid rather than in General \u2014 the mark and the figure are the two halves of that row and cost about the same.',
         'One switch gates the whole border group. Off dims the grid instead of hiding it, so the twelve stay discoverable and the selection survives.',
+        'Between the two grids sits the one switch that changes what the menu bar holds rather than how it looks: the percentage beside the mark. Off leaves the mark on its own and the band narrows by exactly the figure\u2019s width.',
         'The pane closes on a real preview — selected mark inside a panel wearing the selected border — so the two choices are confirmed together, not separately.'
       ],
       onEnter: this.onEnter, onLeave: this.onLeave, onOpen: this.onOpen, onClose: this.onClose,
