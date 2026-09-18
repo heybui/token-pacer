@@ -95,6 +95,12 @@ struct PillView: View {
             }
         }
         .animation(.easeOut(duration: 0.16), value: isMenuOpen)
+        // The board's largest state, always — never the window's current size.
+        // The window tracks the state now (`NotchController.fit`), and feeding
+        // that back into SwiftUI's bounds re-laid the tree out in the middle of
+        // the morph: the shell jumped between sizes instead of springing. The
+        // hosting view keeps this frame and `NotchClipView` holds it steady while
+        // the window changes around it.
         .frame(
             width: PillState.hostSize(around: band).width,
             height: PillState.hostSize(around: band).height,

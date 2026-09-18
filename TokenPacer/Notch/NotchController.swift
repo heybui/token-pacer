@@ -18,10 +18,19 @@ final class NotchController {
     private let updater = Updater()
     private let panel: NotchPanel
     private let host: PassthroughHostingView<PillRootView>
+    /// Keeps `host` at the largest state's size while the window changes around
+    /// it — see `NotchClipView`.
+    private let clip: NotchClipView
     private var observers: [NSObjectProtocol] = []
     /// Live only while the panel is pinned — Esc has to close it, and nothing
     /// else in this app takes the keyboard.
     private var escapeMonitor: Any?
+    /// The screen the panel is anchored to, kept so a resize can re-derive the
+    /// frame without asking AppKit for the display list again.
+    private var metrics: ScreenMetrics?
+    /// A pending shrink. Cancelled by whatever happens next, which is what makes
+    /// a hover that comes back mid-collapse cost nothing.
+    private var shrink: Task<Void, Never>?
 
     init() {
         let watched = LogWatcher.watchedSources()
@@ -44,11 +53,14 @@ final class NotchController {
             }
         ))
         model.preferences = preferences
+        clip = NotchClipView(frame: NSRect(origin: .zero, size: size))
         host.frame = NSRect(origin: .zero, size: size)
-        panel.contentView = host
+        clip.addSubview(host)
+        panel.contentView = clip
 
         model.onChromeChange = { [weak self] liveSize, wantsKeyboard in
             self?.host.liveSize = liveSize
+            self?.fit(to: liveSize)
             self?.setKeyboardActive(wantsKeyboard)
         }
         host.liveSize = model.liveSize
@@ -161,16 +173,71 @@ final class NotchController {
     }
 
     private func reanchor() {
-        guard let metrics = NotchAnchor.preferred(
+        guard let screen = NotchAnchor.preferred(
             from: NSScreen.screens.map(\.metrics), main: NSScreen.main?.metrics
         ) else { return }
-        let band = NotchAnchor.band(metrics)
-        panel.setFrame(
-            NotchAnchor.hostFrame(for: metrics, size: PillState.hostSize(around: band)),
-            display: true
-        )
-        model.band = band
+        metrics = screen
+        model.band = NotchAnchor.band(screen)     // publishes chrome, which fits the window
+        resize(to: windowSize(for: model.liveSize))
+        // Also when the window did not move: a new band changes the size the
+        // hosting view is held at, even on a screen of the same dimensions.
+        clip.pin(host, size: PillState.hostSize(around: model.band))
         panel.orderFrontRegardless()
+    }
+
+    // MARK: - the window tracks the state
+
+    /// How long to wait before shrinking: the shell's spring, plus a margin.
+    ///
+    /// §1.1's rule is that the window frame never moves *while a spring runs* —
+    /// you cannot get overshoot out of `setFrame` and it jitters against the
+    /// compositor. Growing before the spring starts and shrinking after it has
+    /// settled keeps that rule and still leaves the window the size of what is
+    /// drawn in it, which is what the screenshot picker highlights: it was
+    /// offering an 876×795 frame for a 226×30 pill.
+    private static let settle: Duration = .milliseconds(750)
+
+    private func fit(to liveSize: CGSize) {
+        shrink?.cancel()
+        let target = windowSize(for: liveSize)
+        let current = panel.frame.size
+
+        // Grow at once. A shell that outran its window would be clipped for the
+        // length of the morph, which is the one frame anybody is looking at.
+        if target.width > current.width || target.height > current.height {
+            resize(to: CGSize(
+                width: max(target.width, current.width),
+                height: max(target.height, current.height)
+            ))
+        }
+        guard target.width < current.width || target.height < current.height else { return }
+
+        shrink = Task { [weak self] in
+            try? await Task.sleep(for: Self.settle)
+            guard !Task.isCancelled, let self else { return }
+            resize(to: windowSize(for: model.liveSize))
+        }
+    }
+
+    /// The window a shell of this size needs: the shell, plus the room its own
+    /// shadow falls into, and never more than the largest state would take.
+    ///
+    /// The shadow's margin doubles as headroom for the spring's overshoot — 62pt
+    /// each side against a bounce that peaks under 8% of 752 — so the shell is
+    /// never clipped at the top of its travel.
+    private func windowSize(for liveSize: CGSize) -> CGSize {
+        let full = PillState.hostSize(around: model.band)
+        guard liveSize.width > 0, liveSize.height > 0 else { return full }
+        return CGSize(
+            width: min(full.width, liveSize.width + 2 * PillState.shadowReach),
+            height: min(full.height, liveSize.height + PillState.shadowOffsetY + PillState.shadowReach)
+        )
+    }
+
+    private func resize(to size: CGSize) {
+        guard let metrics, size != panel.frame.size else { return }
+        panel.setFrame(NotchAnchor.hostFrame(for: metrics, size: size), display: true)
+        clip.pin(host, size: PillState.hostSize(around: model.band))
     }
 
     // No deinit: the controller is owned by the app delegate for the whole
