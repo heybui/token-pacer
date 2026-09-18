@@ -23,8 +23,8 @@
     50%      { box-shadow: 0 18px 46px rgba(0,0,0,.6), 0 5px 24px 6px rgba(62,201,138,.85), inset 0 0 0 1px rgba(255,255,255,.08); }
   }
   @keyframes glowW {
-    0%, 100% { box-shadow: 0 18px 46px rgba(0,0,0,.6), 0 2px 6px 0 rgba(240,145,58,.28), inset 0 0 0 1px rgba(255,255,255,.08); }
-    50%      { box-shadow: 0 18px 46px rgba(0,0,0,.6), 0 5px 24px 6px rgba(240,145,58,.85), inset 0 0 0 1px rgba(255,255,255,.08); }
+    0%, 100% { box-shadow: 0 18px 46px rgba(0,0,0,.6), 0 2px 6px 0 rgba(232,179,60,.28), inset 0 0 0 1px rgba(255,255,255,.08); }
+    50%      { box-shadow: 0 18px 46px rgba(0,0,0,.6), 0 5px 24px 6px rgba(232,179,60,.85), inset 0 0 0 1px rgba(255,255,255,.08); }
   }
   @keyframes glowC {
     0%, 100% { box-shadow: 0 18px 46px rgba(0,0,0,.6), 0 2px 6px 0 rgba(226,84,63,.3), inset 0 0 0 1px rgba(255,255,255,.08); }
@@ -38,7 +38,7 @@
   }
 </style>
 </helmet>
-<div style="font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; color: #f2f2f4; min-height: 100vh; display: flex; flex-direction: column; background-color: #0b0b0d; background-image: radial-gradient(50% 50% at 50% 50%, rgba(62,201,138,.5), transparent 68%), radial-gradient(50% 50% at 50% 50%, rgba(56,124,172,.46), transparent 70%), radial-gradient(50% 50% at 50% 50%, rgba(240,145,58,.3), transparent 68%); background-size: 150% 140%, 165% 150%, 140% 130%; background-repeat: no-repeat; background-attachment: fixed; animation: bgDrift 42s ease-in-out infinite;">
+<div style="font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; color: #f2f2f4; min-height: 100vh; display: flex; flex-direction: column; background-color: #0b0b0d; background-image: radial-gradient(50% 50% at 50% 50%, rgba(62,201,138,.5), transparent 68%), radial-gradient(50% 50% at 50% 50%, rgba(56,124,172,.46), transparent 70%), radial-gradient(50% 50% at 50% 50%, rgba(232,179,60,.3), transparent 68%); background-size: 150% 140%, 165% 150%, 140% 130%; background-repeat: no-repeat; background-attachment: fixed; animation: bgDrift 42s ease-in-out infinite;">
 
   <div style="display: flex; align-items: center; justify-content: center; gap: 26px; padding: 50px 34px 0;">
     <img src="icons/iconset/transparent/icon_128x128.png" alt="Token Pacer" style="width: 112px; height: 112px; display: block; border-radius: 25px; box-shadow: 0 18px 40px rgba(0,0,0,.6), 0 3px 10px rgba(0,0,0,.4);">
@@ -88,7 +88,7 @@
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 9px;">
-            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: rgba(255,255,255,.58);">v1.0.0 · 4.2 MB · requires macOS 14+</span>
+            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: rgba(255,255,255,.58);">v1.0.0 · 4.2 MB · requires macOS 15+</span>
             <div onClick="{{ onCopy }}" style="display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; padding: 9px 13px; border-radius: 8px; background: #14151a; box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); cursor: pointer; transition: box-shadow 160ms ease;" style-hover="box-shadow: inset 0 0 0 1px rgba(255,255,255,.16)">
               <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: rgba(255,255,255,.72); white-space: nowrap;">brew install --cask token-pacer</span>
               <span style="font-size: 11px; font-weight: 500; color: {{ copyColor }}; white-space: nowrap;">{{ copyLabel }}</span>
@@ -124,7 +124,7 @@
                       <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
                         <div style="display: flex; align-items: baseline; gap: 8px;">
                           <span style="font-size: 13.5px; color: rgba(255,255,255,.92);">Watch starts at</span>
-                          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12.5px; font-weight: 500; color: #f0913a;">75%</span>
+                          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12.5px; font-weight: 500; color: #e8b33c;">75%</span>
                         </div>
                         <div style="display: flex; align-items: baseline; gap: 8px;">
                           <span style="font-size: 13.5px; color: rgba(255,255,255,.92);">Over starts at</span>
@@ -175,7 +175,7 @@
                     <div style="display: flex; align-items: center; gap: 7px;">
                       <div style="position: relative; width: 46px; height: 4px; flex: 0 0 auto; animation: {{ popAnim }};">
                         <div style="position: absolute; left: 0; width: 74%; top: 0; height: 100%; border-radius: 999px; background: #3ec98a;"></div>
-                        <div style="position: absolute; left: 76%; width: 13%; top: 0; height: 100%; border-radius: 999px; background: #f0913a;"></div>
+                        <div style="position: absolute; left: 76%; width: 13%; top: 0; height: 100%; border-radius: 999px; background: #e8b33c;"></div>
                         <div style="position: absolute; left: 91%; width: 9%; top: 0; height: 100%; border-radius: 999px; background: #e2543f;"></div>
                         <div style="position: absolute; left: {{ markLeft }}; top: 50%; width: 2px; height: 11px; transform: translate(-50%,-50%); border-radius: 1px; background: {{ toneLight }}; box-shadow: 0 1px 2px rgba(0,0,0,.6); animation: {{ markAnim }};"></div>
                       </div>
@@ -190,7 +190,7 @@
                     <div style="display: flex; align-items: center; gap: 7px;">
                       <div style="position: relative; width: 46px; height: 4px; flex: 0 0 auto;">
                         <div style="position: absolute; left: 0; width: 74%; top: 0; height: 100%; border-radius: 999px; background: #3ec98a;"></div>
-                        <div style="position: absolute; left: 76%; width: 13%; top: 0; height: 100%; border-radius: 999px; background: #f0913a;"></div>
+                        <div style="position: absolute; left: 76%; width: 13%; top: 0; height: 100%; border-radius: 999px; background: #e8b33c;"></div>
                         <div style="position: absolute; left: 91%; width: 9%; top: 0; height: 100%; border-radius: 999px; background: #e2543f;"></div>
                         <div style="position: absolute; left: 98%; top: 50%; width: 2px; height: 11px; transform: translate(-50%,-50%); border-radius: 1px; background: #f4ab9e; box-shadow: 0 1px 2px rgba(0,0,0,.6); animation: {{ markAnim }};"></div>
                       </div>
@@ -332,7 +332,7 @@
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;loopMs&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:2000,&quot;min&quot;:1000,&quot;max&quot;:5000,&quot;step&quot;:250,&quot;unit&quot;:&quot;ms&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Demo&quot;},&quot;version&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;v1.0.0&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Download&quot;},&quot;fileSize&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;4.2 MB&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Download&quot;}}">
-const GREEN = '#3ec98a', AMBER = '#f0913a', CRIT = '#e2543f';
+const GREEN = '#3ec98a', AMBER = '#e8b33c', CRIT = '#e2543f';
 
 const STATES = [
   { key: 'pill',  cap: 'Collapsed — session % and reset countdown, nothing else', pct: 58, weekly: 55, burn: 18, reset: '2h 06m', w: '226px', h: '34px', r: '13px' },

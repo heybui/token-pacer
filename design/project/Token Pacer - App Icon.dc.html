@@ -117,8 +117,8 @@
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:1280},&quot;pace&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.5,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;State&quot;},&quot;watchStartsAt&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.7,&quot;min&quot;:0.4,&quot;max&quot;:0.9,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Zone boundaries&quot;},&quot;overStartsAt&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.95,&quot;min&quot;:0.75,&quot;max&quot;:1,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Zone boundaries&quot;},&quot;exaggerateSmall&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Small sizes&quot;}}">
-const GREEN='#3ec98a', AMBER='#f0913a', CRIT='#e2543f';
-const LIGHT={'#3ec98a':'#a5f0cd','#f0913a':'#fbcda2','#e2543f':'#f4ab9e'};
+const GREEN='#3ec98a', AMBER='#e8b33c', CRIT='#e2543f';
+const LIGHT={'#3ec98a':'#a5f0cd','#e8b33c':'#fbcda2','#e2543f':'#f4ab9e'};
 const GROUND='#1d1f26', BITE='#0f1014';
 const BAR_L=10, BAR_W=80, BAR_Y=63.5, GAP=0.02;
 
@@ -229,7 +229,7 @@ class Component extends DCLogic {
         { k:'corner radius', v:'22.58% of icon size — Apple squircle approximation.' },
         { k:'bite', v:'55% wide, 17% tall, bottom corners 8.5%, filled #0f1014 — darker than the ground so it never depends on the backdrop.' },
         { k:'bar', v:'80% wide, inset 10% each side, centred at 63.5% height. Capsule height 8.5%, fully rounded.' },
-        { k:'zones', v:'Three separate capsules with a 2% gap between them: safe #3ec98a to 75%, watch #f0913a to 90%, over #e2543f beyond. All three always at full colour.' },
+        { k:'zones', v:'Three separate capsules with a 2% gap between them: safe #3ec98a to 75%, watch #e8b33c to 90%, over #e2543f beyond. All three always at full colour.' },
         { k:'drawn widths', v:'Boundaries stay at 75/90, but no capsule is drawn narrower than 14% of the bar — otherwise over would be thinner than the marker standing in it. Shares land at 72 / 14.4 / 13.5 of the bar\u2019s 80% width.' },
         { k:'marker', v:'3.6% wide, 20% tall, radius 3.2%, in the lighter tint of the zone it stands in, with a soft drop shadow. About 53% of the narrowest capsule\u2019s width at every size down to 32px, rising to 70% at 16px — the zone colour always survives around it.' },
         { k:'resting state', v:'Centred in the safe capsule — pace 37.5%, the same park-at-zone-centre rule the dock uses. Baked into every exported PNG, the DMG and the store listing.' },
