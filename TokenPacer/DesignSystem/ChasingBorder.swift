@@ -246,7 +246,7 @@ final class BorderLight: NSView {
         container.frame = bounds
         frameMask.frame = bounds
         frameMask.lineWidth = look.lineWidth
-        frameMask.path = ShellTrack(cornerRadius: look.cornerRadius, inset: look.lineWidth / 2)
+        frameMask.path = ShellTrack(cornerRadius: look.cornerRadius, inset: Self.track(look))
             .path(in: CGRect(origin: .zero, size: bounds.size)).cgPath
 
         // Square, and big enough that no angle of rotation exposes a corner.
@@ -292,6 +292,19 @@ final class BorderLight: NSView {
         if look.isRunning, !runners.isEmpty { animate() }
     }
 
+    /// How far in from the shell's edge the light runs.
+    ///
+    /// Half a line is what puts it on the static ring, which is where the board
+    /// draws it. The point on top of that is for the edge it shares with the menu
+    /// bar: a shell that fits the band is exactly the row tall, so its bottom edge
+    /// *is* the end of the menu bar, and a light flush against it has nothing
+    /// below to read against — the moving segment looks like a loose green bar
+    /// under the pill rather than an outline tracing it. One point in puts the
+    /// shell's own edge back around the light, and is invisible everywhere else.
+    private static let edgeInset: CGFloat = 1
+
+    private static func track(_ look: Look) -> CGFloat { look.lineWidth / 2 + edgeInset }
+
     /// A vertical band is 52% of the height and one line wide; a horizontal one
     /// 46% of the width. Both sit *on* their edge, and the mask trims them.
     private func frame(_ runner: CAGradientLayer, _ band: EdgeBand, in look: Look) {
@@ -301,13 +314,13 @@ final class BorderLight: NSView {
             let length = height * band.lengthFraction
             runner.bounds = CGRect(x: 0, y: 0, width: look.lineWidth, height: length)
             runner.position = CGPoint(
-                x: band.edge == .left ? look.lineWidth / 2 : width - look.lineWidth / 2,
+                x: band.edge == .left ? Self.track(look) : width - Self.track(look),
                 y: -length
             )
         case .bottom:
             let length = width * band.lengthFraction
             runner.bounds = CGRect(x: 0, y: 0, width: length, height: look.lineWidth)
-            runner.position = CGPoint(x: -length, y: height - look.lineWidth / 2)
+            runner.position = CGPoint(x: -length, y: height - Self.track(look))
         }
     }
 
