@@ -15,10 +15,8 @@ struct CapsuleBar: View {
     var width: CGFloat = 76
     var height: CGFloat = 4
     var markerHeight: CGFloat = 11
-    var isBurning: Bool = false
 
     @Environment(\.tone) private var tone
-    @State private var creeping = false
 
     /// Each boundary is a gap, not a line. The board leaves 2% between capsules,
     /// a point either side of the threshold, so the eye reads three objects
@@ -35,7 +33,6 @@ struct CapsuleBar: View {
         // The marker overhangs the track top and bottom, so the row is as tall as
         // the marker and the capsules sit centred in it.
         .frame(width: width, height: markerHeight)
-        .onChange(of: isBurning, initial: true) { creeping = isBurning }
     }
 
     private func zone(from start: Double, to end: Double, _ color: Color) -> some View {
@@ -45,22 +42,20 @@ struct CapsuleBar: View {
             .offset(x: width * start / 100)
     }
 
-    /// The reading itself. It creeps while a model is answering — the mark's own
-    /// way of saying "working", rather than a blink bolted onto every state.
+    /// The reading itself.
+    ///
+    /// Two things the board asks for are deliberately not here, both measured
+    /// rather than argued: the marker's drop shadow and its creep while a model
+    /// is answering. Together they took the app from 1.5% of a core to 10.5% —
+    /// a blur is an offscreen pass, `repeatForever` drives it at the display's
+    /// refresh rate, and this view is on screen for hours at a time. The border
+    /// already says "working", and it runs on a clock built for the job.
     private func marker(at percent: Double) -> some View {
         let clamped = min(100, max(0, percent))
         return Capsule()
             .fill(tone.light(clamped))
             .frame(width: 2, height: markerHeight)
-            .shadow(color: .black.opacity(0.6), radius: 1, y: 1)
-            .scaleEffect(y: creeping ? 1.25 : 1)
-            .offset(x: width * clamped / 100 - 1 + (creeping ? 3.5 : 0))
-            .animation(
-                creeping
-                    ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
-                    : .easeOut(duration: 0.2),
-                value: creeping
-            )
+            .offset(x: width * clamped / 100 - 1)
             .animation(.easeOut(duration: 0.6), value: percent)
     }
 }

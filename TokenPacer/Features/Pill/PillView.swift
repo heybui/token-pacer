@@ -285,7 +285,10 @@ struct PillView: View {
     }
 
     private var collapsed: some View {
-        HStack(spacing: 8) {
+        // 12, not the row's usual 8: the bar ends in a capsule whose rounded cap
+        // already eats two of those points, so at 8 the over zone sat against the
+        // first digit of the percentage.
+        HStack(spacing: 12) {
             // The ring waits for a figure to mirror. Drawn while the logs are
             // still being read it is an empty track next to the word "reading",
             // and the pair does not fit a flank that holds one or the other.
@@ -298,8 +301,7 @@ struct PillView: View {
                 // that and where the boundaries are, which is the question the
                 // pill exists to answer at a glance.
                 CapsuleBar(
-                    percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
-                    isBurning: snapshot?.isBurning == true
+                    percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent
                 )
                 OdometerText(text: headline, size: 12, color: tone)
             }
