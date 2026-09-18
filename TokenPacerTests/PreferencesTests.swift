@@ -165,3 +165,49 @@ private func crossings(_ percentages: [Double], resetsAt: Date = now.addingTimeI
         #expect(mark.width > 0)
     }
 }
+
+// MARK: - which providers are tracked
+
+/// Turning a provider off is what stops its CLI being asked anything, so the
+/// setting has to reach the store rather than filter its answers.
+@MainActor @Test func anUntrackedSourceIsNeverPolled() async {
+    let claude = TallyingSource(id: .claude)
+    let codex = TallyingSource(id: .codex)
+    let store = UsageStore(sources: [claude, codex], interval: 3600, archive: nil)
+
+    await store.refresh()
+    #expect(await claude.polls == 1)
+    #expect(await codex.polls == 1)
+
+    store.tracked = [.codex]
+    await store.refresh()
+    #expect(await claude.polls == 1)   // left alone
+    #expect(await codex.polls == 2)
+    // And the band follows: the source it was showing is no longer being read.
+    #expect(store.activeSource == .codex)
+}
+
+/// An app tracking nothing has no reason to be on screen, so the last one on
+/// cannot be turned off.
+@MainActor @Test func theLastTrackedProviderStaysOn() {
+    let preferences = Preferences(store: UserDefaults(suiteName: #function) ?? .standard)
+    preferences.set(tracking: false, for: .codex)
+    #expect(preferences.trackedSources == [.claude])
+
+    preferences.set(tracking: false, for: .claude)
+    #expect(preferences.trackedSources == [.claude])
+}
+
+private actor TallyingSource: UsageSource {
+    nonisolated let id: SourceID
+    private(set) var polls = 0
+
+    init(id: SourceID) { self.id = id }
+
+    func poll() throws -> SourceSnapshot {
+        polls += 1
+        return SourceSnapshot(source: id, events: [], limits: nil)
+    }
+    func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {}
+    func cursors() -> [String: JSONLReader.Cursor] { [:] }
+}

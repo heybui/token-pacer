@@ -79,6 +79,21 @@ private struct GeneralPane: View {
                 }
             }
 
+            group("Providers") {
+                ForEach(SourceID.allCases, id: \.self) { source in
+                    row(source.displayName) {
+                        Toggle("", isOn: Binding(
+                            get: { preferences.tracks(source) },
+                            set: { preferences.set(tracking: $0, for: source) }
+                        ))
+                        .labelsHidden()
+                        // The last one on cannot be turned off: an app tracking
+                        // nothing has no reason to be on screen.
+                        .disabled(preferences.trackedSources == [source])
+                    }
+                }
+            }
+
             group("General") {
                 row("Launch at login") {
                     Toggle("", isOn: $launchEnabled)

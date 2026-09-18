@@ -90,6 +90,20 @@ final class UsageStore {
     /// Survives relaunch, so "tracking is off" stays off.
     private(set) var isPaused: Bool
 
+    /// Which providers are being tracked at all.
+    ///
+    /// Untracked means *not polled*: the whole point of turning Claude off is
+    /// that its CLI stops being asked anything, which is the one expensive thing
+    /// this app does. Held here rather than filtered in the view for that reason.
+    var tracked: Set<SourceID> = Set(SourceID.allCases) {
+        didSet {
+            guard !tracked.contains(activeSource) else { return }
+            if let next = SourceID.allCases.first(where: tracked.contains) {
+                activeSource = next
+            }
+        }
+    }
+
     init(
         sources: [any UsageSource] = [ClaudeCodeSource(), CodexSource()],
         weights: TokenWeights = .default,
@@ -208,7 +222,9 @@ final class UsageStore {
         if let simulated = Self.simulatedError {
             for id in SourceID.allCases { errors[id] = simulated }
         }
-        for source in sources {
+        // Untracked sources are not polled at all — no log walk, no pty, no
+        // `/usage`. Their last snapshot stays in the dictionary; nothing reads it.
+        for source in sources where tracked.contains(source.id) {
             do {
                 let fresh = try await source.poll()
                 var merged = events[source.id] ?? []

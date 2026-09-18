@@ -46,6 +46,24 @@ final class Preferences {
         didSet { store.set(showsPercentage, forKey: Key.showsPercentage) }
     }
 
+    /// Which providers are tracked. Never empty: an app tracking nothing is an
+    /// app with no reason to be on screen, so the last one on cannot be turned
+    /// off — `set(tracking:)` refuses rather than the UI having to.
+    private(set) var trackedSources: Set<SourceID> {
+        didSet {
+            store.set(trackedSources.map(\.rawValue).sorted(), forKey: Key.trackedSources)
+        }
+    }
+
+    func tracks(_ source: SourceID) -> Bool { trackedSources.contains(source) }
+
+    func set(tracking: Bool, for source: SourceID) {
+        var next = trackedSources
+        if tracking { next.insert(source) } else { next.remove(source) }
+        guard !next.isEmpty else { return }
+        trackedSources = next
+    }
+
     private let store: UserDefaults
 
     init(store: UserDefaults = .standard) {
@@ -61,6 +79,9 @@ final class Preferences {
         mark = (store.string(forKey: Key.mark).flatMap(Mark.init(rawValue:))) ?? Default.mark
         showsPercentage = store.object(forKey: Key.showsPercentage) as? Bool
             ?? Default.showsPercentage
+        let names = store.stringArray(forKey: Key.trackedSources) ?? []
+        let restored = Set(names.compactMap(SourceID.init(rawValue:)))
+        trackedSources = restored.isEmpty ? Default.trackedSources : restored
     }
 
     /// Back to the design board's own marks. Scoped to the scale it sits beside:
@@ -83,6 +104,7 @@ final class Preferences {
         static let hideWhenDormant = true
         static let mark = Mark.capsuleBar
         static let showsPercentage = true
+        static let trackedSources = Set(SourceID.allCases)
     }
 
     /// Clamped on the way out, so a hand-edited plist cannot invert the scale.
@@ -97,5 +119,6 @@ final class Preferences {
         static let hideWhenDormant = "pref.hideWhenDormant"
         static let mark = "pref.mark"
         static let showsPercentage = "pref.showsPercentage"
+        static let trackedSources = "pref.trackedSources"
     }
 }

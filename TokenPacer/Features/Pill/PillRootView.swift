@@ -42,7 +42,9 @@ struct PillRootView: View {
         PillView(
             state: model.state,
             snapshot: store.snapshot,
-            providers: SourceID.allCases.compactMap { store.snapshots[$0] },
+            providers: SourceID.allCases
+                .filter(preferences.tracks)
+                .compactMap { store.snapshots[$0] },
             mark: preferences.mark,
             showsPercentage: preferences.showsPercentage,
             attention: store.errors[store.activeSource],
@@ -65,6 +67,13 @@ struct PillRootView: View {
             }
             .onChange(of: preferences.showsPercentage, initial: true) { _, shows in
                 model.inputs.showsPercentage = shows
+                model.update(snapshot: store.snapshot)
+            }
+            // Which providers are polled at all. Pushed into the store rather
+            // than filtered out of its answers: an untracked CLI should not be
+            // asked anything.
+            .onChange(of: preferences.trackedSources, initial: true) { _, tracked in
+                store.tracked = tracked
                 model.update(snapshot: store.snapshot)
             }
             .onChange(of: store.errors[store.activeSource] != nil, initial: true) { _, has in
