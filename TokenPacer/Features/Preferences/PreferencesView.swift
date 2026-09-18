@@ -37,12 +37,14 @@ struct PreferencesView: View {
                     AppearancePane(preferences: preferences)
                 }
             }
-            // One height for both. The window is sized once, from whichever pane
-            // is showing when it is built, and it is not resizable — so a pane
-            // that asks for more than the first one got is simply cut off. This
-            // is what General needs; Appearance holds two grids of twelve and
-            // scrolls.
-            .frame(height: 380, alignment: .top)
+            // A floor, not a height. The window is sized once, from the pane
+            // showing when it is built — always General — and it is not
+            // resizable, so a *fixed* height here is a height that has to be
+            // edited every time a row is added: Copilot's provider switch was
+            // the third one, and it pushed "Hide pill when dormant" straight
+            // through the footer. General sizes itself now; Appearance holds two
+            // grids of twelve and scrolls inside whatever that comes to.
+            .frame(minHeight: 380, alignment: .top)
 
             footer
         }

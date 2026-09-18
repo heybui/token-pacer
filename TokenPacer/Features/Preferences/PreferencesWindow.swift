@@ -61,11 +61,18 @@ final class PreferencesWindow: NSObject, NSWindowDelegate {
         window.delegate = self
         // The content sizes the window, which is why it is installed before the
         // window is placed: a hosting view reports nothing until it has one.
-        window.contentView = NSHostingView(
+        let content = NSHostingView(
             rootView: PreferencesView(
                 preferences: preferences, launchAtLogin: launchAtLogin, updater: updater
             )
         )
+        window.contentView = content
+        // And sized *from* it, rather than from whatever the empty content rect
+        // settled on: a hosting view installed in a `.zero` window reports an
+        // intrinsic height short of what the panes ask for — short by the two
+        // lines the alert legend wraps to — and the last row was drawn straight
+        // through the footer. `fittingSize` is the layout engine's own answer.
+        window.setContentSize(content.fittingSize)
         if let origin { window.setFrameOrigin(origin) } else { window.center() }
         self.window = window
         return window
