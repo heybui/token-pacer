@@ -28,21 +28,33 @@ A provider whose directory does not exist contributes nothing — no error, no
 prompt. Either one can also be switched off in Preferences → General, which
 stops it being polled at all.
 
-### For the Claude percentage figure
+### For the percentage figures
 
-Claude Code publishes no rate‑limit state in its logs, so the percentage comes
-from the CLI's own `/usage` panel. That needs both:
+Claude Code publishes no rate‑limit state in its logs, so its percentage comes
+from the CLI's own `/usage` panel. Codex does publish its own — but only while it
+is working in the terminal, so its `/status` panel is what keeps the figure true
+when the spending happened in the desktop app, on the web, or in a cloud task.
+Copilot publishes nothing readable at all: its `/usage` panel is the only source
+of its plan budget, and it is a monthly budget with no session window under it.
 
-1. The `claude` binary on disk. A GUI app inherits launchd's bare `PATH`, so it
-   is looked up by full path: `~/.local/bin`, `~/.claude/local`,
-   `/opt/homebrew/bin`, `/usr/local/bin`, `~/.bun/bin`, `~/.volta/bin`.
-   Elsewhere → set `TOKENPACER_CLAUDE_BIN=/path/to/claude`.
-2. **One trusted project directory** in `~/.claude.json`
-   (`hasTrustDialogAccepted: true`). The CLI refuses to start anywhere else — it
-   draws the trust prompt instead of the panel. Run `claude` once in any project
-   and answer it.
+All three need the same two things:
 
-Without these, everything else still works; only the percentage is missing.
+1. **The binary on disk.** A GUI app inherits launchd's bare `PATH`, so each is
+   looked up by full path: `~/.local/bin`, `~/.claude/local` /
+   `~/.codex/packages/standalone/current/bin`, `/opt/homebrew/bin`,
+   `/usr/local/bin`, `~/.bun/bin`, `~/.volta/bin`. Elsewhere → set
+   `TOKENPACER_CLAUDE_BIN`, `TOKENPACER_CODEX_BIN` or `TOKENPACER_COPILOT_BIN`.
+2. **One trusted project directory**, for Claude and Codex —
+   `hasTrustDialogAccepted: true` in `~/.claude.json`, or `trust_level =
+   "trusted"` in `~/.codex/config.toml`. Neither will start anywhere else; it
+   draws the trust prompt instead of the panel. Run it once in any project and
+   answer it. Copilot needs none: it asks per tool, and nothing here runs one.
+
+Each store can be moved with `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or
+`COPILOT_HOME`, and this app follows whichever is set.
+
+Without these, everything else still works; only that provider's percentage is
+missing. `ACCESS.md` lists every file and command either one touches.
 
 ### To build
 

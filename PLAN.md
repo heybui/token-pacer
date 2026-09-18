@@ -8,22 +8,25 @@ section by the time anyone noticed.
 
 ## 0. Ground truth (corrected 2026-09-16)
 
-### Limits come from the CLI's own `/usage` panel
+### Limits come from each CLI's own usage panel
 
 Claude Code reads its own usage from an authenticated endpoint. This app does not
 call it. It drives the CLI through a pseudo-terminal, types `/usage`, and reads the
 panel the CLI draws — which is that endpoint's response, already fetched and
-rendered by the one client that legitimately holds the credentials.
+rendered by the one client that legitimately holds the credentials. Codex draws
+the same kind of screen on `/status`, and is read the same way (2026-09-18).
 
 ```
-openpty → posix_spawn(claude, POSIX_SPAWN_SETSID) → wait for the screen to go quiet
-        → write "/usage\r" → read until "Resets" and the screen settles → kill the group
+openpty → posix_spawn(cli, POSIX_SPAWN_SETSID) → wait for the screen to go quiet
+        → write "/usage" ⏎ → read until the marker and the screen settles → kill the group
 ```
 
 Measured on this machine: **~4s per run, 4.2KB of terminal output, $0.0000** — a
-`/usage` run makes no model call. `ClaudeCLI` owns the pty; `ClaudeUsagePanel` owns
-the parsing and imports Foundation only, so the hard part is testable without
-spawning anything.
+`/usage` run makes no model call, and neither does `/status` (~6s, 11KB).
+`TerminalCLI` owns the pty and holds one `Spec` per CLI — where the binary lives,
+what to type, what says the panel arrived, how a trusted directory is found.
+`ClaudeUsagePanel` and `CodexStatusPanel` own the parsing, import Foundation only
+and share `PanelText`, so the hard part is testable without spawning anything.
 
 **What this buys.** No Keychain prompt, no token of our own, no `setup-token` step,
 nothing of Claude Code's to keep in sync, and no undocumented endpoint to be a good
@@ -37,7 +40,7 @@ guest at — the CLI makes that call on its own terms, with its own caching.
   terminal they are one absent regex match. What survives is what is visible from
   outside the process: no binary, no trusted directory, a timeout, a login prompt,
   an unparseable screen. Only the first two are fatal.
-- **A UI is the contract.** Claude Code ships weekly and the panel has no
+- **A UI is the contract.** Both CLIs ship weekly and neither panel has a
   compatibility promise. Two real quirks are already handled: the CLI positions the
   cursor instead of emitting padding, so stripping escapes welds `Current session`
   into `Currentsession` and `Resets Sep 22 at 1am` into `ResetsSep22at1am` — every
@@ -46,11 +49,18 @@ guest at — the CLI makes that call on its own terms, with its own caching.
 - **Cached first, fresh second.** The panel paints a cached figure, then repaints
   when the refresh lands, and nothing in the output says which is which. The reader
   waits for the screen to stop changing and the parser takes the *last* match.
-- **An untrusted directory blocks it.** The CLI draws "is this a project you trust?"
-  instead of the panel, so the working directory is taken from the first project in
-  `~/.claude.json` with `hasTrustDialogAccepted`.
+- **An untrusted directory blocks it.** Both CLIs draw "is this a project you
+  trust?" instead of the panel, so the working directory is one they have already
+  been answered for: the first project in `~/.claude.json` with
+  `hasTrustDialogAccepted`, or the first `[projects."…"] trust_level = "trusted"`
+  in `~/.codex/config.toml` — matched with a regex, because a TOML parser is a
+  dependency for one key of one table.
 - **A GUI app has no PATH.** launchd gives it `/usr/bin:/bin:/usr/sbin:/sbin`, so the
-  binary is found by looking in the known install locations, or `TOKENPACER_CLAUDE_BIN`.
+  binary is found by looking in the known install locations, or
+  `TOKENPACER_CLAUDE_BIN` / `TOKENPACER_CODEX_BIN`.
+- **The render is the only evidence.** A panel that fails to parse fails where no
+  debugger is, so `TOKENPACER_PANEL_DUMP=<dir>` writes every run's raw screen
+  there. That is how the one failure in four launches was caught.
 
 ### What whole percentages cost: calibration is gone
 
@@ -76,6 +86,18 @@ a reset — the window is simply empty, no conversion required.
 `BurnRate` lost its calibrated input, leaned on `CeilingEstimator` for a while,
 then went entirely — §0.4. Nothing states a rate of consumption any more.
 
+### Where each agent keeps its files
+
+`~/.claude`, `~/.codex` and `~/.copilot` are defaults, not addresses:
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `COPILOT_HOME` each move one, and people do
+move them. Every read goes through `AgentHome`, which resolves the variable fresh
+each time — the app outlives any run of an agent, and an absolute path is the only
+kind honoured, because a relative one would resolve against *this* app's working
+directory. Claude's `.claude.json` is looked for in the configuration home and
+then beside it: a default install keeps a small one inside `~/.claude` *and* the
+real one in `$HOME`, and taking the first that merely parses cost a whole
+provider's reading until `--probe` caught it.
+
 ### Cadence
 
 Five minutes, activity-gated, exponential backoff to an hour on failure, persisted
@@ -83,16 +105,29 @@ across launches. There is no network etiquette left to enforce — the constrain
 local: each run boots a whole Claude Code process for four seconds, which is far too
 much to spend on a machine nobody is typing at. An idle machine spawns nothing.
 
-Codex needs none of this — its rollout logs already carry `rate_limits` with
-`used_percent`, `window_minutes` and `resets_at`.
+Codex needs less of it. Its rollout logs already carry `rate_limits` with
+`used_percent`, `window_minutes` and `resets_at`, so while it is working the
+figure arrives free. What the logs cannot see is a Codex desktop-app, web or
+cloud session — the same blind spot the web app is for Claude — so Codex drives
+the same pty, typing `/status` instead of `/usage`, and a log-stated reading
+counts as a run in `PanelPoller`. Working Codex spawns nothing; a Codex that has
+been quiet for the idle floor is read once. Two differences in the wording, both
+handled in `CodexStatusPanel`: it counts what is **left**, and its reset stamps
+are local, 24-hour and often dateless (`resets 03:59 on 19 Sep`), because the CLI
+has already converted them.
+
+One thing the driver had to learn: the command and its newline are two writes.
+Codex's completion popup swallows a newline that arrives in the same read, and
+`/status` then sits in the composer until the budget runs out.
 
 ### What each layer is actually for
 
 | Value | Source |
 |---|---|
-| 5-hour %, 7-day %, reset times | **Claude: the CLI's `/usage` panel, to the whole percent. Codex: rollout logs.** |
-| Copilot's monthly allowance | **Nowhere reachable.** Its daemon holds it and will not hand it over — spiked and failed, see §0.5 |
-| Monthly credit spend | the panel's `Usage credits` row — free, no Console admin key |
+| 5-hour %, 7-day %, reset times | **Claude: the CLI's `/usage` panel, to the whole percent. Codex: rollout logs, and its `/status` panel once those go quiet.** |
+| Copilot's plan budget | **Its CLI's `/usage` panel** — `39% used 7,074 / 18,000 AIC`. The desktop app's daemon still will not hand it over (§0.5); the CLI prints it |
+| Monthly credit spend | Claude's `Usage credits` row — free, no Console admin key. Codex points at chatgpt.com and states none |
+| The plan name | Codex's `Account:` row. Claude's panel never names it |
 | The sparkline — the shape of recent activity | Log token counts (no provider states a rate of change) |
 | Splits by model / project / surface | Log token counts (the API gives no attribution) |
 | 30-day history | Log token counts |
@@ -149,6 +184,12 @@ Toolchain: Xcode 27, Swift 6.4. **Deployment target macOS 15+**.
   of the CLI's own panel carries monthly credit spend for free, currency symbol and all. Drawn only
   when the account has extra usage enabled.
 - **Instrument Sans bundled** (OFL) + SF Mono for numerics, matching the design's metrics exactly.
+- **One driver, one spec per CLI** (2026-09-18). Codex could have kept to its logs —
+  they state `rate_limits` outright — but the logs are blind to a desktop-app, web
+  or cloud session, which spends the same quota. So `TerminalCLI` drives both, and
+  the difference between them is data: binary, command, marker, trusted directory.
+  What is *not* shared is the parsing: "43% left" and "4% used" are not the same
+  sentence, and a single regex pretending otherwise would be the bug.
 
 ## 0.2 The board was redrawn (2026-09-18)
 
@@ -206,10 +247,10 @@ Codex a week, Copilot a month. Each row carries its own reset.
   same problem. The board drew it at 116; the shipped 98 stands and the board was
   changed to match (§0.3).
 
-Copilot's store is `~/.copilot`, and its quota is not in it: the desktop app asks
-its own local daemon, which asks the server. The daemon was spiked and will not
-serve anyone but the app itself — §0.5. So
-Copilot has no row (§0.5). The board keeps its vocabulary for an
+Copilot's store is `~/.copilot` (or `COPILOT_HOME`), and its quota is not in it:
+the desktop app asks its own local daemon, which asks the server, and that daemon
+will not serve anyone but the app itself — §0.5. Its **CLI** states it in the
+open, though, so Copilot has a row after all: one budget, no second window. The board keeps its vocabulary for an
 estimated figure — the `~`, and the hollow marker on the ring — but **nothing in the
 app produces one today**: `CeilingEstimator` was the only estimator and it is
 deleted (§0.4). So the device is reserved, not in use, and the distinction it draws
@@ -358,7 +399,7 @@ small one usually sits, on a scale nothing else on screen shares — so "56.7M" 
 a countdown looked like a reading rather than the absence of one. The count is left
 to `--probe` and the splits.
 
-## 0.5 The Copilot daemon says no (2026-09-18)
+## 0.5 The Copilot daemon says no — and the CLI says yes (2026-09-18)
 
 Spiked, and it fails at the last step. Recorded in full because the next person to
 have this idea deserves the four hours back.
@@ -394,14 +435,52 @@ restarts. The CLI panel is already a UI as a contract (§0); this would be a
 private socket as a contract, which is the same bet with worse odds and no user
 visible to notice when it breaks.
 
-**Where that leaves Copilot.** Its spend is beautifully recorded — every request
-with tokens, model and timestamp in `assistant_usage_events` — and its allowance
-is unreachable. A numerator with no denominator, which by §0's rule is no row.
-The board still draws three providers; the app can draw two. Reopening it needs
-one of: GitHub shipping a `copilot` CLI that states usage, a documented endpoint,
-or a decision to let the *user* state their plan size in Preferences and count
-premium requests locally — which is a real option, but it brings back the
-request-multiplier and initiator arithmetic that was deliberately cut.
+**Where that left Copilot.** A numerator with no denominator, which by §0's rule
+is no row. Reopening it needed one of: GitHub shipping a `copilot` CLI that
+states usage, a documented endpoint, or the user stating their own plan size.
+
+### The first of those happened, the same day
+
+GitHub Copilot CLI 1.0.86 has a TUI, and its `/usage` screen prints the
+denominator outright:
+
+```
+   Changes    +0 -0
+AI Credits 0 (24s)
+   Plan ████████████████████ 39% used  7,074 / 18,000 AIC
+```
+
+So Copilot is read exactly as the other two are — `TerminalCLI` spawns it, types
+`/usage`, parses what it draws. No daemon, no socket, no reverse engineering. The
+spike above stands as the record of why the *other* route is closed; it has not
+been reopened and should not be.
+
+**What is different about this provider, and what that costs:**
+
+- **One window, not two.** Copilot has no five-hour limit and no weekly one — a
+  plan budget, spent down over a billing month. `primary` carries it and
+  `secondary` is nil. A figure invented for the second slot would sit under a
+  heading that means something else.
+- **No reset date is printed.** The budget renews on the account's billing
+  anniversary, which only GitHub knows. The parser uses the month boundary and
+  says so in a `ponytail:` comment; the day the panel prints a date, that goes.
+- **Credits, not money.** `7,074 / 18,000 AIC` goes into `Spend` with `AIC` where
+  a currency code would be — a used-of-limit pair with a name is exactly what
+  that type holds. Legacy accounts print premium requests instead, and the unit
+  is carried through as printed rather than assumed.
+- **Nothing local to read.** `assistant_usage_events` is gone from
+  `~/.copilot/data.db` in 1.0.86; what is left is sessions and context-window
+  rows, no per-request tokens. So Copilot is the first **panel-only provider**:
+  no `UsageSource`, no sparkline, no splits, no history, and the poller's
+  activity gate has nothing to open it — only the idle floor runs it, every 30
+  minutes. `UsageStore.refreshPanelOnlyProviders` is the whole seam.
+- **It boots slowly.** 23s, halved to ~12s with `--disable-builtin-mcps`, and the
+  plan row lands only after the CLI has asked GitHub for the budget — so this
+  spec carries its own 60s budget where the others take 30.
+- **A provider added by an update was never offered to an existing install**, so
+  its absence from a saved `trackedSources` is a gap, not a decision.
+  `pref.knownSources` records what has been offered; anything outside it is
+  switched on once, and a provider switched off after that stays off.
 
 ## 0.6 What phase 5 actually built (2026-09-18)
 
@@ -645,7 +724,13 @@ Three layers, one process, no XPC, no daemon.
 
 The design morphs the shell between sizes with a spring that overshoots. **Do not animate `NSWindow.setFrame`** — you cannot get spring overshoot out of it and it jitters against the compositor.
 
-Instead: one `NSPanel` sized to the largest state, permanently. The figure is derived rather than typed in — `PillState.hostSize(around:)` takes the pinned panel, the menu's drop, the shadow's whole reach and the band, so it cannot drift from the shells it has to clear. SwiftUI animates the shell *inside* it. To stop the invisible remainder from eating menu-bar clicks, subclass the hosting view:
+Instead: one `NSPanel`, and SwiftUI animates the shell *inside* it. The figure is derived rather than typed in — `PillState.hostSize(around:)` takes the pinned panel, the menu's drop, the shadow's whole reach and the band, so it cannot drift from the shells it has to clear.
+
+**Sized to the largest state permanently — revised 2026-09-19.** The rule that matters is "the frame never moves *while a spring runs*"; "never at all" was the cheap way to hold it. The window now tracks the state, and the timing is what keeps the rule: it **grows at once** when a state change asks for more room, before the spring starts, and **shrinks 0.75s after** the shell has settled, with the pending shrink cancelled by whatever happens next. `NotchController.fit` is the whole of it, and the content view fills the host (`maxWidth/maxHeight: .infinity`, top-aligned) rather than being pinned to the largest size, which would centre the shell in a smaller window and pull it off the top edge it hangs from.
+
+Why bother: macOS's screenshot picker highlights the *window*, not what is drawn in it, so ⌘⇧4-space over the pill offered an 876 × 795 frame for a 226 × 30 shell — a capture 1.0% of which was opaque. Measured after: 350 × 114, the margin being the room the shell's own shadow falls into. That margin is also the spring's overshoot headroom.
+
+**And the trap it set.** The first version let the content view fill the host (`maxWidth/maxHeight: .infinity`). That hands SwiftUI the window's bounds, so a frame change re-lays the tree out *in the same transaction as the state change* — and the morph stopped being a morph: the shell jumped from the hover card to the pinned panel. `NotchClipView` is the fix. The hosting view keeps the largest state's frame for ever and is *repositioned*, never resized, so SwiftUI sees no bounds change at all and the window merely clips it. Caught by eye, then measured: sampling the shell mid-flight reads 533 → 625 → 719pt across a 404 → 752 morph. To stop the invisible remainder from eating menu-bar clicks, subclass the hosting view:
 
 ```swift
 final class PassthroughHostingView<V: View>: NSHostingView<V> {
@@ -668,21 +753,27 @@ Notch geometry: notch present when `screen.safeAreaInsets.top > 0`; notch width 
 
 ```swift
 protocol UsageSource: Actor {
-    var id: SourceID { get }                      // .claude | .codex | .copilot
-    func poll() async throws -> SourceSnapshot    // events since last cursor + optional authoritative limits
+    nonisolated var id: SourceID { get }          // .claude | .codex
+    func poll() throws -> SourceSnapshot          // events since last cursor + optional stated limits
+    func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>)
+    func cursors() -> [String: JSONLReader.Cursor]
 }
 ```
 
-Two conformances today, three on the redrawn board, one aggregator. No registry,
-no DI container. Copilot's is a SQLite read rather than a JSONL tail, which is
-what the cursor abstraction has to stretch to cover: `(path, inode, offset)`
-becomes `(path, last row id)` for that one source.
+Two conformances, one aggregator. No registry, no DI container. The third was
+Copilot's, a SQLite read rather than a JSONL tail — the one thing the cursor
+abstraction would have had to stretch for — and it is cut (§0.5), so `(path,
+inode, offset)` is the only shape a source has ever needed.
+
+A source states limits when its logs carry them (Codex) and `nil` when they do
+not (Claude); the panel readings arrive on a separate path, `UsageStore` holding
+one `UsagePanel` per source, and the newer of the two readings wins.
 
 **Incremental reading is mandatory.** Re-parsing every JSONL every 5s would read hundreds of MB. `JSONLCursor` keeps `(path, inode, offset)`; each poll stats mtime, seeks to offset, decodes only new lines, and drops a cursor whose inode changed (log rotation).
 
 **Engine** (pure, synchronous, fully testable — no I/O, no dates from `Date()`, inject a clock):
 - `WindowCalculator` — ccusage block rule: a block starts at the first event after a ≥5h gap, floored to the hour; block spans `[start, start+5h)`.
-- `Aggregator` — folds events into **5-minute buckets** keyed by `(source, model, project, surface)`. 30 days ≈ 8.6k buckets; the sparkline, splits and history all read buckets, never raw events. Two revisions to what was planned here: the archive persists **raw events**, not buckets (§4, §4.1), and SQLite arrives after all — read-only, as Copilot's store, which this app never writes to.
+- `Aggregator` — folds events into **5-minute buckets** keyed by `(source, model, project, surface)`. 30 days ≈ 8.6k buckets; the sparkline, splits and history all read buckets, never raw events. Two revisions to what was planned here: the archive persists **raw events**, not buckets (§4, §4.1), and the SQLite reader that Copilot would have needed was never written, because Copilot is cut (§0.5).
 
 Output is one value type the whole UI binds to:
 
@@ -763,24 +854,31 @@ TokenPacer/              the target's sources, named for it rather than "Sources
                           PillModel.swift · PillRootView.swift
     Panel/                PinnedPanelView.swift
     Menu/                 NotchMenuView.swift
-    Preferences/          PreferencesWindow.swift · PreferencesView.swift
+    Preferences/          PreferencesWindow.swift · PreferencesView.swift · AppearancePane.swift
   Core/
     Model/                UsageEvent.swift · UsageSnapshot.swift · TokenCounts.swift · SourceID.swift
     Ingest/               UsageSource.swift · ClaudeCodeSource.swift · CodexSource.swift
-                          ClaudeUsagePanel.swift · JSONLReader.swift
-    Engine/               WindowCalculator.swift
-                          Aggregator.swift · TokenWeights.swift · AlertPolicy.swift
-                          PanelPoller.swift
+                          SessionRegistry.swift · JSONLReader.swift · AgentHome.swift
+                          UsagePanel.swift · ClaudeUsagePanel.swift · CodexStatusPanel.swift
+                          CopilotUsagePanel.swift
+    Engine/               WindowCalculator.swift · Aggregator.swift · TokenWeights.swift
+                          AlertPolicy.swift · PanelPoller.swift
     Store/                UsageStore.swift · Archive.swift
     Log.swift
-  Services/               ClaudeCLI.swift · Notifier.swift · LaunchAtLogin.swift
+  Services/               TerminalCLI.swift · Notifier.swift · LaunchAtLogin.swift · AppInfo.swift
                           Preferences.swift · SingleInstance.swift · Updater.swift
   DesignSystem/           Tokens.swift · ToneScale.swift · Typography.swift · Format.swift
-                          OdometerText.swift · UsageRing.swift · CapBar.swift
-                          ChasingBorder.swift · AttentionBadge.swift
+                          Mark.swift · Marks.swift · CapsuleBar.swift · RingMark.swift · UsageRing.swift
+                          BorderEffect.swift · ChasingBorder.swift · CreepingMarker.swift
+                          OdometerText.swift · CapBar.swift · AttentionBadge.swift · JobBadge.swift
 TokenPacerTests/
   Fixtures/               claude-session.jsonl · codex-rollout.jsonl (trimmed real logs)
-  EngineTests.swift · SourceTests.swift · PillStateTests.swift · ArchiveTests.swift · …
+  EngineTests.swift · SourceTests.swift · PillStateTests.swift · ArchiveTests.swift
+  PanelTests.swift · CodexPanelTests.swift · LimitsTests.swift · SessionRegistryTests.swift · …
+
+Beside them, `ACCESS.md`: every path by which this app learns anything about your
+usage — four flows for Claude Code, three for Codex — what each reads, by what
+mechanism, how often, and what is deliberately never opened.
 ```
 
 No `Resources/` at the repo root and no file lists anywhere: everything the app
@@ -800,15 +898,16 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 |---|---|---|
 | 0 | Notch panel: borderless `NSPanel`, `LSUIElement`, click passthrough, re-anchoring | ✅ done |
 | 1 | `JSONLReader` + both sources + window/ceiling/burn engine, `--probe` | ✅ done |
-| 1.5 | **Live limits** — the CLI's `/usage` panel over a pty, 5-min activity-gated polling, attention badge, single-instance guard | ✅ done (unplanned; see §0) |
+| 1.5 | **Live limits** — Claude's `/usage` panel over a pty, 5-min activity-gated polling, attention badge, single-instance guard | ✅ done (unplanned; see §0) |
 | 2 | Design system + the remaining pill states + spring morph | ✅ done (old board) |
 | 3 | Warning auto-expand, pinned panel, context menu | ✅ done (old board) |
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done (old board) |
 | 5 | **Two wings** — the drop panel, the card as a list, the week on the bar (§0.6) | ✅ done |
 | 6 | **Marks** — all twelve drawn, `Mark` + `MarkView` the seam, widths measured from the drawings (§0.7) | ✅ done |
 | 7 | **Appearance** — both grids live, the preview lap, the percentage switch, the border gate (§0.7) | ✅ done |
-| 8 | ~~**Copilot**~~ | ⛔ cut: nothing local states its quota (§0.5) |
+| 8 | **Copilot** — its CLI's `/usage` panel, one window, panel-only provider (§0.5) | ✅ done 2026-09-18, after being cut |
 | 9 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
+| 10 | **Codex's `/status` panel** — one pty driver for both CLIs, log-stated readings counted as runs, `ACCESS.md` (§0, §0.1) | ✅ done 2026-09-18 |
 
 Phases 2–4 shipped against the board as it stood; §0.2 is what the redraw asks
 back. Nothing in `Core/` is affected — the redraw is entirely above the snapshot.
@@ -979,6 +1078,19 @@ update path is — an installed copy will only accept an update signed the same 
 - `/usage` panel read over a pty: 4.1s, 4.2KB, parsed to 7% session / 19% weekly / S$11.99 of S$12.00,
   matching what the CLI draws on screen. Re-run 2026-09-18: 15% session / 34% weekly, and Codex
   correctly reporting nothing, its last reading belonging to a window that has since reset.
+- ✅ **Codex's `/status` panel over the same pty** (2026-09-18): 0% session / 57% weekly / plan
+  *Plus*, against a `/status` screen showing "100% left" and "43% left" — and read by the app as
+  launched, not only by `--probe`. One run in four hit the 30s budget without the panel appearing,
+  logged `unreadable`, and backed off; the dump hook has the render for when it recurs.
+- ✅ **The window tracks the state** (2026-09-19), driven by synthetic events rather than by hand:
+  collapsed 350 × 114 → hover 528 × 196 the instant the pointer lands → pinned 876 × 638 on a
+  double-click → back to 350 × 114 within a second of Esc. The pinned card was captured whole at
+  its new size, shadow and all, so nothing is clipped by the smaller frame.
+- ✅ **The running light was flush with the menu-bar boundary.** A collapsed shell is exactly the
+  band tall, so its bottom edge *is* the end of the menu bar, and a light drawn at `lineWidth / 2`
+  had nothing below it to read against — on an external display it looked like a loose green bar
+  under the pill. Measured in pixels off a screenshot: light on rows 57–59 against a shell ending
+  at 59, now rows 54–57. One point of `edgeInset`, on the mask and the runner bands alike.
 - Single instance enforced, including a raw binary launched past LaunchServices.
 - Shadow follows the clipped shape.
 - Collapsed pill and hover card, on screen, against live figures.
@@ -1020,7 +1132,11 @@ update path is — an installed copy will only accept an update signed the same 
 
 ## 4. Deliberate simplifications
 
-- 5s polling timer, not FSEvents — a 5-hour window does not need sub-second freshness, and a watcher on `~/.claude/projects` fires constantly.
+- ~~5s polling timer, not FSEvents~~ — both, in the end. The tick still decides *when* a reading is
+  worth its cost, but FSEvents answers "has anything changed at all", because the poll's cost was
+  never reading — cursors already made that incremental — it was walking the tree to find the file
+  being written to. The session registry is the exception: its watcher reads it on the spot, at
+  0.3s, because a session that stops to ask something is a thing the notch has to say quickly.
 - 5-minute buckets, not raw event persistence — caps disk and memory regardless of usage volume.
 - Full-screen detection by menu-bar visibility (`screen.visibleFrame.maxY == screen.frame.maxY`) rather than window enumeration — no Screen Recording permission needed. `ponytail:` heuristic; upgrade to `CGWindowListCopyWindowInfo` only if it misfires.
 - **No network, no credentials, no Keychain** — held, after a detour. Phase 1.5 briefly read the OAuth
@@ -1047,12 +1163,17 @@ update path is — an installed copy will only accept an update signed the same 
 
 ## 5. Standing risks
 
-1. **Undocumented log formats.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. Mitigation: decode defensively, and never a confident `0%`. The promised `no data` pill state is now simply what the pill does: `--` wherever a percentage would go, for want of a reading rather than for want of usage.
-2. **A provider can go quiet.** Every percentage is now the provider's own, so when a reading cannot be taken — the CLI moved, the panel changed, the daemon is down — there is no number at all rather than a wrong one. The pill shows `--` and the countdown, and the risk is a user reading that as "no usage" rather than "not reported". The attention badge is what has to carry the difference. `TokenWeights` no longer touches anything on screen except the sparkline and the splits, where only the ordering matters.
-3. ~~**Bundle id**~~ — settled: `com.redevify.token-pacer`, renamed with the product before release.
-4. ~~**Copilot's quota comes from a daemon nobody documents.**~~ Settled by §0.5:
-   it cannot be read at all, so there is no risk to carry — only a provider the
-   board draws and the app cannot.
-5. **The Sparkle private key is a single point of failure.** It lives only in the login Keychain of
+1. **Undocumented log formats, and two panels that are UIs.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. The same is true a second time over for the rendered panels, which have no compatibility promise at all — Codex 0.155 already needed the command and its newline sent as two writes, and its status line carries the same words as the panel, so the marker is only searched in what arrives after the ask. Mitigation: decode defensively, and never a confident `0%`. The promised `no data` pill state is now simply what the pill does: `--` wherever a percentage would go, for want of a reading rather than for want of usage.
+2. **A panel-only provider has no second opinion.** Claude and Codex both write
+   logs, so a broken panel still leaves volume, activity and a shape. Copilot
+   writes nothing this app can read: if its `/usage` screen changes, that row goes
+   to `--` and there is nothing behind it. It is also the one provider whose reset
+   date is inferred rather than read.
+3. **A provider can go quiet.** Every percentage is now the provider's own, so when a reading cannot be taken — the CLI moved, the panel changed, the daemon is down — there is no number at all rather than a wrong one. The pill shows `--` and the countdown, and the risk is a user reading that as "no usage" rather than "not reported". The attention badge is what has to carry the difference. `TokenWeights` no longer touches anything on screen except the sparkline and the splits, where only the ordering matters.
+4. ~~**Bundle id**~~ — settled: `com.redevify.token-pacer`, renamed with the product before release.
+5. ~~**Copilot's quota comes from a daemon nobody documents.**~~ Settled twice:
+   the daemon still will not serve it, and the CLI prints it without being asked
+   (§0.5). What is left is risk 2, not this one.
+6. **The Sparkle private key is a single point of failure.** It lives only in the login Keychain of
    this machine. No backup means no future update for anyone already installed — not a bug that can
    be fixed later, so back it up before the first release, not after.
