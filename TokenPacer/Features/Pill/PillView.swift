@@ -381,7 +381,11 @@ struct PillView: View {
     /// problem. A provider that reports nothing keeps its row and shows `--`:
     /// absent is a state worth seeing, and it is not the same as zero.
     private var hoverCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // 11 between lines. Each row is a whole reading — a provider, where it
+        // stands, its week, its reset — and at 6 they stacked into a block the eye
+        // had to take apart. The card sizes to its content, so the air costs
+        // nothing but the height it is worth.
+        VStack(alignment: .leading, spacing: 11) {
             // Kept even when the rows below say the same thing in figures. With
             // one provider tracked the card would otherwise be a single line, and
             // "Plenty of room" is the sentence the pill exists to say.
