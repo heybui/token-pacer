@@ -322,3 +322,23 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
         #expect(host >= band.notchWidth + 2 * wings.flank)
     }
 }
+
+/// The bug this pins: the flank was measured from the figures alone, leaving out
+/// the row's own spacing either side of the notch, so a six-character countdown
+/// drew through its gutter and a seven-character one would have run off the end.
+@Test func theFlankLeavesRoomForTheCountdownAndItsGutter() {
+    for mark in Mark.allCases {
+        let wings = PillState.Wings(mark: mark, headline: "1.25M", tail: "12d 07h", hasBadge: true)
+        let tail = Typography.monoWidth("12d 07h", size: 11.5)
+        #expect(wings.flank >= tail + PillState.trailingGutter + PillState.markGap)
+    }
+}
+
+/// And that the figures are asked of the font rather than guessed at: a digit
+/// takes the odometer's own cell, everything else takes what it actually draws.
+@Test func monoWidthMeasuresLettersRatherThanAssumingThem() {
+    let digits = Typography.monoWidth("123456", size: 11.5)
+    let letters = Typography.monoWidth("abcdef", size: 11.5)
+    #expect(digits == 6 * 11.5 * 0.6)
+    #expect(letters > 0 && letters != digits)
+}

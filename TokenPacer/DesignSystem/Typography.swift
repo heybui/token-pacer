@@ -1,3 +1,4 @@
+import AppKit
 import CoreText
 import SwiftUI
 
@@ -59,5 +60,24 @@ enum Typography {
     /// Every figure. SF Mono, as the design specifies — always present.
     static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
+    }
+
+    /// How wide a string is when `OdometerText` draws it.
+    ///
+    /// Asked of the font rather than estimated. "0.6em a character" is the cell
+    /// the odometer gives a *digit*, and it was used for the whole string to size
+    /// the flanks — which came out about a point short per character, so a
+    /// six-figure countdown sat 6pt into its own gutter and a seven-figure one
+    /// would have run off the end of the shell.
+    ///
+    /// Digits keep the cell, because that is what the odometer draws them in.
+    /// Everything else is measured.
+    static func monoWidth(_ text: String, size: CGFloat, weight: NSFont.Weight = .medium) -> CGFloat {
+        let font = NSFont.monospacedSystemFont(ofSize: size, weight: weight)
+        return text.reduce(0) { total, character in
+            guard !character.isNumber else { return total + size * 0.6 }
+            return total + (String(character) as NSString)
+                .size(withAttributes: [.font: font]).width
+        }
     }
 }

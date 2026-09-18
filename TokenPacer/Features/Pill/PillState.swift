@@ -74,15 +74,20 @@ enum PillState: String, CaseIterable, Sendable {
         var tail = "12d 07h"
         var hasBadge = false
 
-        /// SF Mono runs 0.6em to the character, which is the figure the flanks
-        /// were sized by hand from before this measured them.
+        /// Asked of the font, through the same rule the odometer draws by.
         private static func mono(_ text: String, _ size: CGFloat) -> CGFloat {
-            CGFloat(text.count) * size * 0.6
+            Typography.monoWidth(text, size: size)
         }
 
         var flank: CGFloat {
-            let left = leadingGutter + mark.width + markGap + Self.mono(headline, 12)
-            let right = Self.mono(tail, 11.5)
+            // The trailing `markGap` on each side is the row's own spacing between
+            // the last thing in a wing and the gap held open for the notch. It is
+            // not decoration and it is not optional: left it out, the formula came
+            // up 12pt short a side, the row over-committed its shell, and the
+            // countdown drew through its own gutter towards the edge.
+            let left = leadingGutter + mark.width + markGap
+                + Self.mono(headline, 12) + markGap
+            let right = markGap + Self.mono(tail, 11.5)
                 + (hasBadge ? badgeSize + markGap : 0)
                 + trailingGutter
             return ceil(max(left, right))
