@@ -192,7 +192,13 @@ final class UsageStore {
     func refreshSessions() {
         // Paused means nothing is read. A stale count would outlive the pause
         // and claim someone is waiting long after they stopped.
-        sessions = isPaused ? [] : SessionRegistry.read()
+        let fresh = isPaused ? [] : SessionRegistry.read()
+        guard fresh != sessions else { return }
+        sessions = fresh
+        Log.ingest.debug("""
+            registry: \(fresh.count, privacy: .public) sessions, \
+            \(fresh.count(where: \.isWaiting), privacy: .public) waiting
+            """)
     }
 
     func setPaused(_ paused: Bool) {
@@ -241,6 +247,12 @@ final class UsageStore {
     }
 
     func refresh(now: Date = Date()) async {
+        // A session that dies without tidying its file leaves the registry
+        // claiming it is still waiting, and nothing writes to that directory
+        // afterwards to say otherwise. The watcher cannot see a process exit, so
+        // the tick that is already running is the floor underneath it — six
+        // kilobytes, and no timer of its own.
+        refreshSessions()
         if let simulated = Self.simulatedError {
             for id in SourceID.allCases { errors[id] = simulated }
         }
