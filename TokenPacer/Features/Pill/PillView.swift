@@ -69,6 +69,9 @@ struct PillView: View {
 
     private var shell: some View {
         let shellSize = state.size(around: band)
+        // Nil hands the height back to the content. Everything else keeps the
+        // board's figure, which for a fixed layout is the point of having one.
+        let fixedHeight: CGFloat? = state.fitsContent ? nil : shellSize.height
         return ZStack(alignment: .bottom) {
             // Revealed, not cross-faded, and above all not rebuilt. The shell's
             // frame springs open and the whole thing is clipped to that shape,
@@ -88,10 +91,10 @@ struct PillView: View {
                 // Top-aligned: a flank-filling state is shorter than its shell by
                 // the overhang, and that slack belongs below the band, not split
                 // either side of it.
-                .frame(width: shellSize.width, height: shellSize.height, alignment: .top)
+                .frame(width: shellSize.width, height: fixedHeight, alignment: .top)
                 .transition(.identity)
         }
-            .frame(width: shellSize.width, height: shellSize.height, alignment: .bottom)
+            .frame(width: shellSize.width, height: fixedHeight, alignment: .bottom)
             .clipShape(shape)
             // The shadow is cast by the shape itself, never by the composited
             // content. Flattening the content works only while SwiftUI can
@@ -161,11 +164,17 @@ struct PillView: View {
             VStack(spacing: 0) {
                 notchBand
                 if !state.fillsFlanks {
-                    stateBody.frame(width: shell.width, height: shell.height - band.height)
+                    stateBody.frame(
+                        width: shell.width,
+                        height: state.fitsContent ? nil : shell.height - band.height
+                    )
                 }
             }
         } else {
-            stateBody.frame(width: state.size.width, height: state.size.height)
+            stateBody.frame(
+                width: state.size.width,
+                height: state.fitsContent ? nil : state.size.height
+            )
         }
     }
 
@@ -369,24 +378,48 @@ struct PillView: View {
     /// problem. A provider that reports nothing keeps its row and shows `--`:
     /// absent is a state worth seeing, and it is not the same as zero.
     private var hoverCard: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 8) {
+            // Kept even when the rows below say the same thing in figures. With
+            // one provider tracked the card would otherwise be a single line, and
+            // "Plenty of room" is the sentence the pill exists to say.
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(statusLine)
+                    .font(Typography.sans(13, .semibold))
+                    .foregroundStyle(.white)
+                Spacer(minLength: 8)
+                if let attention {
+                    AttentionBadge(message: attention, size: 10)
+                }
+            }
+
             ForEach(providers, id: \.source) { provider in
-                ProviderRow(snapshot: provider, barWidth: providerBarWidth)
+                ScaleRow(
+                    label: provider.source.wordmark,
+                    percent: provider.sessionPercent,
+                    resetsAt: provider.resetsAt,
+                    isBurning: provider.isBurning,
+                    barWidth: providerBarWidth
+                )
             }
-            if let attention {
-                AttentionBadge(message: attention, size: 10)
-            }
-            Spacer(minLength: 0)
+
+            // The cap that actually ends the week, on the same scale as the
+            // window that ends the afternoon.
+            ScaleRow(
+                label: "WEEK",
+                percent: snapshot?.weeklyPercent,
+                resetsAt: snapshot?.weeklyResetsAt,
+                barWidth: providerBarWidth
+            )
         }
         .padding(.top, bodyTop)
         .padding(.horizontal, 18)
-        .padding(.bottom, 14)
+        .padding(.bottom, 12)
     }
 
     /// What is left for the bar once the row's fixed columns are paid for.
     private var providerBarWidth: CGFloat {
         let shell = spansNotch ? state.size(around: band).width : state.size.width
-        return max(60, shell - ProviderRow.fixedColumns - 36)
+        return max(60, shell - ScaleRow.fixedColumns - 36)
     }
 
     /// "reported" alone would imply the figure was just read. Between anchors it
@@ -413,13 +446,17 @@ struct PillView: View {
     }
 }
 
-/// One provider on the shared scale: who, where it is, and when it resets.
+/// One line on the shared scale: what it is, where it is, and when it resets.
 ///
-/// The columns are fixed and the bar takes what is left, so two rows line up
-/// down the card however wide the shell is — which is the whole point of putting
-/// them on one scale.
-private struct ProviderRow: View {
-    let snapshot: UsageSnapshot
+/// A provider's window and the weekly cap are the same shape of fact, so they are
+/// the same row. The columns are fixed and the bar takes what is left, so every
+/// row lines up down the card however wide the shell is — which is the whole
+/// point of putting them on one scale.
+private struct ScaleRow: View {
+    let label: String
+    let percent: Double?
+    let resetsAt: Date?
+    var isBurning: Bool = false
     let barWidth: CGFloat
 
     static let wordmarkWidth: CGFloat = 54
@@ -434,26 +471,18 @@ private struct ProviderRow: View {
 
     var body: some View {
         HStack(spacing: Self.spacing) {
-            Text(snapshot.source.wordmark)
+            Text(label)
                 .font(Typography.mono(9.5, .semibold))
                 .tracking(0.95)
                 .foregroundStyle(.white.opacity(0.62))
                 .frame(width: Self.wordmarkWidth, alignment: .leading)
 
-            CapsuleBar(
-                percent: snapshot.sessionPercent,
-                width: barWidth,
-                isBurning: snapshot.isBurning
-            )
+            CapsuleBar(percent: percent, width: barWidth, isBurning: isBurning)
 
-            OdometerText(
-                text: Format.percent(snapshot.sessionPercent),
-                size: 11,
-                color: tone(snapshot.sessionPercent)
-            )
-            .frame(width: Self.percentWidth, alignment: .leading)
+            OdometerText(text: Format.percent(percent), size: 11, color: tone(percent))
+                .frame(width: Self.percentWidth, alignment: .leading)
 
-            Text(Format.countdown(to: snapshot.resetsAt))
+            Text(Format.countdown(to: resetsAt))
                 .font(Typography.mono(9.5))
                 .foregroundStyle(.white.opacity(0.42))
                 .frame(width: Self.resetWidth, alignment: .trailing)

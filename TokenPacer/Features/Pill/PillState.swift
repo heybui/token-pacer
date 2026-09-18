@@ -9,8 +9,26 @@ enum PillState: String, CaseIterable, Sendable {
         switch self {
         case .dormant: CGSize(width: 226, height: 3)
         case .ghost, .collapsed, .exhausted, .paused: CGSize(width: 226, height: 36)
+        // A floor, not the height. These two size to their content (`fitsContent`)
+        // because the card's rows are a list now — one per provider plus the week,
+        // and a preference is coming that turns providers off. The board's 98 was
+        // drawn for a ring and two lines; any single number here is wrong for some
+        // of the lists the card can hold.
         case .hover, .warning: CGSize(width: 404, height: 98)
         case .pinned: CGSize(width: 752, height: 540)
+        }
+    }
+
+    /// States whose height is their content's, not the board's.
+    ///
+    /// The hover card holds a row per tracked provider and the week, and how many
+    /// of those there are is a preference. A fixed height is either short of the
+    /// longest list or padded out below the shortest — the screenshot that started
+    /// this showed a third of the card empty under two rows.
+    var fitsContent: Bool {
+        switch self {
+        case .hover, .warning: true
+        case .dormant, .ghost, .collapsed, .exhausted, .paused, .pinned: false
         }
     }
 
