@@ -336,16 +336,15 @@ struct PillView: View {
         // wider wing's measurement, so the narrower one has slack — and where
         // that slack goes is a decision, not a leftover.
         //
-        // The mark leans in, towards the hardware: against the outer edge it sat
-        // in the shell's own rounded corner. The countdown leans out, to the end
-        // of the row: it is the last thing in the band, and pulled in beside the
-        // notch it read as a second figure attached to the first rather than as
-        // the far end of a row.
+        // Both wings lean out, to the two ends of the row: the mark against the
+        // left gutter, the countdown against the right. The slack — whichever
+        // wing is the narrower one has some — collects beside the notch, where
+        // there is nothing to read anyway.
         HStack(spacing: 0) {
             leadingWing
                 .padding(.leading, PillState.leadingGutter)
                 .padding(.trailing, PillState.notchClearance)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             notchGap
 

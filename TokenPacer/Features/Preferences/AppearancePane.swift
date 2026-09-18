@@ -271,6 +271,10 @@ private struct BorderTile: View {
                 }
                 .frame(height: 34)
                 .padding(.top, 4)
+                // Room either side for the one light that paints outside its
+                // panel. Without it the glow ran off the edge of its own tile and
+                // into the pane's margin.
+                .padding(.horizontal, 12)
 
                 Text(effect.displayName)
                     .font(Typography.sans(10))
