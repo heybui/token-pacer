@@ -483,7 +483,12 @@ private struct ScaleRow: View {
     static let percentWidth: CGFloat = 28     // "100%"
     static let weekWidth: CGFloat = 28        // "100%"
     static let resetWidth: CGFloat = 42       // "12d 07h"
-    static let spacing: CGFloat = 8
+    /// 14, not the 8 the rest of the app uses between neighbours. These columns
+    /// are not neighbours — each is a different kind of fact about the same line,
+    /// and at 8 the bar ran into its own percentage and the three figures read as
+    /// one string. The bar pays for it, which is the right pocket: it is the only
+    /// column that can be any length at all.
+    static let spacing: CGFloat = 14
     static var fixedColumns: CGFloat {
         wordmarkWidth + percentWidth + weekWidth + resetWidth + spacing * 4
     }
