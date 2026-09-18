@@ -484,14 +484,20 @@ What they cost, with a 200pt notch, `100%` and `4h 59m`:
 The mark is paid for twice — both wings take the wider one — so the choice between
 the thermometer and the pips is 60pt of menu bar.
 
-### The wings lean towards the hardware
+### Where the slack goes is a decision
 
-They used to lean away from it. The flank is the wider wing's measurement, so the
-narrower wing has slack, and the slack pooled where the flexible space was: beside
-the notch. That left the mark pressed into the shell's own rounded corner with a
-hand's width of nothing next to the camera. Both wings now take half of what is
-left and align *inwards* — leading wing trailing-aligned, trailing wing
-leading-aligned, as the board draws them — so the slack lands at the outer edges.
+The flank is the wider wing's measurement, so the narrower wing has slack — and it
+used to land wherever the flexible space happened to be, which was beside the
+notch. That left the mark pressed into the shell's own rounded corner with a
+hand's width of nothing next to the camera.
+
+Each wing is now half of what is left, and each says where its own slack goes:
+
+- **The mark leans in**, towards the hardware. Against the outer edge it sits in
+  the corner radius.
+- **The countdown leans out**, to the end of the row. Pulled in beside the notch
+  it read as a second figure attached to the first rather than as the far end of
+  a band. Settled by eye, against the alternative, at the user's call.
 
 Two constants where there was one: `markGap` (12) is spacing between two figures,
 `notchClearance` (12) is clearance from a piece of hardware. Same number, free to

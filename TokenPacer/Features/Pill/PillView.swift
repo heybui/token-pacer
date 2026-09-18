@@ -312,11 +312,15 @@ struct PillView: View {
     }
 
     private var collapsed: some View {
-        // Two wings, each taking half of what is left over, each leaning towards
-        // the hardware. The slack lands on the outside — the flank is measured
-        // from the wider wing, so the narrower one has room to spare, and pooled
-        // beside the notch it left the mark pressed against the shell's own
-        // rounded corner with a hand's width of nothing next to the camera.
+        // Two wings, each taking half of what is left over. The flank is the
+        // wider wing's measurement, so the narrower one has slack — and where
+        // that slack goes is a decision, not a leftover.
+        //
+        // The mark leans in, towards the hardware: against the outer edge it sat
+        // in the shell's own rounded corner. The countdown leans out, to the end
+        // of the row: it is the last thing in the band, and pulled in beside the
+        // notch it read as a second figure attached to the first rather than as
+        // the far end of a row.
         HStack(spacing: 0) {
             leadingWing
                 .padding(.leading, PillState.leadingGutter)
@@ -328,7 +332,7 @@ struct PillView: View {
             trailingWing
                 .padding(.leading, PillState.notchClearance)
                 .padding(.trailing, PillState.trailingGutter)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
