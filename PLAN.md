@@ -1,6 +1,10 @@
 # Token Pacer — implementation plan
 
-macOS notch usage tracker. Design source: `design/project/Token Pacer.dc.html`.
+macOS notch usage tracker. Design source: the **macOS notch usage tracker**
+project in Claude Design — <https://claude.ai/design/p/43fb1ba9-64ca-41c5-b23c-9616b8317980>
+— board "Token Pacer". Read it from there, never from a checkout: the export
+that used to sit in `design/` went stale inside a day and was missing a whole
+section by the time anyone noticed.
 
 ## 0. Ground truth (corrected 2026-09-16)
 
@@ -292,7 +296,7 @@ percentage, the time left and one coach line.
 Where the board and the shipped app disagreed on something already settled, the
 app was right and the board was corrected — the design files are a source of
 truth, so a prototype carrying a cut feature reads as an unbuilt one forever.
-Changed in `design/project/`:
+Changed on the boards:
 
 - **Amber back to `#e8b33c`** — 29 occurrences across the board, the landing page
   and the app-icon sheet, glows included.
@@ -518,9 +522,9 @@ they cost about the same 30pt each.
 
 ### The border is twelve too, and it turns rather than travels
 
-The board shipped a rendering spec for this one — `design/project/Token Pacer
-Running Border.dc.html`, "Rendering spec · Core Animation" — and it names the
-mistake the first port made before anyone could make it twice:
+The board shipped a rendering spec for this one — "Token Pacer Running Border",
+"Rendering spec · Core Animation" — and it names the mistake the first port made
+before anyone could make it twice:
 
 > CSS spins a conic gradient at constant ANGULAR speed, so on a 3.07:1 rect the
 > head sprints across the 56pt ends and crawls along the 172pt edges. A
