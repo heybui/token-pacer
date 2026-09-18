@@ -49,6 +49,9 @@ final class NotchController {
         }
         host.liveSize = model.liveSize
         host.onRightMouseDown = { [weak model] in model?.toggleMenu() }
+        // Hover belongs to the host: it is the only thing that knows the rect the
+        // shell actually occupies on screen.
+        host.onHoverChange = { [weak model] inside in model?.setPointerInside(inside) }
 
         store.onSnapshot = { [weak self] snapshot in self?.considerAlert(for: snapshot) }
 

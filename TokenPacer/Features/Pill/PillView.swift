@@ -13,7 +13,6 @@ struct PillView: View {
     var isMenuOpen = false
     var menuItems: [NotchMenuItem] = []
     var onCloseMenu: () -> Void = {}
-    var onHoverChange: (Bool) -> Void = { _ in }
     /// The menu bar row the shell sits in, and the notch it wraps when there is
     /// one. Empty only on a screen reporting no row at all.
     var band = NotchBand()
@@ -55,11 +54,6 @@ struct PillView: View {
                     .padding(.top, PillState.menuGap)
             }
         }
-        // Tracked on the shell and its menu, never on the host. `.onHover`
-        // installs an AppKit tracking area, and a tracking area ignores the
-        // hitTest that makes the rest of the host click-through — so hovering
-        // anywhere in the top half of the screen used to expand the pill.
-        .onHover(perform: onHoverChange)
         .animation(.easeOut(duration: 0.16), value: isMenuOpen)
         .frame(
             width: PillState.hostSize(around: band).width,
