@@ -389,31 +389,53 @@ struct PillView: View {
                 Spacer(minLength: 8)
                 if let attention {
                     AttentionBadge(message: attention, size: 10)
+                } else if let snapshot, snapshot.sessionPercent != nil {
+                    // How old the figure is. Between readings the pill is showing
+                    // the last one unmoved, and saying so is the difference
+                    // between a stale number and a lying one.
+                    Text(reportedLabel(snapshot))
+                        .font(Typography.mono(9.5))
+                        .foregroundStyle(.white.opacity(0.34))
                 }
             }
 
-            ForEach(providers, id: \.source) { provider in
-                ScaleRow(
-                    label: provider.source.wordmark,
-                    percent: provider.sessionPercent,
-                    resetsAt: provider.resetsAt,
-                    isBurning: provider.isBurning,
-                    barWidth: providerBarWidth
-                )
+            ForEach(scaleLines) { line in
+                ScaleRow(line: line, barWidth: providerBarWidth)
             }
-
-            // The cap that actually ends the week, on the same scale as the
-            // window that ends the afternoon.
-            ScaleRow(
-                label: "WEEK",
-                percent: snapshot?.weeklyPercent,
-                resetsAt: snapshot?.weeklyResetsAt,
-                barWidth: providerBarWidth
-            )
         }
         .padding(.top, bodyTop)
         .padding(.horizontal, 18)
         .padding(.bottom, 12)
+    }
+
+    /// Every window worth a row, in the order they belong to each other.
+    ///
+    /// The weekly cap is a provider's, not the app's: Claude states one and so
+    /// does Codex, and they run out on different days. So the week follows its own
+    /// provider rather than sitting once at the bottom, where it silently belonged
+    /// to whichever source happened to be active.
+    private var scaleLines: [ScaleLine] {
+        providers.flatMap { provider -> [ScaleLine] in
+            var lines = [ScaleLine(
+                id: "\(provider.source.rawValue).session",
+                label: provider.source.wordmark,
+                percent: provider.sessionPercent,
+                resetsAt: provider.resetsAt,
+                isBurning: provider.isBurning
+            )]
+            // Only when the provider actually states one. An empty week under a
+            // live window reads as a cap of zero rather than as no answer.
+            if provider.weeklyPercent != nil {
+                lines.append(ScaleLine(
+                    id: "\(provider.source.rawValue).week",
+                    label: "WEEK",
+                    percent: provider.weeklyPercent,
+                    resetsAt: provider.weeklyResetsAt,
+                    isSecondary: true
+                ))
+            }
+            return lines
+        }
     }
 
     /// What is left for the bar once the row's fixed columns are paid for.
@@ -436,14 +458,6 @@ struct PillView: View {
         return percent >= toneScale.warnAt ? "Running hot" : "Plenty of room"
     }
 
-    private var detailLine: String {
-        if let attention { return attention }
-        guard let snapshot else { return "reading logs…" }
-
-        var parts = ["Week \(Format.percent(snapshot.weeklyPercent))"]
-        if snapshot.sessionPercent != nil { parts.append(reportedLabel(snapshot)) }
-        return parts.joined(separator: " · ")
-    }
 }
 
 /// One line on the shared scale: what it is, where it is, and when it resets.
@@ -452,11 +466,19 @@ struct PillView: View {
 /// the same row. The columns are fixed and the bar takes what is left, so every
 /// row lines up down the card however wide the shell is — which is the whole
 /// point of putting them on one scale.
-private struct ScaleRow: View {
+struct ScaleLine: Identifiable {
+    let id: String
     let label: String
     let percent: Double?
     let resetsAt: Date?
-    var isBurning: Bool = false
+    var isBurning = false
+    /// A window that belongs to the row above it — a provider's weekly cap under
+    /// its own session. Drawn quieter, so the eye groups them.
+    var isSecondary = false
+}
+
+private struct ScaleRow: View {
+    let line: ScaleLine
     let barWidth: CGFloat
 
     static let wordmarkWidth: CGFloat = 54
@@ -471,18 +493,29 @@ private struct ScaleRow: View {
 
     var body: some View {
         HStack(spacing: Self.spacing) {
-            Text(label)
-                .font(Typography.mono(9.5, .semibold))
+            Text(line.label)
+                .font(Typography.mono(line.isSecondary ? 8.5 : 9.5, .semibold))
                 .tracking(0.95)
-                .foregroundStyle(.white.opacity(0.62))
+                .foregroundStyle(.white.opacity(line.isSecondary ? 0.4 : 0.62))
+                .padding(.leading, line.isSecondary ? 10 : 0)
                 .frame(width: Self.wordmarkWidth, alignment: .leading)
 
-            CapsuleBar(percent: percent, width: barWidth, isBurning: isBurning)
+            CapsuleBar(
+                percent: line.percent,
+                width: barWidth,
+                height: line.isSecondary ? 3 : 4,
+                markerHeight: line.isSecondary ? 9 : 11,
+                isBurning: line.isBurning
+            )
 
-            OdometerText(text: Format.percent(percent), size: 11, color: tone(percent))
-                .frame(width: Self.percentWidth, alignment: .leading)
+            OdometerText(
+                text: Format.percent(line.percent),
+                size: line.isSecondary ? 10 : 11,
+                color: tone(line.percent)
+            )
+            .frame(width: Self.percentWidth, alignment: .leading)
 
-            Text(Format.countdown(to: resetsAt))
+            Text(Format.countdown(to: line.resetsAt))
                 .font(Typography.mono(9.5))
                 .foregroundStyle(.white.opacity(0.42))
                 .frame(width: Self.resetWidth, alignment: .trailing)
