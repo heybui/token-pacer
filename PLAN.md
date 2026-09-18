@@ -70,8 +70,7 @@ when a frozen number is the correct one. The one thing inferred without a readin
 a reset — the window is simply empty, no conversion required.
 
 `BurnRate` lost its calibrated input, leaned on `CeilingEstimator` for a while,
-and has since lost that too — see §0.4. It now reports a measured rate and
-projects nothing.
+then went entirely — §0.4. Nothing states a rate of consumption any more.
 
 ### Cadence
 
@@ -196,9 +195,10 @@ Copilot's store is `~/.copilot`, and its quota is not in it: the desktop app ask
 its own local daemon, which asks the server. That daemon is reachable — port and
 token sit in `~/.copilot/run/` — so the figure is fetched the same way Claude's
 is, from the client that already holds the credential. Until that is proven,
-Copilot has no row (§0). The board's hollow marker stays what it is for: a figure
-that is not the provider's own, which after this rule means Claude's log-only
-fallback and nothing else.
+Copilot has no row (§0). Which leaves the board's hollow marker with nothing to
+mark: after §0.4 no figure in this app is an estimate. Either it goes from the
+board, or it is held for Copilot in case the daemon turns out to report something
+softer than a percentage. Undecided.
 
 ### The mark is a choice of twelve
 
@@ -306,8 +306,8 @@ The pinned panel keeps the sparkline, which was always the part that said
 something: its row is now captioned by its own span rather than by a rate.
 
 **What it costs, stated plainly:** the board's over banner said "90% used, ~18 min
-left" and now says "90% used, 2h 04m to the reset". The hover card's pace line
-loses its projection the same way. A countdown to a reset is a fact; minutes of
+left" and now says "90% used, 2h 04m to the reset". The hover card's pace line is
+gone rather than shortened. A countdown to a reset is a fact; minutes of
 headroom was three guesses stacked — a rate, a conversion, and the assumption
 that the next hour looks like the last half one.
 
@@ -329,9 +329,9 @@ Three layers, one process, no XPC, no daemon.
 
 ### 1.1 Host: one fixed window, not a resizing one
 
-The design morphs the shell 226×36 → 404×98 → 752×540 with a spring that overshoots. **Do not animate `NSWindow.setFrame`** — you cannot get spring overshoot out of it and it jitters against the compositor.
+The design morphs the shell between sizes with a spring that overshoots. **Do not animate `NSWindow.setFrame`** — you cannot get spring overshoot out of it and it jitters against the compositor.
 
-Instead: one `NSPanel` sized to the max state (`792 × 580`, includes context-menu drop), permanently. SwiftUI animates the shell *inside* it. To stop the invisible remainder from eating menu-bar clicks, subclass the hosting view:
+Instead: one `NSPanel` sized to the largest state, permanently. The figure is derived rather than typed in — `PillState.hostSize(around:)` takes the pinned panel, the menu's drop, the shadow's whole reach and the band, so it cannot drift from the shells it has to clear. SwiftUI animates the shell *inside* it. To stop the invisible remainder from eating menu-bar clicks, subclass the hosting view:
 
 ```swift
 final class PassthroughHostingView<V: View>: NSHostingView<V> {
@@ -368,7 +368,7 @@ becomes `(path, last row id)` for that one source.
 
 **Engine** (pure, synchronous, fully testable — no I/O, no dates from `Date()`, inject a clock):
 - `WindowCalculator` — ccusage block rule: a block starts at the first event after a ≥5h gap, floored to the hour; block spans `[start, start+5h)`.
-- `Aggregator` — folds events into **5-minute buckets** keyed by `(source, model, project, surface)`. 30 days ≈ 8.6k buckets; the sparkline, splits and history all read buckets, never raw events. Persist buckets as JSON in Application Support; never persist raw events. No SQLite.
+- `Aggregator` — folds events into **5-minute buckets** keyed by `(source, model, project, surface)`. 30 days ≈ 8.6k buckets; the sparkline, splits and history all read buckets, never raw events. Two revisions to what was planned here: the archive persists **raw events**, not buckets (§4, §4.1), and SQLite arrives after all — read-only, as Copilot's store, which this app never writes to.
 
 Output is one value type the whole UI binds to:
 
@@ -408,7 +408,7 @@ bottom-only corners growing down out of the notch:
 The board's old 226 × 3 dormant hairline is gone with the shell: hidden now means
 both wings are simply empty.
 
-Animation: `.interpolatingSpring(stiffness: 220, damping: 24)`, per build note. Reduce Motion deliberately ignored for the shell morph (design decision — but keep it honoured for the pulsing dot, which is a real accessibility nuisance, not the product).
+Animation: `Animation.spring(duration: 0.6, bounce: 0.18)` — the board's `interpolatingSpring(stiffness: 220, damping: 24)` restated as the thing actually being tuned, which is how long the expansion reads for. Reduce Motion is not honoured anywhere, by decision: there is no branch on it in the app and none is wanted.
 
 Components worth owning (everything else is stock SwiftUI):
 - `OdometerText` — digit strips translated by `-d em`, spring transition + brief blur. Used at 5 sizes (11/11.5/12/26/30px).
@@ -441,14 +441,14 @@ TokenPacer/              the target's sources, named for it rather than "Sources
   Info.plist              build inputs, not bundle resources: the synchronized
   TokenPacer.entitlements  group carries a membership exception for both
   Resources/              InstrumentSans.ttf · TokenPacer.icns
-  App/                    main.swift · AppDelegate.swift · Probe.swift
+  App/                    main.swift · AppDelegate.swift · Probe.swift · LogWatcher.swift
   Notch/                  NotchPanel.swift · NotchController.swift · NotchAnchor.swift
                           PassthroughHostingView.swift
   Features/
     Pill/                 PillView.swift · PillState.swift · PillStateResolver.swift
                           PillModel.swift · PillRootView.swift
     Panel/                PinnedPanelView.swift
-    Menu/                 NotchMenuView.swift · UsageClipboard.swift
+    Menu/                 NotchMenuView.swift
     Preferences/          PreferencesWindow.swift · PreferencesView.swift
   Core/
     Model/                UsageEvent.swift · UsageSnapshot.swift · TokenCounts.swift · SourceID.swift
@@ -463,7 +463,7 @@ TokenPacer/              the target's sources, named for it rather than "Sources
                           Preferences.swift · SingleInstance.swift · Updater.swift
   DesignSystem/           Tokens.swift · ToneScale.swift · Typography.swift · Format.swift
                           OdometerText.swift · UsageRing.swift · CapBar.swift
-                          PulsingDot.swift · ChasingBorder.swift · AttentionBadge.swift
+                          ChasingBorder.swift · AttentionBadge.swift
 TokenPacerTests/
   Fixtures/               claude-session.jsonl · codex-rollout.jsonl (trimmed real logs)
   EngineTests.swift · SourceTests.swift · PillStateTests.swift · ArchiveTests.swift · …
@@ -638,7 +638,8 @@ update path is — an installed copy will only accept an update signed the same 
 ### Verified on hardware
 
 - `/usage` panel read over a pty: 4.1s, 4.2KB, parsed to 7% session / 19% weekly / S$11.99 of S$12.00,
-  matching what the CLI draws on screen. `--probe` reports `[authoritative]`.
+  matching what the CLI draws on screen. Re-run 2026-09-18: 15% session / 34% weekly, and Codex
+  correctly reporting nothing, its last reading belonging to a window that has since reset.
 - Single instance enforced, including a raw binary launched past LaunchServices.
 - Shadow follows the clipped shape.
 - Collapsed pill and hover card, on screen, against live figures.
@@ -681,7 +682,8 @@ update path is — an installed copy will only accept an update signed the same 
 - **No network, no credentials, no Keychain** — held, after a detour. Phase 1.5 briefly read the OAuth
   usage endpoint with the user's own token out of the Keychain; that is gone. The app now spawns the
   user's own CLI and reads the panel it draws, so it holds no secret and opens no socket of its own.
-  It still degrades to log-only inference when the CLI cannot be read.
+  ~~It still degrades to log-only inference when the CLI cannot be read.~~ It does
+  not: §0.4 removed the inference, so an unreadable CLI means no percentage.
 - The panel aggregates straight from the 30 days of events the store already holds, rather than the
   planned persisted 5-minute buckets. Cheap per refresh, and it leaves the cold start unfixed —
   `BucketArchive` is still the answer to §4.1, not a second copy of the buckets.
@@ -695,7 +697,7 @@ update path is — an installed copy will only accept an update signed the same 
   archive keeps the events *and* each file's byte offset, so only appended bytes are read.
   Measured on this machine, 714MB across 544 files: **4171ms over 17,354 events → 305ms**, of which
   114ms is reading the 4.5MB archive. Raw events rather than the planned buckets, so windows, burn
-  rate, splits and the ceiling keep their exact fidelity and nothing downstream changed.
+  splits and the windows kept their exact fidelity and nothing downstream changed.
   The loading state stays: the first read is still not instant, and a fake 0% would still be a lie.
 - ~~**Outliers dominate the inferred ceiling.**~~ ✅ answered by deletion, not by a better estimator (§0.4). Max-observed put Claude's ceiling at 32.4M weighted tokens, so a normal window read ~4%; p95 and a decaying trailing max were the candidate fixes. Neither was built. A percentage nobody publishes is not a percentage.
 
