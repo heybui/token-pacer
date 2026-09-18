@@ -229,7 +229,16 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(model.state == .ghost)
 
     // …and gone once the hold expires, without waiting for the 5s poll.
-    try? await Task.sleep(for: .seconds(PillStateResolver.ghostFade + 0.2))
+    //
+    // Polled to a deadline rather than slept for exactly the fade: the model's
+    // withdrawal is a 0.4s `Task`, and a single sleep 0.2s longer than that
+    // failed whenever the suite ran it beside a busy machine. What is being
+    // tested is that the withdrawal happens without a poll, not that it lands
+    // inside a particular millisecond.
+    let deadline = Date().addingTimeInterval(3)
+    while model.state != .dormant, Date() < deadline {
+        try? await Task.sleep(for: .milliseconds(50))
+    }
     #expect(model.state == .dormant)
 }
 
