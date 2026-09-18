@@ -67,24 +67,28 @@ final class NotchController {
 
     func flush() async { await store.flush() }
 
-    /// The notch carries the alert itself whenever it can be seen; this is the
-    /// fallback for the case where it cannot.
+    /// The board's rule: the notch carries the state, the banner carries the
+    /// moment it changed. So it fires beside a notch that is in plain sight
+    /// rather than only when something is covering it — and only on going over.
+    /// Entering watch stays silent and visual; the mark simply tints amber.
     private func considerAlert(for snapshot: UsageSnapshot) {
         guard !store.isPaused else { return }   // "No alerts fire while paused."
-        let thresholds = [preferences.warnAt, preferences.criticalAt]
-        guard let crossed = alerts.crossing(
-            percent: snapshot.sessionPercent, resetsAt: snapshot.resetsAt, thresholds: thresholds
-        ) else { return }
+        guard alerts.crossing(
+            percent: snapshot.sessionPercent,
+            resetsAt: snapshot.resetsAt,
+            thresholds: [preferences.criticalAt]
+        ) != nil else { return }
 
-        let critical = crossed >= preferences.criticalAt
+        let left = snapshot.burn.headroomMinutes.map { "~\($0) min left" }
+            ?? "\(Format.countdown(to: snapshot.resetsAt)) to the reset"
         notifier.alert(
-            title: "\(snapshot.source.displayName) · \(Format.percent(snapshot.sessionPercent)) of the 5-hour window",
-            body: critical
-                ? "Wrap up soon — \(Format.countdown(to: snapshot.resetsAt)) until it resets."
-                : "Running hot. \(Format.countdown(to: snapshot.resetsAt)) left at this pace.",
-            sound: preferences.soundOnThreshold
+            title: "Over",
+            body: "\(Format.percent(snapshot.sessionPercent)) used, \(left). "
+                + "Consider finishing the current task before starting anything big.",
+            sound: preferences.soundOnThreshold,
+            whenNotchHidden: false
         )
-        Log.notch.info("alert at \(Int(crossed), privacy: .public)% (banner only if the notch is hidden)")
+        Log.notch.info("over banner at \(Int(self.preferences.criticalAt), privacy: .public)%")
     }
 
     private func observe() {

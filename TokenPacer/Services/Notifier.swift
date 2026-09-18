@@ -1,11 +1,12 @@
 import AppKit
 import UserNotifications
 
-/// Banners, but only when the notch cannot speak for itself.
+/// Banners.
 ///
-/// "Only shown when a full-screen app hides the notch — otherwise the notch
-/// itself carries the alert." A banner beside a pill that is already showing the
-/// same number is noise.
+/// Going over fires one beside a notch in plain sight: the notch carries the
+/// state, the banner carries the moment it changed. Everything else the notch
+/// does not carry at all — an available update — is gated on it being hidden,
+/// which is what `whenNotchHidden` is for.
 @MainActor
 struct Notifier {
     var isNotchVisible: () -> Bool = { FullScreenDetector.isMenuBarVisible }
