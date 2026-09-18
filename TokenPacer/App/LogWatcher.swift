@@ -31,9 +31,22 @@ final class LogWatcher: @unchecked Sendable {
     /// is what actually reads. `NoDefer` still delivers the first event of a
     /// burst at once, so typing is not a second behind.
     private static let latency: CFTimeInterval = 1.0
+    /// What the session registry is watched at instead.
+    ///
+    /// Nothing reads a log here — the callback reads eleven half-kilobyte files
+    /// and is the whole update. A second of coalescing on top of that is a
+    /// second of a pill saying nobody is waiting when somebody is.
+    static let registryLatency: CFTimeInterval = 0.3
 
-    init?(root: URL) {
+    /// Called on the watcher's own queue whenever something under `root`
+    /// changed, for a root whose reading is cheap enough to do on the spot.
+    /// Nil leaves the dirty flag as the only signal, which is what a log root
+    /// wants: there the tick decides when the reading is worth its cost.
+    private let onChange: (@Sendable () -> Void)?
+
+    init?(root: URL, latency: CFTimeInterval = LogWatcher.latency, onChange: (@Sendable () -> Void)? = nil) {
         guard FileManager.default.fileExists(atPath: root.path) else { return nil }
+        self.onChange = onChange
 
         var context = FSEventStreamContext(
             version: 0,
@@ -42,14 +55,16 @@ final class LogWatcher: @unchecked Sendable {
         )
         let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
             guard let info else { return }
-            Unmanaged<LogWatcher>.fromOpaque(info).takeUnretainedValue().markDirty()
+            let watcher = Unmanaged<LogWatcher>.fromOpaque(info).takeUnretainedValue()
+            watcher.markDirty()
+            watcher.onChange?()
         }
 
         guard let stream = FSEventStreamCreate(
             kCFAllocatorDefault, callback, &context,
             [root.path] as CFArray,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-            Self.latency,
+            latency,
             UInt32(kFSEventStreamCreateFlagNoDefer)
         ) else { return nil }
 
@@ -93,6 +108,22 @@ final class LogWatcher: @unchecked Sendable {
                 CodexSource(changed: Self.gate(codex)),
             ],
             [claude, codex].compactMap(\.self)
+        )
+    }
+
+    /// Watches `~/.claude/sessions`, where the CLI records what every session on
+    /// this machine is doing.
+    ///
+    /// Only that directory: it is flat, holds nothing but the small JSON files
+    /// and their keys, and changes when a session changes state. One level up is
+    /// `~/.claude`, where the transcripts are appended to continuously — watching
+    /// there would wake this on every token written anywhere on the machine, to
+    /// re-read files that had not moved.
+    static func registry(onChange: @escaping @Sendable () -> Void) -> LogWatcher? {
+        LogWatcher(
+            root: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/sessions"),
+            latency: registryLatency,
+            onChange: onChange
         )
     }
 

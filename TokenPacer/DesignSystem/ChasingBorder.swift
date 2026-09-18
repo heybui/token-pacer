@@ -96,6 +96,10 @@ final class BorderLight: NSView {
     /// border: a band along three sides and nothing along the top.
     private let container = CALayer()
     private let frameMask = CAShapeLayer()
+    /// The one light that paints outside the mask, and only outside it: a shadow
+    /// cast by the panel's silhouette, with the silhouette itself cut out of it.
+    private let glowLayer = CALayer()
+    private let glowMask = CAShapeLayer()
 
     private var turns: [(layer: CALayer, ramp: ConicRamp)] = []
     private var runners: [(layer: CAGradientLayer, band: EdgeBand)] = []
@@ -112,7 +116,12 @@ final class BorderLight: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
+        // Under the band, so a halo never washes over the hairline it belongs to.
+        layer?.addSublayer(glowLayer)
         layer?.addSublayer(container)
+        glowMask.fillRule = .evenOdd
+        glowMask.fillColor = NSColor.black.cgColor
+        glowLayer.mask = glowMask
         // A stroked open path, not the spec's even-odd pair of subpaths: the same
         // 1.5pt band on three sides, out of a shape the app already draws.
         frameMask.fillColor = nil
@@ -175,7 +184,7 @@ final class BorderLight: NSView {
         turns = []
         runners = []
         glow = nil
-        layer?.shadowOpacity = 0
+        glowLayer.shadowOpacity = 0
 
         switch look.effect.paint {
         case .angular(let ramps):
@@ -246,12 +255,25 @@ final class BorderLight: NSView {
         if case .solid = look.effect.paint { container.sublayers?.first?.frame = bounds }
 
         if glow != nil {
-            layer?.shadowColor = NSColor(look.tone).cgColor
-            // The panel's own silhouette, so the glow is cast by the shell rather
-            // than recomputed from what is drawn in this overlay every frame.
-            layer?.shadowPath = UnevenRoundedRectangle(
+            let silhouette = UnevenRoundedRectangle(
                 bottomLeadingRadius: look.cornerRadius, bottomTrailingRadius: look.cornerRadius
             ).path(in: CGRect(origin: .zero, size: bounds.size)).cgPath
+
+            glowLayer.frame = bounds
+            glowLayer.shadowColor = NSColor(look.tone).cgColor
+            // The panel's own silhouette, so the glow is cast by the shell rather
+            // than recomputed from what is drawn in this overlay every frame.
+            glowLayer.shadowPath = silhouette
+
+            // And the silhouette cut back out of it. A shadow is drawn *behind*
+            // its layer, and this overlay is transparent, so without the cut-out
+            // the blur filled the panel as well as haloing it — a green pane with
+            // a soft edge instead of a glow on the desktop behind.
+            glowMask.frame = bounds
+            let outside = CGMutablePath()
+            outside.addRect(bounds.insetBy(dx: -Self.glowReach, dy: -Self.glowReach))
+            outside.addPath(silhouette)
+            glowMask.path = outside
         }
         if look.isRunning, !runners.isEmpty { animate() }
     }
@@ -338,7 +360,7 @@ final class BorderLight: NSView {
     /// The only light that paints outside the mask. Spread has no Core Animation
     /// equivalent, so the blur carries it.
     private func installGlow(_ solid: SolidLight) {
-        guard let layer else { return }
+        let layer = glowLayer
         layer.shadowOffset = CGSize(width: 0, height: 2)
         layer.shadowRadius = 5
         layer.shadowOpacity = 0.28
@@ -370,8 +392,8 @@ final class BorderLight: NSView {
         turns.forEach { $0.layer.removeAllAnimations() }
         runners.forEach { $0.layer.removeAllAnimations() }
         container.sublayers?.forEach { $0.removeAllAnimations() }
-        layer?.removeAllAnimations()
-        layer?.shadowOpacity = 0
+        glowLayer.removeAllAnimations()
+        glowLayer.shadowOpacity = 0
     }
 
     private func fade(to opacity: Float, animated: Bool) {
@@ -379,8 +401,13 @@ final class BorderLight: NSView {
         CATransaction.setDisableActions(!animated)
         CATransaction.setAnimationDuration(0.3)
         container.opacity = opacity
+        glowLayer.opacity = opacity
         CATransaction.commit()
     }
+
+    /// How far the halo is allowed to reach, and therefore how much of the
+    /// outside the cut-out has to cover.
+    private static let glowReach: CGFloat = 60
 
     fileprivate static func resolve(_ tint: BorderTint, alpha: Double, look: Look) -> NSColor {
         let base: NSColor = switch tint {
