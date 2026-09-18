@@ -65,6 +65,11 @@ struct PillView: View {
 
     @Environment(\.tone) private var toneScale
 
+    /// What the figure under the pointer means. The card is the only place with
+    /// room to say it, and a system tooltip never appears here: the panel never
+    /// activates, so AppKit never draws one.
+    @State private var caption: String?
+
     private var tone: Color {
         guard let percent = snapshot?.sessionPercent else { return .white.opacity(0.5) }
         return toneScale(percent)
@@ -459,12 +464,7 @@ struct PillView: View {
                 Text(statusLine)
                     .font(Typography.sans(13, .semibold))
                     .foregroundStyle(.white)
-                // Beside the sentence, not out at the edge: what is running
-                // qualifies "plenty of room", and the reported time keeps the
-                // far corner it already had.
-                if workingJobs > 0 {
-                    JobBadge(count: workingJobs, scale: PillState.badgeHoverScale)
-                }
+                    .onHover { caption = $0 ? "The zone the leading window is in" : nil }
                 Spacer(minLength: 8)
                 if let attention {
                     AttentionBadge(message: attention, size: 10)
@@ -475,12 +475,18 @@ struct PillView: View {
                     Text(reportedLabel(snapshot))
                         .font(Typography.mono(9.5))
                         .foregroundStyle(.white.opacity(0.34))
+                        .onHover { caption = $0 ? "When the numbers were last read" : nil }
                 }
             }
 
             ForEach(scaleLines) { line in
-                ScaleRow(line: line, barWidth: providerBarWidth)
+                ScaleRow(line: line, barWidth: providerBarWidth) { caption = $0 }
             }
+
+            Text(caption ?? zoneRule)
+                .font(Typography.mono(9.5))
+                .foregroundStyle(.white.opacity(caption == nil ? 0.3 : 0.55))
+                .lineLimit(1)
         }
         // The band above is already a full menu-bar row of clearance, so the card
         // needs a line of air under it, not a margin. It was reading as a third
@@ -488,6 +494,12 @@ struct PillView: View {
         .padding(.top, 4)
         .padding(.horizontal, 18)
         .padding(.bottom, 10)
+    }
+
+    /// The default line under the rows: what the colours mean, in the user's own
+    /// numbers.
+    private var zoneRule: String {
+        "Safe to \(Int(toneScale.warnAt))% · watch to \(Int(toneScale.critAt))% · over above"
     }
 
     /// Every window worth a row, in the order they belong to each other.
@@ -501,6 +513,7 @@ struct PillView: View {
             ScaleLine(
                 id: provider.source.rawValue,
                 label: provider.source.wordmark,
+                name: provider.source.displayName,
                 percent: provider.sessionPercent,
                 resetsAt: provider.resetsAt,
                 weekPercent: provider.weeklyPercent,
@@ -540,6 +553,9 @@ struct PillView: View {
 struct ScaleLine: Identifiable {
     let id: String
     let label: String
+    /// The provider's name in full. The row has room for a wordmark; the
+    /// tooltips have room to say which product it is.
+    var name: String = ""
     let percent: Double?
     let resetsAt: Date?
     /// The provider's weekly cap, drawn hollow on the same track.
@@ -550,6 +566,9 @@ struct ScaleLine: Identifiable {
 private struct ScaleRow: View {
     let line: ScaleLine
     let barWidth: CGFloat
+    /// Called with what the column under the pointer means, and with nil when it
+    /// leaves. The card prints it; the row only knows what it is drawing.
+    var explain: (String?) -> Void = { _ in }
 
     /// Each column is its widest content and no more, and the numeric ones are
     /// trailing so what slack is left falls between the columns rather than
@@ -578,6 +597,7 @@ private struct ScaleRow: View {
                 .tracking(0.95)
                 .foregroundStyle(.white.opacity(0.62))
                 .frame(width: Self.wordmarkWidth, alignment: .leading)
+                .onHover { explain($0 ? line.name : nil) }
 
             // The capsule bar whatever the menu bar is wearing. These rows are a
             // comparison — four readings down a column, on one domain — and that
@@ -591,9 +611,11 @@ private struct ScaleRow: View {
                 width: barWidth,
                 isBurning: line.isBurning
             )
+            .onHover { explain($0 ? "5-hour window · the dot is the week" : nil) }
 
             OdometerText(text: Format.percent(line.percent), size: 11, color: tone(line.percent))
                 .frame(width: Self.percentWidth, alignment: .trailing)
+                .onHover { explain($0 ? "Used in this 5-hour window" : nil) }
 
             // The dot's own figure. Without it the second marker is a position
             // with no number, which is half a reading.
@@ -601,11 +623,13 @@ private struct ScaleRow: View {
                 .font(Typography.mono(9.5))
                 .foregroundStyle(.white.opacity(0.5))
                 .frame(width: Self.weekWidth, alignment: .trailing)
+                .onHover { explain($0 ? "Used of the weekly cap" : nil) }
 
             Text(Format.countdown(to: line.resetsAt))
                 .font(Typography.mono(9.5))
                 .foregroundStyle(.white.opacity(0.42))
                 .frame(width: Self.resetWidth, alignment: .trailing)
+                .onHover { explain($0 ? "Time left until the window resets" : nil) }
         }
     }
 }
