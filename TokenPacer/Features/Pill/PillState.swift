@@ -40,11 +40,11 @@ enum PillState: String, CaseIterable, Sendable {
     /// Smallest strip either side of the notch the figures fit in, and no wider.
     ///
     /// The widest each side has to hold: on the left an 11pt gutter, the 17pt
-    /// ring, 8pt of spacing and a five-character headline ("1.25M", the token
-    /// count shown before a reading lands); on the right a six-character
-    /// countdown and a 13pt
-    /// gutter. Mono at 12pt runs about 7.2pt a character, so 74 fits both with a
-    /// couple of points to spare and nothing to waste.
+    /// ring, 8pt of spacing and a four-character headline ("100%", now that the
+    /// headline is a percentage in every case); on the right a six-character
+    /// countdown and a 13pt gutter. Mono at 12pt runs about 7.2pt a character, so
+    /// 74 fits both with room to spare. It was sized for the five-character
+    /// "1.25M" and has not been tightened since: the right side still wants it.
     static let flank: CGFloat = 74
 
     /// Where an expanded body starts, under the band.

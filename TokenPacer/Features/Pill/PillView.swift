@@ -37,13 +37,15 @@ struct PillView: View {
         return toneScale(percent)
     }
 
-    /// Percentage when one can be trusted, raw tokens when it can't.
+    /// A percentage in every case, or the dashes that stand for one.
+    ///
+    /// Raw tokens used to stand in when no percentage could be had. They read as
+    /// a figure of the same kind — a big number where a small one usually is —
+    /// and they are on a scale nothing else on screen shares. `--` says the one
+    /// true thing instead: this provider has not reported.
     private var headline: String {
         guard let snapshot else { return "--" }
-        if isGhost { return Format.percent(snapshot.weeklyPercent) }
-        return snapshot.sessionPercent == nil
-            ? Format.tokens(snapshot.sessionTokens)
-            : Format.percent(snapshot.sessionPercent)
+        return Format.percent(isGhost ? snapshot.weeklyPercent : snapshot.sessionPercent)
     }
 
     var body: some View {

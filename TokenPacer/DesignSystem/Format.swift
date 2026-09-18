@@ -46,8 +46,8 @@ enum Format {
         return "projected \(amount(projected)) by month end"
     }
 
-    /// Volume, where a percentage is not the question: the tokens a window has
-    /// taken, before any reading lands.
+    /// Volume, for `--probe` and the splits — never as a headline, which is a
+    /// percentage in every case.
     static func tokens(_ count: Int) -> String {
         switch count {
         case 1_000_000...: String(format: "%.2fM", Double(count) / 1_000_000)

@@ -107,14 +107,10 @@ struct PinnedPanelView: View {
         }
     }
 
-    /// The ring carries the provider's percentage. With no reading yet there is
-    /// none to carry: the window's own token count goes in its place, which is a
-    /// measurement rather than a percentage worked out here.
+    /// The ring carries the provider's percentage, and `--` when there is none.
     private var heroLabel: String? {
         guard let snapshot else { return nil }
-        return snapshot.sessionPercent == nil
-            ? Format.tokens(snapshot.sessionTokens)
-            : Format.percent(snapshot.sessionPercent)
+        return Format.percent(snapshot.sessionPercent)
     }
 
     private var weeklyCaption: String {
