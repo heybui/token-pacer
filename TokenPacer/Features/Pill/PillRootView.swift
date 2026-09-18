@@ -11,8 +11,9 @@ struct PillRootView: View {
     var onOpenPreferences: () -> Void = {}
 
     /// Where "Send feedback" goes. One constant, so the day the page moves it
-    /// moves once.
-    private static let landingPage = URL(string: "https://github.com/heybui/token-pacer")!
+    /// moves once. Not the repo: that one is private, and every user who clicked
+    /// this would have landed on a 404.
+    private static let landingPage = URL(string: "https://tokenpacer.com")!
 
     var menuItems: [NotchMenuItem] {
         [

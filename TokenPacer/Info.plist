@@ -17,12 +17,14 @@
 	<key>CFBundleIconFile</key><string>TokenPacer</string>
 	<key>LSUIElement</key><true/>
 
-	<!-- Sparkle. The feed is a release asset, so `releases/latest/download`
-	     always resolves to the newest one and nothing else needs hosting.
+	<!-- Sparkle. The feed is served from the domain, never from a repo: the
+	     source is private, so nothing unauthenticated can reach its releases —
+	     and a build polls the URL it shipped with for ever, so that URL has to
+	     outlive wherever the disk image happens to sit.
 	     The private half of SUPublicEDKey lives in the login Keychain as
 	     "Private key for signing Sparkle updates" — it is not in this repo, and
-	     losing it means no existing install can ever be updated again. -->
-	<key>SUFeedURL</key><string>https://github.com/heybui/token-pacer/releases/latest/download/appcast.xml</string>
+	     it cannot be recovered. -->
+	<key>SUFeedURL</key><string>https://tokenpacer.com/appcast.xml</string>
 	<key>SUPublicEDKey</key><string>upjF7oD8vW9TXGxqDlR4XSQ5AQNojCkT8Xi87J0DZWc=</string>
 	<key>SUEnableAutomaticChecks</key><true/>
 	<key>NSHighResolutionCapable</key><true/>
