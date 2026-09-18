@@ -175,7 +175,11 @@ struct PillView: View {
             .animation(Tokens.spring, value: state)
             // The panel has its own controls; a tap anywhere inside it would
             // fight them. Only the small states pin.
-            .onTapGesture { if state != .pinned { onTogglePinned() } }
+            // Two clicks, not one. The band sits in the menu bar, which is a
+            // strip people click at all day; a single click opened the whole
+            // panel by accident often enough to be the thing you noticed about
+            // the app. The card says so while it is open.
+            .onTapGesture(count: 2) { if state != .pinned { onTogglePinned() } }
     }
 
     private var shape: UnevenRoundedRectangle {
@@ -464,7 +468,7 @@ struct PillView: View {
                 Text(statusLine)
                     .font(Typography.sans(13, .semibold))
                     .foregroundStyle(.white)
-                    .onHover { caption = $0 ? "The zone the leading window is in" : nil }
+                    .onHover { caption = $0 ? zoneRule : nil }
                 Spacer(minLength: 8)
                 if let attention {
                     AttentionBadge(message: attention, size: 10)
@@ -483,10 +487,14 @@ struct PillView: View {
                 ScaleRow(line: line, barWidth: providerBarWidth) { caption = $0 }
             }
 
-            Text(caption ?? zoneRule)
+            Text(caption ?? Self.hint)
                 .font(Typography.mono(9.5))
                 .foregroundStyle(.white.opacity(caption == nil ? 0.3 : 0.55))
                 .lineLimit(1)
+                // A change of words, not of place: the line fades from one to the
+                // next rather than swapping under the pointer.
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.18), value: caption)
         }
         // The band above is already a full menu-bar row of clearance, so the card
         // needs a line of air under it, not a margin. It was reading as a third
@@ -496,8 +504,11 @@ struct PillView: View {
         .padding(.bottom, 10)
     }
 
-    /// The default line under the rows: what the colours mean, in the user's own
-    /// numbers.
+    /// The line under the rows when nothing is under the pointer: what this
+    /// window can do, since neither gesture is one you would guess at.
+    private static let hint = "Double-click for the full report · right-click for settings"
+
+    /// What the colours mean, in the user's own numbers.
     private var zoneRule: String {
         "Safe to \(Int(toneScale.warnAt))% · watch to \(Int(toneScale.critAt))% · over above"
     }
