@@ -57,18 +57,67 @@ enum PillState: String, CaseIterable, Sendable {
 
     /// Smallest strip either side of the notch the figures fit in, and no wider.
     ///
-    /// The widest each side has to hold: on the left an 11pt gutter, the 36pt
-    /// capsule bar, 12pt of spacing and a four-character headline ("100%"); on the
-    /// right a six-character countdown and a 13pt gutter. Mono at 12pt runs about
-    /// 7.2pt a character, so the left side asks for 88 and the right for 57.
+    /// What the two wings hold, and therefore how wide they are.
     ///
-    /// One figure, not two: the flanks are symmetric because the shell is centred
-    /// on the notch, and an asymmetric one would put the hardware off-centre in
-    /// its own shell. The right side carries the slack.
+    /// Measured from the content rather than fixed, because the content moves:
+    /// the mark is a preference (18pt for the ring, 36 for the bar), the headline
+    /// is four characters or two, and the countdown is "4h 59m" until a weekly
+    /// window makes it "12d 07h". A constant sized for the worst of those leaves
+    /// the band permanently wider than what is in it.
     ///
-    /// Still the capsule bar's price — the ring cost 17 — but at 36pt rather than
-    /// the board's 46 glyph or the 76 it asks for when a wordmark shares the wing.
-    static let flank: CGFloat = 88
+    /// **One figure for both wings.** The shell is centred on the notch, so
+    /// unequal flanks would sit the hardware off-centre inside its own shell.
+    /// Whichever side is wider sets both, and the other carries the slack.
+    struct Wings: Equatable, Sendable {
+        var mark: Mark = .capsuleBar
+        var headline = "100%"
+        var tail = "12d 07h"
+        var hasBadge = false
+
+        /// SF Mono runs 0.6em to the character, which is the figure the flanks
+        /// were sized by hand from before this measured them.
+        private static func mono(_ text: String, _ size: CGFloat) -> CGFloat {
+            CGFloat(text.count) * size * 0.6
+        }
+
+        var flank: CGFloat {
+            let left = leadingGutter + mark.width + markGap + Self.mono(headline, 12)
+            let right = Self.mono(tail, 11.5)
+                + (hasBadge ? badgeSize + markGap : 0)
+                + trailingGutter
+            return ceil(max(left, right))
+        }
+
+        /// What the wings hold in a given state, which is both what the view
+        /// draws and what the shell is measured from. One function, so the two
+        /// can never disagree about how much room a figure needs.
+        static func of(
+            state: PillState, snapshot: UsageSnapshot?, mark: Mark, hasBadge: Bool
+        ) -> Wings {
+            let headline = switch state {
+            case .ghost: Format.percent(snapshot?.weeklyPercent)
+            default: Format.percent(snapshot?.sessionPercent)
+            }
+            let tail = switch state {
+            case .paused: "paused"
+            case .ghost: "week"
+            default: Format.countdown(to: snapshot?.resetsAt)
+            }
+            return Wings(mark: mark, headline: headline, tail: tail, hasBadge: hasBadge)
+        }
+
+        /// What the host reserves: the widest either wing can ever be, so the
+        /// window never has to grow while the shell inside it does.
+        static let widest = Wings(
+            mark: Mark.allCases.max { $0.width < $1.width } ?? .capsuleBar,
+            headline: "1.25M", tail: "12d 07h", hasBadge: true
+        ).flank
+    }
+
+    static let leadingGutter: CGFloat = 11
+    static let trailingGutter: CGFloat = 13
+    static let markGap: CGFloat = 12
+    static let badgeSize: CGFloat = 10
 
     /// Where an expanded body starts, under the band.
     ///
@@ -97,7 +146,7 @@ enum PillState: String, CaseIterable, Sendable {
     /// A notchless screen has a band too — the menu bar row — and it is the one
     /// that matters there: the board's 36pt collapsed pill hung below the row on
     /// an external display, its bottom edge lining up with nothing.
-    func size(around band: NotchBand) -> CGSize {
+    func size(around band: NotchBand, wings: Wings = Wings()) -> CGSize {
         guard !band.isEmpty, self != .dormant else { return size }
         // Hovering changes the height, never the width. The shell is one object
         // growing downward out of the notch, and a pill that widened as well read
@@ -106,7 +155,7 @@ enum PillState: String, CaseIterable, Sendable {
         // Off a notched screen there is no hardware to reach around and no
         // flanks to measure, so the board's width stands; the row only ever sets
         // the height there.
-        let banded = band.notchWidth > 0 ? band.notchWidth + 2 * PillState.flank : size.width
+        let banded = band.notchWidth > 0 ? band.notchWidth + 2 * wings.flank : size.width
         return CGSize(
             width: self == .pinned ? max(size.width, banded) : banded,
             height: band.height + (fillsFlanks ? 0 : size.height - PillState.reclaimedTop)
@@ -145,7 +194,10 @@ enum PillState: String, CaseIterable, Sendable {
     /// wide notch the flanks can outgrow every shell the board drew.
     static func hostSize(around band: NotchBand) -> CGSize {
         CGSize(
-            width: max(hostSize.width, band.notchWidth + 2 * (flank + shadowReach)),
+            // The widest the flanks can ever be, not the widest they are now: the
+            // window is resized by the controller, the shell by a spring inside
+            // it, and a shell that outgrew its window would be clipped mid-morph.
+            width: max(hostSize.width, band.notchWidth + 2 * (Wings.widest + shadowReach)),
             height: hostSize.height + band.height
         )
     }

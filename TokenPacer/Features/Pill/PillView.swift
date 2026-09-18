@@ -9,6 +9,12 @@ struct PillView: View {
     /// The mark the user chose. One value reaches the band and every card row, so
     /// they cannot end up drawing progress two different ways.
     var mark: Mark = .capsuleBar
+
+    /// How wide the wings have to be for what is in them — the same measurement
+    /// the model makes for the rect that takes clicks.
+    private var wings: PillState.Wings {
+        .of(state: state, snapshot: snapshot, mark: mark, hasBadge: attention != nil)
+    }
     /// Non-nil when the last refresh failed. The figure stays; it is marked
     /// unverified rather than hidden.
     var attention: String?
@@ -71,7 +77,7 @@ struct PillView: View {
     }
 
     private var shell: some View {
-        let shellSize = state.size(around: band)
+        let shellSize = state.size(around: band, wings: wings)
         // Nil hands the height back to the content. Everything else keeps the
         // board's figure, which for a fixed layout is the point of having one.
         let fixedHeight: CGFloat? = state.fitsContent ? nil : shellSize.height
@@ -163,7 +169,7 @@ struct PillView: View {
             // the flanks, and a body still cut to 404 overflowed it by 18pt each
             // side — clipped by the shell, so the first and last characters of
             // every line were simply gone.
-            let shell = state.size(around: band)
+            let shell = state.size(around: band, wings: wings)
             VStack(spacing: 0) {
                 notchBand
                 if !state.fillsFlanks {
@@ -320,7 +326,7 @@ struct PillView: View {
                     percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
                     isBurning: snapshot?.isBurning == true
                 )
-                OdometerText(text: headline, size: 12, color: tone)
+                OdometerText(text: wings.headline, size: 12, color: tone)
             }
 
             notchGap
@@ -440,7 +446,7 @@ struct PillView: View {
 
     /// What is left for the bar once the row's fixed columns are paid for.
     private var providerBarWidth: CGFloat {
-        let shell = spansNotch ? state.size(around: band).width : state.size.width
+        let shell = spansNotch ? state.size(around: band, wings: wings).width : state.size.width
         return max(60, shell - ScaleRow.fixedColumns - 36)
     }
 

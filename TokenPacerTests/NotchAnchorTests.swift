@@ -69,7 +69,7 @@ private let external = ScreenMetrics(
 
     for state in PillState.allCases where state != .dormant {
         let drawn = state.size(around: band)
-        #expect(drawn.width >= band.notchWidth + 2 * PillState.flank)   // room either side
+        #expect(drawn.width >= band.notchWidth + 2 * PillState.Wings().flank)
         #expect(drawn.height
                 == band.height
                 + (state.fillsFlanks ? 0 : state.size.height - PillState.reclaimedTop))
@@ -83,7 +83,7 @@ private let external = ScreenMetrics(
     #expect(PillState.pinned.size(around: band).width == PillState.pinned.size.width)
 
     #expect(PillState.hostSize(around: band).height - PillState.hostSize.height == band.height)
-    #expect(PillState.hostSize(around: band).width >= band.notchWidth + 2 * PillState.flank)
+    #expect(PillState.hostSize(around: band).width >= band.notchWidth + 2 * PillState.Wings().flank)
 }
 
 /// A menu bar set to hide automatically measures zero. The hardware is still

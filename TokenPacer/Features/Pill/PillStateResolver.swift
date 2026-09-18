@@ -16,6 +16,11 @@ struct PillInputs: Equatable, Sendable {
     /// Off keeps the collapsed pill on screen through a quiet spell rather than
     /// withdrawing to the 3pt sliver.
     var hideWhenDormant = true
+    /// A source is complaining, so the badge is in the right wing and the flank
+    /// has to be wide enough for it. Geometry only; the message lives on the store.
+    var hasAttention = false
+    /// Which mark the wings carry, which is most of how wide they are.
+    var mark: Mark = .capsuleBar
 }
 
 /// One function, no scattered booleans. The design's eight states are mutually

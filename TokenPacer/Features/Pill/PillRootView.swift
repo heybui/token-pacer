@@ -57,6 +57,15 @@ struct PillRootView: View {
             .onChange(of: store.snapshot) { _, snapshot in
                 model.update(snapshot: snapshot)
             }
+            // Geometry inputs: both change how wide the wings have to be.
+            .onChange(of: preferences.mark, initial: true) { _, mark in
+                model.inputs.mark = mark
+                model.update(snapshot: store.snapshot)
+            }
+            .onChange(of: store.errors[store.activeSource] != nil, initial: true) { _, has in
+                model.inputs.hasAttention = has
+                model.update(snapshot: store.snapshot)
+            }
             // The tone rule reaches every bar, ring and square from one place.
             .environment(\.tone, preferences.thresholds)
             .onChange(of: preferences.criticalAt) { _, _ in model.update(snapshot: store.snapshot) }

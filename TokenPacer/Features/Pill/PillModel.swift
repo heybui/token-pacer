@@ -15,9 +15,18 @@ final class PillModel {
     /// before the menu has drawn.
     var menuHeight: CGFloat = 0
 
+    /// What the wings hold right now. The view draws from the same figures, so
+    /// the rect that takes clicks is the rect that was drawn.
+    var wings: PillState.Wings {
+        .of(
+            state: state, snapshot: inputs.snapshot,
+            mark: inputs.mark, hasBadge: inputs.hasAttention
+        )
+    }
+
     /// Shell plus menu: what the host must let clicks through to.
     var liveSize: CGSize {
-        let shell = state.size(around: band)
+        let shell = state.size(around: band, wings: wings)
         guard isMenuOpen else { return shell }
         return CGSize(
             width: max(shell.width, PillState.menuWidth),

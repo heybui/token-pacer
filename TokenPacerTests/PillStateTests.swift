@@ -287,3 +287,38 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
     #expect(PillState.hostSize.height - PillState.pinned.size.height
             >= PillState.shadowReach + PillState.shadowOffsetY)
 }
+
+// MARK: - the wings measure what is in them
+
+/// The flank is the wider wing, and both get it: the shell is centred on the
+/// notch, so unequal sides would sit the hardware off-centre in its own shell.
+@Test func bothWingsTakeTheWiderSide() {
+    let wide = PillState.Wings(mark: .capsuleBar, headline: "100%", tail: "12d 07h")
+    let narrow = PillState.Wings(mark: .ringWings, headline: "4%", tail: "1h 02m")
+    #expect(wide.flank > narrow.flank)
+
+    let band = NotchBand(notchWidth: 200, height: 39)
+    // Symmetric by construction: the drawn width is the notch plus two equal flanks.
+    #expect(PillState.collapsed.size(around: band, wings: wide).width
+        == band.notchWidth + 2 * wide.flank)
+}
+
+/// The ring is half the bar's width, and the band should show it.
+@Test func aNarrowerMarkNarrowsTheBand() {
+    let band = NotchBand(notchWidth: 200, height: 39)
+    let bar = PillState.Wings(mark: .capsuleBar)
+    let ring = PillState.Wings(mark: .ringWings)
+    #expect(PillState.collapsed.size(around: band, wings: ring).width
+        < PillState.collapsed.size(around: band, wings: bar).width)
+}
+
+/// The window is resized by the controller and the shell by a spring inside it,
+/// so the host reserves the widest the wings can ever be, not the widest they are.
+@Test func theHostReservesTheWidestWings() {
+    let band = NotchBand(notchWidth: 200, height: 39)
+    let host = PillState.hostSize(around: band).width
+    for mark in Mark.allCases {
+        let wings = PillState.Wings(mark: mark, headline: "1.25M", tail: "12d 07h", hasBadge: true)
+        #expect(host >= band.notchWidth + 2 * wings.flank)
+    }
+}
