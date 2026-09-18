@@ -23,7 +23,7 @@ actor CodexSource: UsageSource {
     private static let scanAtLeastEvery: TimeInterval = 60
 
     init(
-        root: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/sessions"),
+        root: URL = AgentHome.codex.appending(path: "sessions"),
         retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600,
         changed: ChangeGate? = nil
     ) {

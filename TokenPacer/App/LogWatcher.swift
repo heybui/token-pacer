@@ -97,8 +97,8 @@ final class LogWatcher: @unchecked Sendable {
         // Watched independently: a machine with Codex installed but unused had
         // its tree walked every five seconds for ever, and one shared gate would
         // have woken both sources whenever either wrote.
-        let claude = LogWatcher(root: home.appending(path: ".claude/projects"))
-        let codex = LogWatcher(root: home.appending(path: ".codex/sessions"))
+        let claude = LogWatcher(root: AgentHome.claude.appending(path: "projects"))
+        let codex = LogWatcher(root: AgentHome.codex.appending(path: "sessions"))
 
         // A root with no watcher falls back to scanning every tick, which is the
         // behaviour this replaced — it costs the CPU this saves, never accuracy.
@@ -121,7 +121,7 @@ final class LogWatcher: @unchecked Sendable {
     /// re-read files that had not moved.
     static func registry(onChange: @escaping @Sendable () -> Void) -> LogWatcher? {
         LogWatcher(
-            root: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/sessions"),
+            root: AgentHome.claude.appending(path: "sessions"),
             latency: registryLatency,
             onChange: onChange
         )

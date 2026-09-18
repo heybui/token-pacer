@@ -23,7 +23,7 @@ actor ClaudeCodeSource: UsageSource {
     private static let scanAtLeastEvery: TimeInterval = 60
 
     init(
-        root: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/projects"),
+        root: URL = AgentHome.claude.appending(path: "projects"),
         retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600,
         changed: ChangeGate? = nil
     ) {

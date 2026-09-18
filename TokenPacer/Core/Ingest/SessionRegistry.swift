@@ -47,7 +47,7 @@ struct AgentSession: Equatable, Sendable, Identifiable {
 /// not "what has happened since". There is no cursor here for the same reason.
 enum SessionRegistry {
     static var defaultRoot: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude/sessions")
+        AgentHome.claude.appending(path: "sessions")
     }
 
     /// The fields this app has a use for. The file carries a dozen more —
