@@ -179,11 +179,14 @@ Claude, Codex and **Copilot**. Every provider gets the same bar — 0–100% of 
 own quota — and differs only in the clock behind it: Claude a rolling 5 hours,
 Codex a week, Copilot a month. Each row carries its own reset.
 
-- **Closest to its limit on the left, the next on the right.** Position carries
-  attribution once the wordmark no longer fits. This replaces the board's original
-  rule — measured left, estimated right — which lost its basis when estimates did
-  (§0.4). Whichever provider is nearest its limit owns the collapsed pill, whatever
-  its clock.
+- **Measured left, estimated right.** The left wing takes the highest *measured*
+  provider, the right the highest *estimated* one; position carries attribution
+  once the wordmark no longer fits.
+- **Estimated is drawn, not just stated.** The `~` on the number says it
+  everywhere. The hollow marker — an outlined dot instead of a filled one — says it
+  on the **ring**, which has a 6.5pt dot to put a ring inside. The **capsule bar
+  stays solid in every case**: its marker is a 2pt rule, too narrow to read as an
+  outline at menu-bar size, and widening it stops it reading as a position.
 - **Stacked, 226 × 34** below the notch when two need showing: bars halve to
   2.5pt, each row keeps its own countdown.
 - **Hover card, 404 × 98**: one row per provider, same capsules, same domain, each
@@ -195,11 +198,13 @@ Copilot's store is `~/.copilot`, and its quota is not in it: the desktop app ask
 its own local daemon, which asks the server. That daemon is reachable — port and
 token sit in `~/.copilot/run/` — so the figure is fetched the same way Claude's
 is, from the client that already holds the credential. Until that is proven,
-Copilot has no row (§0). The board's hollow marker — an outlined marker plus a `~`
-on the number, meaning "estimated" — is gone with the same change: after §0.4 no
-figure in this app is an estimate, so a device for marking one marks nothing. Every
-marker is solid now, and a provider that reports nothing has no row rather than a
-softer-looking one.
+Copilot has no row (§0) until that is proven. The board keeps its vocabulary for an
+estimated figure — the `~`, and the hollow marker on the ring — but **nothing in the
+app produces one today**: `CeilingEstimator` was the only estimator and it is
+deleted (§0.4). So the device is reserved, not in use, and the distinction it draws
+is between *approximate* and *absent*: a row that is soft, against no row at all.
+If Copilot's daemon turns out to state spend without stating the allowance, that is
+the row it is reserved for.
 
 ### The mark is a choice of twelve
 
@@ -271,10 +276,9 @@ Changed in `design/project/`:
 - **The build notes**: macOS 15+, `com.redevify.token-pacer`, the CLI's `/usage`
   panel over a pty instead of "rate-limit fields", and no Console API key.
 - **The landing page** now says macOS 15+.
-- **The hollow marker and the `~` are gone** from all four places they were drawn —
-  the menu-bar pair, the ring wings, the stacked rows and the hover card — along
-  with the three rules that explained them and the left/right attribution built on
-  them.
+- **The hollow marker is solid on every capsule bar**, and only there: a 2pt rule
+  cannot read as an outline at menu-bar size. It survives on the ring wings, where
+  the dot is 6.5pt, and the `~` on the number carries the same meaning everywhere.
 
 **The icon was re-exported** with the corrected amber and the real zone
 boundaries (the old export had watch at 70% and over at 95%), and
