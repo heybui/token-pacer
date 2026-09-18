@@ -35,8 +35,8 @@ final class NotchController {
         panel = NotchPanel(contentRect: NSRect(origin: .zero, size: size))
         host = PassthroughHostingView(rootView: PillRootView(
             model: model, store: store, preferences: preferences, updater: updater,
-            onOpenPreferences: { [preferences, preferencesWindow] in
-                preferencesWindow.show(preferences: preferences)
+            onOpenPreferences: { [preferences, preferencesWindow, updater] in
+                preferencesWindow.show(preferences: preferences, updater: updater)
             }
         ))
         model.preferences = preferences
@@ -72,6 +72,10 @@ final class NotchController {
         // than quietly resuming on the next launch.
         model.setPaused(store.isPaused)
         if !store.isPaused { store.start() }
+        if ProcessInfo.processInfo.environment["TP_OPEN_PREFS"] != nil {
+            NSApp.setActivationPolicy(.regular)
+            preferencesWindow.show(preferences: preferences, updater: updater)
+        }
     }
 
     func flush() async { await store.flush() }
@@ -143,7 +147,9 @@ final class NotchController {
         }
         guard event.modifierFlags.contains(.command) else { return event }
         switch event.charactersIgnoringModifiers {
-        case ",": preferencesWindow.show(preferences: preferences); model.closeMenu()
+        case ",":
+            preferencesWindow.show(preferences: preferences, updater: updater)
+            model.closeMenu()
         case "q": NSApp.terminate(nil)
         default: return event
         }

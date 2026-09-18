@@ -13,8 +13,13 @@ final class PreferencesWindow: NSObject, NSWindowDelegate {
     /// where the user put it should.
     private var origin: CGPoint?
 
-    func show(preferences: Preferences, launchAtLogin: LaunchAtLogin = LaunchAtLogin()) {
-        let window = window ?? make(preferences: preferences, launchAtLogin: launchAtLogin)
+    func show(
+        preferences: Preferences, launchAtLogin: LaunchAtLogin = LaunchAtLogin(),
+        updater: Updater? = nil
+    ) {
+        let window = window ?? make(
+            preferences: preferences, launchAtLogin: launchAtLogin, updater: updater
+        )
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
     }
@@ -31,7 +36,9 @@ final class PreferencesWindow: NSObject, NSWindowDelegate {
         window = nil
     }
 
-    private func make(preferences: Preferences, launchAtLogin: LaunchAtLogin) -> NSWindow {
+    private func make(
+        preferences: Preferences, launchAtLogin: LaunchAtLogin, updater: Updater?
+    ) -> NSWindow {
         let window = NSWindow(
             contentRect: .zero,
             styleMask: [.titled, .closable, .fullSizeContentView],
@@ -50,12 +57,14 @@ final class PreferencesWindow: NSObject, NSWindowDelegate {
         // when the app deactivates, so it never floats over another app's
         // work once you have moved on.
         window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
-        window.hidesOnDeactivate = true
+        window.hidesOnDeactivate = ProcessInfo.processInfo.environment["TP_OPEN_PREFS"] == nil
         window.delegate = self
         // The content sizes the window, which is why it is installed before the
         // window is placed: a hosting view reports nothing until it has one.
         window.contentView = NSHostingView(
-            rootView: PreferencesView(preferences: preferences, launchAtLogin: launchAtLogin)
+            rootView: PreferencesView(
+                preferences: preferences, launchAtLogin: launchAtLogin, updater: updater
+            )
         )
         if let origin { window.setFrameOrigin(origin) } else { window.center() }
         self.window = window

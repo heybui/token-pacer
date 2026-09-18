@@ -10,11 +10,6 @@ struct PillRootView: View {
     var updater: Updater?
     var onOpenPreferences: () -> Void = {}
 
-    /// Where "Send feedback" goes. One constant, so the day the page moves it
-    /// moves once. Not the repo: that one is private, and every user who clicked
-    /// this would have landed on a 404.
-    private static let landingPage = URL(string: "https://tokenpacer.com")!
-
     var menuItems: [NotchMenuItem] {
         [
             NotchMenuItem(title: "Preferences", key: "⌘,", action: onOpenPreferences),
@@ -25,7 +20,7 @@ struct PillRootView: View {
                 updater?.checkForUpdates()
             },
             NotchMenuItem(title: "Send feedback") {
-                NSWorkspace.shared.open(Self.landingPage)
+                NSWorkspace.shared.open(AppInfo.landingPage)
             },
             NotchMenuItem(title: "Quit Token Pacer", key: "⌘Q") { NSApp.terminate(nil) },
         ]

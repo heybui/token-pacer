@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Two panes, as the board draws them: everything numeric and behavioural in
@@ -9,6 +10,9 @@ import SwiftUI
 struct PreferencesView: View {
     @Bindable var preferences: Preferences
     var launchAtLogin: LaunchAtLogin
+    /// Nil in tests and in a `swift run` build, where constructing one would
+    /// start Sparkle's scheduler. The footer's row greys out with it.
+    var updater: Updater?
 
     @State private var pane: Pane = .general
 
@@ -39,11 +43,51 @@ struct PreferencesView: View {
             // is what General needs; Appearance holds two grids of twelve and
             // scrolls.
             .frame(height: 380, alignment: .top)
+
+            footer
         }
         .padding(26)
         .frame(width: 420)
         .background(Color(hex: 0x141416))
         .environment(\.colorScheme, .dark)
+    }
+}
+
+private extension PreferencesView {
+    /// The one place in the app that says which version you are running.
+    ///
+    /// There is no Dock icon, no menu bar and no About box to put it in, and a
+    /// bug report that names no build is a bug report about every build.
+    var footer: some View {
+        VStack(spacing: 0) {
+            Divider().overlay(.white.opacity(0.06))
+            HStack(spacing: 10) {
+                // Not the app's name as well: the window's title bar already
+                // carries that, and the row only just fits as it is.
+                Text("Version \(AppInfo.versionLine)")
+                    .font(Typography.mono(10.5))
+                    .foregroundStyle(.white.opacity(0.32))
+                    .fixedSize()
+                Spacer(minLength: 8)
+                link("Check for updates", enabled: updater?.canCheck ?? false) {
+                    updater?.checkForUpdates()
+                }
+                Text("·").foregroundStyle(.white.opacity(0.2))
+                link("Send feedback") { NSWorkspace.shared.open(AppInfo.landingPage) }
+            }
+            .padding(.top, 12)
+        }
+    }
+
+    func link(
+        _ title: String, enabled: Bool = true, action: @escaping () -> Void
+    ) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.plain)
+            .font(Typography.sans(11.5))
+            .foregroundStyle(enabled ? Tokens.blue.opacity(0.9) : .white.opacity(0.22))
+            .disabled(!enabled)
+            .fixedSize()
     }
 }
 
