@@ -87,7 +87,7 @@ Codex needs none of this — its rollout logs already carry `rate_limits` with
 | Value | Source |
 |---|---|
 | 5-hour %, 7-day %, reset times | **Claude: the CLI's `/usage` panel, to the whole percent. Codex: rollout logs.** |
-| Copilot's monthly request allowance | **Unsolved.** The board draws it estimated (hollow marker, `~`); no local source is known yet — see §0.2 |
+| Copilot's monthly allowance | **The desktop app's own local daemon** (`~/.copilot/run/`), the same idea as the CLI panel — unproven, see §0 |
 | Monthly credit spend | the panel's `Usage credits` row — free, no Console admin key |
 | Burn rate, sparkline, headroom | Log token counts (the API gives no rate of change) |
 | Splits by model / project / surface | Log token counts (the API gives no attribution) |
@@ -102,28 +102,37 @@ So log parsing stays — it answers everything the panel cannot — but it stops
 |---|---|---|---|
 | Store | `~/.claude/projects/<slug>/<uuid>.jsonl` | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | `~/.copilot/session-store.db` — SQLite, WAL |
 | Usage record | `type:"assistant"` → `message.usage` | `type:"token_usage_record"` → `payload.usage` | a row in `assistant_usage_events` |
-| Fields | `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` | `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` | `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, plus `request_multiplier`, `total_nano_aiu` |
+| Fields | `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` | `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` | `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens` |
 | Dedupe key | `message.id` + `requestId` | `response_id` | `id`, the row's own autoincrement |
 | Context | `cwd`, `sessionId`, `message.model`, `timestamp` | `session_meta.payload.cwd`, `turn_context.cwd` | `sessions.cwd`, `sessions.repository`, `model`, `created_at` (ISO-8601 UTC) |
-| Nesting trap | cache counts are **separate from** `input_tokens` | `cached_input_tokens` is **inside** `input_tokens`; `reasoning_output_tokens` is inside `output_tokens` | none — every count is its own column; `initiator` is what splits `user` from `agent` and `sub-agent` |
+| Nesting trap | cache counts are **separate from** `input_tokens` | `cached_input_tokens` is **inside** `input_tokens`; `reasoning_output_tokens` is inside `output_tokens` | none — every count is its own column |
 
-Three things about `~/.copilot` worth writing down, measured on this machine
-(218 events, 4 initiators):
+Two notes on reading `~/.copilot`: open it `mode=ro`, never `immutable=1` — the
+database runs in WAL mode with a multi-megabyte `-wal` beside it and `immutable`
+skips that file, so the newest turns would simply be invisible. And reading it
+means `import SQLite3` in `Core/Ingest`: a C library out of the SDK,
+infrastructure in the same sense as `os.Logger` rather than a break in the
+Foundation-only rule. Never open it for writing; it belongs to another app.
 
-- **`token_details_json` publishes the weights.** Each row carries a cost per
-  million tokens by type: input ×1, cache read ×0.1, cache write ×1.25, output ×5.
-  Those are exactly the ratios `TokenWeights` guesses at for the other two, stated
-  by a vendor rather than inferred — a free check on §1.2's calibration knob.
-- **A premium request is `request_multiplier`, not a row.** It varies by model
-  (1.0 for most, 7.5 on one), and `initiator` says whether a user asked or an agent
-  did. Which initiators count against the monthly allowance is the open question;
-  the row count is certainly not it.
-- **Read it with `mode=ro`, never `immutable=1`.** The database runs in WAL mode
-  with a multi-megabyte `-wal` beside it, and `immutable` skips that file — the
-  newest turns would simply be invisible. Reading means `import SQLite3` in
-  `Core/Ingest`: a C library from the SDK, infrastructure in the same sense as
-  `os.Logger`, not a break in the Foundation-only rule. Never open it for writing;
-  it belongs to another app.
+### One mechanism, three providers: each one's own figure
+
+The headline percentage is always the provider's own, read from wherever that
+provider already keeps it. No quota is ever reconstructed here — the quotas
+differ in period, in unit and in how they are counted, and an app that models
+three of them is three times wrong the week any of them changes.
+
+| | Where its own figure is | What that costs |
+|---|---|---|
+| Claude | the CLI's `/usage` panel, over a pty | ~4s a run, whole percentages, a UI for a contract |
+| Codex | `rate_limits` in the rollout logs — `used_percent` to one decimal, `window_minutes` 300 and 10080, `resets_at` | nothing: it writes it down itself, so there is nothing to drive |
+| Copilot | the desktop app's own local daemon — `~/.copilot/run/ws.port` and `ws.token`, message kind `get_account_quota`, seen in its logs | unproven; there is no `copilot` binary to drive, so this is the pty's equivalent |
+
+The rule that follows, and the reason there is no per-provider arithmetic here:
+**a provider whose own figure cannot be read has no row.** Not an estimate, not a
+row built from token counts against an assumed plan size. Local token counts keep
+answering what no quota endpoint ever will — rate of change, attribution, history
+— and never the headline. `CeilingEstimator` stays as what feeds headroom, which
+is the job it can actually do.
 
 Toolchain: Xcode 27, Swift 6.4. **Deployment target macOS 15+**.
 
@@ -183,11 +192,13 @@ Codex a week, Copilot a month. Each row carries its own reset.
   same problem. The board drew it at 116; the shipped 98 stands and the board was
   changed to match (§0.3).
 
-Copilot's store is `~/.copilot` and it is richer than either log tree — see the
-log-format table in §0. What it does **not** hold is the denominator: the CLI asks
-the server for it (`get_account_quota`, visible in `~/.copilot/logs`) and keeps no
-copy on disk. So Copilot's percentage is estimated by construction, not by
-oversight, and the board's hollow marker is the honest way to draw it.
+Copilot's store is `~/.copilot`, and its quota is not in it: the desktop app asks
+its own local daemon, which asks the server. That daemon is reachable — port and
+token sit in `~/.copilot/run/` — so the figure is fetched the same way Claude's
+is, from the client that already holds the credential. Until that is proven,
+Copilot has no row (§0). The board's hollow marker stays what it is for: a figure
+that is not the provider's own, which after this rule means Claude's log-only
+fallback and nothing else.
 
 ### The mark is a choice of twelve
 
@@ -237,9 +248,11 @@ the whole group. `ChasingBorder` is one of the twelve, not the only one.
   is ruled out by the board: "Eclipse" tells you nothing about what lands in your
   menu bar.
 
-Settled by the board, against what is built: **the over banner fires alongside the
-notch**, not only when the notch is hidden. The notch carries the state, the banner
-carries the moment it changed. Watch stays silent and visual.
+Settled by the board and now built: **the over banner fires alongside the notch**,
+not only when the notch is hidden. The notch carries the state, the banner carries
+the moment it changed. Only going over fires one — watch stays silent and visual,
+the mark just tints amber — and the copy is the board's: "Over", then the
+percentage, the time left and one coach line.
 
 ## 0.3 Reflected back into the board (2026-09-18)
 
@@ -449,7 +462,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 5 | **Two wings** — the flat bar row, the drop panel, the left wing yielding to app menus | ⬜ not started |
 | 6 | **Marks** — the `Mark` protocol, twelve of them, the capsule bar as default | ⬜ not started |
 | 7 | **Appearance** — the second prefs pane, twelve border effects, the live grids | ⬜ not started |
-| 8 | **Copilot** — `CopilotSource` over `~/.copilot/session-store.db`, estimated allowance | ⬜ not started |
+| 8 | **Copilot** — its quota from the app's local daemon, `~/.copilot/session-store.db` for everything else | ⬜ spike the daemon first |
 | 9 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
 
 Phases 2–4 shipped against the board as it stood; §0.2 is what the redraw asks
@@ -489,11 +502,11 @@ the same figures without asking for a credential at all. It absorbed most of the
 
 - **Preferences shipped** with four rows: the alert scale, sound on threshold,
   launch at login (`SMAppService.mainApp`), and hide-when-dormant. Alerts fire
-  through `AlertPolicy` → `UNUserNotificationCenter`, and only when the notch is
-  hidden — a full-screen app or another space — because a pill already showing
-  93% does not need to be told. **The redrawn board overrules this**: the banner
-  fires alongside the notch, once per window, because the notch carries the state
-  and the banner carries the moment it changed (§0.2).
+  through `AlertPolicy` → `UNUserNotificationCenter`. It fired only when the notch
+  was hidden — a full-screen app or another space — on the grounds that a pill
+  already showing 93% does not need to be told. ~~That~~ ✅ changed with the
+  redraw: the banner fires beside a notch in plain sight, once per window, on
+  going over only.
 - **The Windows group — cut.** The design's reset hour and time zone. Neither is
   ours to set: the window opens on first use and the CLI states when it resets,
   so a picker here would either be ignored or disagree with the countdown beside
@@ -659,11 +672,11 @@ update path is — an installed copy will only accept an update signed the same 
 1. **Undocumented log formats.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. Mitigation: decode defensively, and when a source yields no parseable usage record in a window where the CLI *is* running, show an explicit `no data` pill state — never a confident `0%`.
 2. **Claude's percentage is an estimate.** Until a full 5-hour window is observed the ceiling is unknown; the UI shows raw tokens (`1.24M`), not a percentage, and only switches to `%` once confident. Codex's authoritative number is the calibration reference — if the two diverge wildly on similar usage, the weights in `TokenWeights` are wrong, not the engine.
 3. ~~**Bundle id**~~ — settled: `com.redevify.token-pacer`, renamed with the product before release.
-4. **Copilot's denominator is not local.** Its spend is recorded in detail
-   (§0); its monthly allowance is fetched from the server and never written to
-   disk, so the third row is an estimate against an assumed plan size and will
-   stay one. The hollow marker and the `~` are what keep that honest. A wrong plan
-   size is a silently wrong percentage — worth stating in the UI, not just here.
+4. **Copilot's quota comes from a daemon nobody documents.** The port and token
+   in `~/.copilot/run/` belong to the desktop app and are rewritten when it
+   restarts; the message shape is known only from its own logs. Same class of risk
+   as the CLI panel, with less to go on — and the same answer: when it cannot be
+   read, Copilot has no row rather than an invented one.
 5. **The Sparkle private key is a single point of failure.** It lives only in the login Keychain of
    this machine. No backup means no future update for anyone already installed — not a bug that can
    be fixed later, so back it up before the first release, not after.
