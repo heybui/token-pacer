@@ -23,7 +23,7 @@ DMG     := build/$(APP)-$(VERSION).dmg
 ## tap carries the cask. Both are checked out beside this one.
 SITE_REPO ?= heybui/tokenpacer.com
 SITE_DIR  ?= ../tokenpacer.com
-TAP_REPO  ?= heybui/homebrew-tap
+TAP_REPO  ?= redevify/homebrew-tap
 TAP_DIR   ?= ../homebrew-tap
 ## Per release, so it is never the URL baked into a build — only the feed is that,
 ## and the feed is the domain.
