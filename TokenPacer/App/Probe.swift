@@ -31,7 +31,6 @@ enum Probe {
               tokens    \(s.sessionTokens)
               resets    \(s.resetsAt.map(format) ?? "—")
               weekly    \(s.weeklyPercent.map { String(format: "%.1f%%", $0) } ?? "—")
-              burn      \(Int(s.burn.weightedPerHour)) weighted/hr
               active    \(s.isActive)   plan \(s.planType ?? "—")
               events    \(await store.eventCount(id)) in 30d, last \(s.lastActivity.map(format) ?? "—")
             """)

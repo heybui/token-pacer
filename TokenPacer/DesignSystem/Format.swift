@@ -46,15 +46,8 @@ enum Format {
         return "projected \(amount(projected)) by month end"
     }
 
-    /// What the logs recorded, per hour. Nil while nothing is flowing — a rate
-    /// of zero is what the idle line already says.
-    static func burn(_ burn: BurnRate) -> String? {
-        guard burn.weightedPerHour > 0 else { return nil }
-        return "\(tokens(Int(burn.weightedPerHour)))/hr"
-    }
-
-    /// Volume, where a percentage is not the question: burn rate, and the tokens
-    /// a window has taken.
+    /// Volume, where a percentage is not the question: the tokens a window has
+    /// taken, before any reading lands.
     static func tokens(_ count: Int) -> String {
         switch count {
         case 1_000_000...: String(format: "%.2fM", Double(count) / 1_000_000)

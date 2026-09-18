@@ -100,7 +100,7 @@ struct PinnedPanelView: View {
                     )
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    captionRow("Burn rate", burnCaption, tone: isExhausted ? Tokens.red : nil)
+                    captionRow("Activity", activityCaption)
                     Sparkline(values: panel.sparkline, tone: tone)
                 }
             }
@@ -123,15 +123,11 @@ struct PinnedPanelView: View {
         return "\(percent) · resets \(Format.weekday(resetsAt))"
     }
 
-    /// "If the panel is pinned it stays open and reads zero-headroom in red."
-    private var isExhausted: Bool { (snapshot?.sessionPercent ?? 0) >= 100 }
-
-    private var burnCaption: String {
-        if isExhausted {
-            return "spent · resets in \(Format.countdown(to: snapshot?.resetsAt))"
-        }
-        guard let burn = snapshot?.burn else { return "—" }
-        return Format.burn(burn) ?? (snapshot?.isActive == true ? "idle" : "window empty")
+    /// The sparkline's own span, not a figure derived from it: 26 five-minute
+    /// buckets. A rate in tokens an hour used to sit here and said nothing a
+    /// person could act on — the shape is the whole point of this row.
+    private var activityCaption: String {
+        snapshot?.isActive == true ? "last 2 hours" : "window empty"
     }
 
     private func captionRow(_ label: String, _ value: String, tone: Color? = nil) -> some View {

@@ -425,7 +425,6 @@ struct PillView: View {
         guard let snapshot else { return "reading logs…" }
 
         var parts = ["Week \(Format.percent(snapshot.weeklyPercent))"]
-        if let burn = Format.burn(snapshot.burn) { parts.append(burn) }
         if snapshot.sessionPercent != nil { parts.append(reportedLabel(snapshot)) }
         return parts.joined(separator: " · ")
     }

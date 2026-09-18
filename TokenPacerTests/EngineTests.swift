@@ -125,24 +125,6 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
     let snapshot = SnapshotBuilder.build(source: .claude, limits: nil, events: [], at: t0)
     #expect(snapshot.isActive == false)
     #expect(snapshot.sessionTokens == 0)
-    #expect(snapshot.burn == .idle)
-}
-
-// MARK: - burn rate
-
-@Test func burnRateIgnoresEventsOlderThanTheSample() {
-    let now = t0.addingTimeInterval(10 * 3600)
-    #expect(BurnRateCalculator.rate(events: [event(0)], at: now) == .idle)
-}
-
-/// All that is left of burn: what the logs recorded, per hour. Twice the tokens
-/// over the same stretch is twice the rate, and nothing is projected from it.
-@Test func burnRateIsAMeasurementNotAProjection() {
-    let now = t0.addingTimeInterval(600)
-    let light = BurnRateCalculator.rate(events: [event(0.05, output: 1000)], at: now)
-    let heavy = BurnRateCalculator.rate(events: [event(0.05, output: 2000)], at: now)
-    #expect(light.weightedPerHour > 0)
-    #expect(heavy.weightedPerHour > light.weightedPerHour)
 }
 
 // MARK: - token normalisation

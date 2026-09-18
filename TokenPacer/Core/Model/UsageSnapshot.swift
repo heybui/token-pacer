@@ -10,7 +10,6 @@ struct UsageSnapshot: Equatable, Sendable {
     var resetsAt: Date?
     var weeklyPercent: Double?
     var weeklyResetsAt: Date?
-    var burn: BurnRate = .idle
     /// A 5-hour window is open. True for hours at a time.
     var isActive: Bool = false
     /// Tokens are flowing *now* — the logs grew within `burningWindow`. This is
@@ -115,7 +114,6 @@ enum SnapshotBuilder {
             events: events, window: current, at: now, weights: weights
         )
 
-        snapshot.burn = BurnRateCalculator.rate(events: events, at: now, weights: weights)
         return snapshot
     }
 }
