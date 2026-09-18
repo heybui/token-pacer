@@ -184,7 +184,14 @@ final class BorderLight: NSView {
         turns = []
         runners = []
         glow = nil
+        // The turning and travelling layers take their animations with them when
+        // they go; the glow's layer stays for the life of the view, so its own
+        // have to be taken off by hand. Left on, they went on driving
+        // `shadowOpacity` past the nought set here, and the halo stayed lit
+        // behind whichever light was chosen next.
+        glowLayer.removeAllAnimations()
         glowLayer.shadowOpacity = 0
+        glowLayer.shadowPath = nil
 
         switch look.effect.paint {
         case .angular(let ramps):
