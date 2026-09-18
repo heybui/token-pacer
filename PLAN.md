@@ -90,7 +90,7 @@ Codex needs none of this — its rollout logs already carry `rate_limits` with
 | 5-hour %, 7-day %, reset times | **Claude: the CLI's `/usage` panel, to the whole percent. Codex: rollout logs.** |
 | Copilot's monthly allowance | **The desktop app's own local daemon** (`~/.copilot/run/`), the same idea as the CLI panel — unproven, see §0 |
 | Monthly credit spend | the panel's `Usage credits` row — free, no Console admin key |
-| Burn rate, sparkline | Log token counts (no provider states a rate of change) |
+| The sparkline — the shape of recent activity | Log token counts (no provider states a rate of change) |
 | Splits by model / project / surface | Log token counts (the API gives no attribution) |
 | 30-day history | Log token counts |
 
@@ -296,9 +296,14 @@ It had two jobs and both were already hollow:
 
 **What went with it:** `Ceiling`, `CeilingEstimator`, `UsageSnapshot.Origin` and
 its three cases, `BurnRate.headroomMinutes`, the horizon guard, the "estimated"
-and "no ceiling yet" labels, the ceiling line in `--probe`, and nine tests. Net
-−225 lines, and `BurnRate` is now four lines of arithmetic over the trailing
-thirty minutes.
+and "no ceiling yet" labels, the ceiling line in `--probe`, and nine tests.
+
+Then `BurnRate` itself, in a second pass. Stripped of its projection it reported
+weighted tokens an hour — and on a live machine 81% of that figure was cache
+reads, so `4.78M/hr` meant "this much context is being re-read", not "this much
+is being spent". A number in a unit nobody publishes, that no reader can act on.
+The pinned panel keeps the sparkline, which was always the part that said
+something: its row is now captioned by its own span rather than by a rate.
 
 **What it costs, stated plainly:** the board's over banner said "90% used, ~18 min
 left" and now says "90% used, 2h 04m to the reset". The hover card's pace line
@@ -363,7 +368,6 @@ becomes `(path, last row id)` for that one source.
 
 **Engine** (pure, synchronous, fully testable — no I/O, no dates from `Date()`, inject a clock):
 - `WindowCalculator` — ccusage block rule: a block starts at the first event after a ≥5h gap, floored to the hour; block spans `[start, start+5h)`.
-- `BurnRate` — weighted tokens/hour over a trailing 30 min. A measurement, not a projection.
 - `Aggregator` — folds events into **5-minute buckets** keyed by `(source, model, project, surface)`. 30 days ≈ 8.6k buckets; the sparkline, splits and history all read buckets, never raw events. Persist buckets as JSON in Application Support; never persist raw events. No SQLite.
 
 Output is one value type the whole UI binds to:
@@ -372,7 +376,6 @@ Output is one value type the whole UI binds to:
 struct UsageSnapshot {
     var sessionPct: Double?, sessionTokens: Int, resetsAt: Date   // nil = not reported
     var weeklyPct: Double?, weeklyResetsAt: Date
-    var burnRatePerHour: Double
     var sparkline: [Double]          // 26 buckets, matches the design
     var splits: Splits               // by model / project / surface
     var history: [DayUsage]          // 30 days
@@ -451,7 +454,7 @@ TokenPacer/              the target's sources, named for it rather than "Sources
     Model/                UsageEvent.swift · UsageSnapshot.swift · TokenCounts.swift · SourceID.swift
     Ingest/               UsageSource.swift · ClaudeCodeSource.swift · CodexSource.swift
                           ClaudeUsagePanel.swift · JSONLReader.swift
-    Engine/               WindowCalculator.swift · BurnRate.swift
+    Engine/               WindowCalculator.swift
                           Aggregator.swift · TokenWeights.swift · AlertPolicy.swift
                           PanelPoller.swift
     Store/                UsageStore.swift · Archive.swift
@@ -628,9 +631,9 @@ update path is — an installed copy will only accept an update signed the same 
   happening. 735 of 792 assistant lines in a real session are the model stopping for a tool, so
   reading "assistant" as "finished" was wrong most of the time. Capped at 15 minutes, so a CLI
   killed mid-turn does not pulse all day; a 12s quiet window (two polls) covers the rest.
-- ~~**Headroom is only projected four sample-lengths ahead.**~~ Gone with the ceiling (§0.4). The
-  horizon guard existed because a rate measured over thirty minutes told a live machine it had 269
-  minutes left at 0.3% used. Nothing is projected now, so there is nothing to bound.
+- ~~**Headroom is only projected four sample-lengths ahead.**~~ Gone with the ceiling, and the burn
+  rate behind it went too (§0.4). The horizon guard existed because a rate measured over thirty
+  minutes told a live machine it had 269 minutes left at 0.3% used.
 
 ### Verified on hardware
 
@@ -699,7 +702,7 @@ update path is — an installed copy will only accept an update signed the same 
 ## 5. Standing risks
 
 1. **Undocumented log formats.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. Mitigation: decode defensively, and when a source yields no parseable usage record in a window where the CLI *is* running, show an explicit `no data` pill state — never a confident `0%`.
-2. **A provider can go quiet.** Every percentage is now the provider's own, so when a reading cannot be taken — the CLI moved, the panel changed, the daemon is down — there is no number at all rather than a wrong one. The pill shows the window's token count and the countdown; the risk is a user reading "no figure" as "no usage". `TokenWeights` no longer touches anything on screen except the burn rate and the splits, where only the ordering matters.
+2. **A provider can go quiet.** Every percentage is now the provider's own, so when a reading cannot be taken — the CLI moved, the panel changed, the daemon is down — there is no number at all rather than a wrong one. The pill shows the window's token count and the countdown; the risk is a user reading "no figure" as "no usage". `TokenWeights` no longer touches anything on screen except the sparkline and the splits, where only the ordering matters.
 3. ~~**Bundle id**~~ — settled: `com.redevify.token-pacer`, renamed with the product before release.
 4. **Copilot's quota comes from a daemon nobody documents.** The port and token
    in `~/.copilot/run/` belong to the desktop app and are rewritten when it
