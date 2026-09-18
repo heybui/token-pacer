@@ -271,3 +271,14 @@ private actor TallyingSource: UsageSource {
     #expect(lit.count == 48)               // two stops per dash
     #expect(stops.last?.angle == 360)
 }
+
+/// The grid draws all twelve and no others — the order differs from the stored
+/// one on purpose, so this pins the set rather than the sequence.
+@Test func theBorderGridHoldsEveryEffectOnce() {
+    #expect(Set(BorderEffect.grid) == Set(BorderEffect.allCases))
+    #expect(BorderEffect.grid.count == BorderEffect.allCases.count)
+    // The glow paints outside its own panel, so it never sits at the end of a
+    // row: four across, and it is not in the first or the last column.
+    let column = (BorderEffect.grid.firstIndex(of: .breatheGlow) ?? 0) % 4
+    #expect(column != 0 && column != 3)
+}

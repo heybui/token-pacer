@@ -24,6 +24,18 @@ enum BorderEffect: String, CaseIterable, Sendable {
     case sideDrip
     case bottomSweep
 
+    /// The order the Appearance grid draws them in.
+    ///
+    /// The board's own, with one swap: the glow is the only light that paints
+    /// *outside* its panel, and at the end of a row its halo spills into the
+    /// pane's margin rather than over its neighbours. It changes places with Side
+    /// drip, which has nothing outside its own edge to spill.
+    static let grid: [BorderEffect] = [
+        .comet, .dualComet, .zoneSweep, .marchingDashes,
+        .pulseWave, .quarterTrace, .counterPair, .breathe,
+        .sideDrip, .edgeRunners, .breatheGlow, .bottomSweep,
+    ]
+
     var displayName: String {
         switch self {
         case .comet: "Comet"
