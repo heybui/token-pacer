@@ -379,6 +379,42 @@ or a decision to let the *user* state their plan size in Preferences and count
 premium requests locally — which is a real option, but it brings back the
 request-multiplier and initiator arithmetic that was deliberately cut.
 
+## 0.6 What phase 5 actually built (2026-09-18)
+
+The board asked for two wings and a drop panel. What shipped is the panel, the
+mark that fills the wings, and one deletion from the board itself.
+
+**The mark.** `CapsuleBar` replaces the ring in the menu bar: three capsules at
+full colour standing for safe, watch and over, a point of gap either side of each
+threshold, and a marker riding them at the reported percentage. The zones follow
+the user's own thresholds, so moving the slider moves the capsules. Drawn at
+**36pt** — the board draws 46 and says it wants 76, but both figures buy a 44pt
+wordmark beside the bar, and with one provider there is nothing to name. The flank
+pays 74 → 88 for it; the ring cost 17pt.
+
+**The card is a list.** One row per provider on one scale: wordmark, bar,
+percentage, the week, its reset. It sizes to its content rather than to a number,
+because a preference is coming that turns providers off and any fixed height is
+wrong for some of the lists the card can hold.
+
+**The week rides the provider's own bar.** It was a row of its own for an hour,
+which made it the *app's* week — and there is no such thing, since Claude states
+a weekly cap and so does Codex and they end on different days. It is a dot on the
+same track now, told apart from the window by shape rather than by fill: a
+1.25pt outline is what dies first at menu-bar size. In the card the dot has its
+figure spelled out beside it; in the menu bar there is neither dot nor number,
+because a second marker whose number does not fit is a mark nobody can read.
+
+**Cut from the board, twice.** The flat bar row (§0.2) and the left wing yielding
+to app menus: the first because the menu bar is translucent and the figures ended
+up on the wallpaper, the second because measuring another app's menus needs the
+Accessibility permission, and one system prompt is too much to ask for one app's
+worth of politeness.
+
+**Still the ring**: the over card and the pinned panel's hero. The board wants
+every expanded state to lead with the same mark scaled up, which is phase 6's
+job, not a swap to make while eleven marks are still unwritten.
+
 ## 1. Architecture
 
 Three layers, one process, no XPC, no daemon.
@@ -554,8 +590,8 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 2 | Design system + the remaining pill states + spring morph | ✅ done (old board) |
 | 3 | Warning auto-expand, pinned panel, context menu | ✅ done (old board) |
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done (old board) |
-| 5 | **Two wings** — the drop panel below the band; the flat row was tried and rejected | 🔨 in progress |
-| 6 | **Marks** — the `Mark` protocol, twelve of them, the capsule bar as default | ⬜ not started |
+| 5 | **Two wings** — the drop panel, the card as a list, the week on the bar (§0.6) | ✅ done |
+| 6 | **Marks** — the capsule bar is built and is the default; eleven to go, and the protocol with them | 🔨 1 of 12 |
 | 7 | **Appearance** — the second prefs pane, twelve border effects, the live grids | ⬜ not started |
 | 8 | ~~**Copilot**~~ | ⛔ cut: nothing local states its quota (§0.5) |
 | 9 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
@@ -674,6 +710,13 @@ update path is — an installed copy will only accept an update signed the same 
 ### Standing design decisions
 
 - **Reduce Motion** — deliberately not honoured, for the activity dot or the shell morph.
+- **Nothing permanently on screen gets a blur.** The menu-bar mark is drawn for hours at a
+  time, so a `.shadow` on it is an offscreen pass the machine pays for all day — and an
+  animation driving that pass runs it at the display's refresh rate. Measured: 1.5% of a
+  core before the capsule bar, **10.5%** with a drop shadow on its marker, **1.9%** with the
+  shadow gone and the marker still creeping. Contrast comes from a second filled shape
+  instead. Every new thing that draws in the band is measured before and after, not argued
+  about.
 - **Sparkle ships alongside the cask, not instead of it.** `brew upgrade` covers people who install
   through the tap; the feed covers people who download the DMG. Gentle reminders are implemented
   because this app has no Dock icon and no menu bar — Sparkle's own panel would arrive from nowhere,
@@ -718,6 +761,16 @@ update path is — an installed copy will only accept an update signed the same 
   where it was to where it already was and the light sat perfectly still. It is driven by the clock
   now, and measured in points so it looks the same on the pill and on the card.
 - The pinned panel and its context menu, on screen, against live figures.
+- ✅ **Notch hardware, by eye.** The band around the real camera, checked on the built-in
+  display rather than the external monitor every earlier run used.
+- The capsule bar and the provider card, on screen against live figures, through four
+  rounds of screenshots: the bar drew an eighth of itself past its own right edge (`.offset`
+  does not take part in layout, so a centred frame sat the zones to the right of where the
+  offsets were measured from), the card read a third empty, its columns were wider than
+  their contents, and its rows were too close to read as separate readings.
+- **A bug the measuring found.** The app refused to start with no copy of it running: the
+  instance lock is a descriptor, and every CLI the app spawns for `/usage` inherited it. One
+  orphaned `claude` process held the lock on the app's behalf. `FD_CLOEXEC`, one line.
 - Four bugs only the hardware could show: the host clipped the shell's shadow; the shadow reverted
   to a bounding box because a ScrollView cannot be rasterised into a compositing group; `.onHover`
   installed a tracking area over the whole host, which ignores the hitTest that makes the rest
@@ -726,11 +779,6 @@ update path is — an installed copy will only accept an update signed the same 
 
 ### Still unverified
 
-- **Notch hardware.** Mostly run on an external display with no notch, so the no-notch fallback is
-  what has been exercised. `--probe` now resolves the built-in Retina display as the host — safe-area
-  top 38, notch 220 wide, a 39pt row, collapsed shell 368×39 against the board's 226×36 — so the
-  geometry is no longer theoretical. What it looks like around the real camera is still an eye
-  check nobody has made.
 - **Menu-bar click passthrough** and full-screen / space-switch behaviour.
 - ~~**Calibration over time**~~ — gone with the endpoint, and the ceiling it fed is gone too (§0.4).
   Before it was removed it measured a conversion near 190k weighted a point against an inferred
