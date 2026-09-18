@@ -70,7 +70,7 @@
     <div style="display: flex; flex-direction: column; gap: 22px;">
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <h2 style="margin: 0; font-size: 18px; font-weight: 600;">States</h2>
-        <p style="margin: 0; max-width: 64ch; font-size: 13.5px; line-height: 1.6; color: rgba(255,255,255,.5); text-wrap: pretty;">One model, eight states, two surfaces. The <strong style="color: rgba(255,255,255,.78); font-weight: 600;">bar row</strong> is flat — no shell, no background of its own — and straddles the notch: the progress mark and the exact percentage in the left wing, the time left in the right, the hardware between them and nothing else. The <strong style="color: rgba(255,255,255,.78); font-weight: 600;">drop panel</strong> is the pill shell, which grows downward out of the notch and spans past it; every expanded state lives there and leads with the same mark, scaled up. Switch the mark with the <em style="color: rgba(255,255,255,.72); font-style: normal;">mark</em> tweak and every state follows. Nothing is ever drawn where the hardware is.</p>
+        <p style="margin: 0; max-width: 64ch; font-size: 13.5px; line-height: 1.6; color: rgba(255,255,255,.5); text-wrap: pretty;">One model, eight states, two surfaces. The <strong style="color: rgba(255,255,255,.78); font-weight: 600;">bar row</strong> is the shell, and it straddles the notch: black, opaque, running behind the hardware so the two wings and the camera read as one object rather than as two readouts floating either side of it. The progress mark and the exact percentage sit in the left wing, the time left in the right. Drawn flat, with no shell of its own, the wings sit on whatever wallpaper the menu bar is showing through — tried, and it reads as two loose numbers on the sky. The <strong style="color: rgba(255,255,255,.78); font-weight: 600;">drop panel</strong> is the pill shell, which grows downward out of the notch and spans past it; every expanded state lives there and leads with the same mark, scaled up. Switch the mark with the <em style="color: rgba(255,255,255,.72); font-style: normal;">mark</em> tweak and every state follows. No content is ever placed over the hardware; only the shell's own black passes behind it.</p>
       </div>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
         <sc-for list="{{ boardStates }}" as="st" hint-placeholder-count="6">
@@ -171,7 +171,7 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 22px;">
           <div style="display: flex; gap: 8px; align-items: flex-start;">
             <span style="color: rgba(255,255,255,.26); font-size: 12px; line-height: 1.5;">—</span>
-            <span style="font-size: 12.5px; line-height: 1.5; color: rgba(255,255,255,.62); text-wrap: pretty;">The notch is a reserved 190×37 dead zone, never drawn into. Both wings sit hard against it so the pair reads as one instrument.</span>
+            <span style="font-size: 12.5px; line-height: 1.5; color: rgba(255,255,255,.62); text-wrap: pretty;">The notch is a reserved 190×37 dead zone: no figure is ever placed in it. The shell's black spans it all the same, which is what welds both wings and the camera into one instrument.</span>
           </div>
           <div style="display: flex; gap: 8px; align-items: flex-start;">
             <span style="color: rgba(255,255,255,.26); font-size: 12px; line-height: 1.5;">—</span>
@@ -844,11 +844,12 @@ class Component extends DCLogic {
     const WING = 96, NOTCH = 40;
     const wing = (k, align, kids) => React.createElement('div', { key: k, style: {
       boxSizing: 'border-box', width: WING, flex: '0 0 auto', display: 'flex',
-      alignItems: 'center', justifyContent: align, gap: 4, padding: '0 8px', opacity } }, kids);
+      alignItems: 'center', justifyContent: align, gap: 4, padding: '0 8px', opacity,
+      background: kind === 'hidden' ? 'transparent' : '#000' } }, kids);
 
     return React.createElement('div', { style: {
       width: WING * 2 + NOTCH, height: 30, flex: '0 0 auto', display: 'flex', alignItems: 'stretch', margin: '0 auto',
-      background: 'rgba(10,10,12,.55)' } }, [
+      background: kind === 'hidden' ? 'transparent' : 'rgba(10,10,12,.55)' } }, [
       wing('l', 'flex-end', left),
       React.createElement('div', { key: 'n', style: {
         width: NOTCH, flex: '0 0 auto', background: '#000', display: 'flex',
@@ -1194,7 +1195,7 @@ class Component extends DCLogic {
     const NOTCH = 48, WING = 104;
 
     const wing = (k, kids, align) => React.createElement('div', { key: k, style: {
-      width: WING, height: 26, display: 'flex', alignItems: 'center', gap: 6,
+      width: WING, height: 26, display: 'flex', alignItems: 'center', gap: 6, background: '#000',
       justifyContent: align, padding: align === 'flex-end' ? '0 9px 0 0' : '0 0 0 9px' } }, kids);
 
     const bar = React.createElement('div', { key: 'bar', style: {

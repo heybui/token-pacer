@@ -152,20 +152,23 @@ The design changed shape, not detail. Five things moved; each is a real delta
 against what is built, and they are listed here rather than folded silently into
 the sections below, because most of phase 2–4 was built against the old board.
 
-### The pill is gone from the menu bar row
+### ~~The pill is gone from the menu bar row~~ — tried and rejected
 
-The collapsed state is no longer a shell. It is a **bar row**: flat, no
-background of its own, straddling the notch. The mark and the exact percentage
-sit in the **left wing**, the time left in the **right wing**, the hardware
-between them, and *nothing is ever drawn where the hardware is*. Only the
-expanded states — hover, over, pinned — are a shell, and that shell is the
-**drop panel**: it grows downward out of the notch, corners `0 0 R R`, and spans
-past the notch on both sides.
+The board asked for a **flat bar row**: no shell, no background of its own, the
+mark and the percentage in the left wing, the time left in the right, and nothing
+drawn where the hardware is. It was built, put on screen, and reverted the same
+hour — **the board is wrong here, and the board was changed to match the app.**
 
-What this contradicts: the app currently fills the whole band, notch width
-included, with the shell's own black so the pill reads as grown out of the
-hardware. The board now says that black is only for the drop panel. The band
-geometry (`NotchBand`, `PillState.flank`) survives; what it is filled with does not.
+Why it fails: the board assumes the menu bar behind the wings is a plain dark
+strip. It is not. The bar is translucent, so a flat row puts the figures straight
+onto whatever the wallpaper happens to be — two loose numbers on a patch of sky,
+with the camera as a gap between them. The black band is what welds both wings and
+the hardware into one object, and that was the argument for it the first time.
+
+What survives from the section: the **drop panel** is still the shell that hangs
+below — corners `0 0 R R`, growing downward, spanning past the notch — and the
+`NotchBand` / `PillState.flank` geometry is unchanged. What is rejected is only the
+idea that the band goes unpainted.
 
 - Notch measured on the board: **190 × 37**, 12.6% of the menu bar.
 - A capsule-bar wing readout is ~160pt (44 wordmark + 76 bar + number + 7 gaps);
@@ -551,7 +554,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 2 | Design system + the remaining pill states + spring morph | ✅ done (old board) |
 | 3 | Warning auto-expand, pinned panel, context menu | ✅ done (old board) |
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done (old board) |
-| 5 | **Two wings** — the flat bar row and the drop panel below it | 🔨 in progress |
+| 5 | **Two wings** — the drop panel below the band; the flat row was tried and rejected | 🔨 in progress |
 | 6 | **Marks** — the `Mark` protocol, twelve of them, the capsule bar as default | ⬜ not started |
 | 7 | **Appearance** — the second prefs pane, twelve border effects, the live grids | ⬜ not started |
 | 8 | ~~**Copilot**~~ | ⛔ cut: nothing local states its quota (§0.5) |

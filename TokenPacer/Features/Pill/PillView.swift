@@ -64,14 +64,6 @@ struct PillView: View {
         )
     }
 
-    /// The two surfaces the board draws, in one view tree.
-    ///
-    /// **The bar row is flat.** Nothing is painted behind the wings: they sit on
-    /// the menu bar the system already drew, which is what makes the notch read as
-    /// stock hardware with a reading beside it rather than as an app wearing the
-    /// hardware. The black, the hairline, the shadow and the running light all
-    /// belong to the **drop panel** — the body that hangs below the row — and a
-    /// state with no body paints nothing at all.
     private var shell: some View {
         let shellSize = state.size(around: band)
         return ZStack(alignment: .bottom) {
@@ -97,6 +89,45 @@ struct PillView: View {
                 .transition(.identity)
         }
             .frame(width: shellSize.width, height: shellSize.height, alignment: .bottom)
+            .clipShape(shape)
+            // The shadow is cast by the shape itself, never by the composited
+            // content. Flattening the content works only while SwiftUI can
+            // rasterise all of it — the panel's ScrollView is AppKit-backed and
+            // cannot be, so the group falls back to a layer shadow on its
+            // bounding box and the square corners show through.
+            .background {
+                ZStack {
+                    // Not applied at all when the state does not cast one, rather
+                    // than applied clear: a `.shadow` is an offscreen pass whether
+                    // or not anything comes out of it.
+                    if state.castsShadow {
+                        shape
+                            .fill(.black)
+                            .shadow(
+                                color: .black.opacity(0.66),
+                                radius: PillState.shadowRadius, y: PillState.shadowOffsetY
+                            )
+                    }
+                    // Never inside that branch. An `if/else` gives the two arms
+                    // separate identities, so opening the shell cross-faded one
+                    // black into the other — both halfway through at the midpoint,
+                    // leaving it a quarter see-through for the length of the
+                    // spring. The fill is one view that never leaves; only the
+                    // shadow behind it comes and goes.
+                    shape.fill(.black)
+                }
+            }
+            .overlay { shape.strokeBorder(state == .collapsed ? Tokens.shellRingIdle : Tokens.shellRingOpen, lineWidth: 1) }
+            .overlay {
+                // Not on the pinned panel: a 752×540 sheet with a light running
+                // round it is a screensaver, and the panel is for reading.
+                if chasesBorder {
+                    ChasingBorder(
+                        cornerRadius: state.cornerRadius, tone: tone,
+                        isRunning: snapshot?.isBurning == true
+                    )
+                }
+            }
             .opacity(state.opacity)
             .animation(Tokens.spring, value: state)
             // The panel has its own controls; a tap anywhere inside it would
@@ -127,64 +158,11 @@ struct PillView: View {
             VStack(spacing: 0) {
                 notchBand
                 if !state.fillsFlanks {
-                    panel { stateBody.frame(width: shell.width, height: shell.height - band.height) }
+                    stateBody.frame(width: shell.width, height: shell.height - band.height)
                 }
             }
         } else {
-            // No hardware to reach around: the row is the whole surface, so the
-            // board's own 226-wide shell stands and carries the shape itself.
-            panel { stateBody.frame(width: state.size.width, height: state.size.height) }
-        }
-    }
-
-    /// The drop panel: black, bottom-rounded, and the only thing in this view that
-    /// is painted. Dormant is exempt — "no activity" means the menu bar is left
-    /// exactly as the system drew it.
-    @ViewBuilder
-    private func panel(@ViewBuilder _ body: () -> some View) -> some View {
-        if state == .dormant {
-            body()
-        } else {
-            body()
-                .clipShape(shape)
-                // The shadow is cast by the shape itself, never by the composited
-                // content. Flattening the content works only while SwiftUI can
-                // rasterise all of it — the panel's ScrollView is AppKit-backed and
-                // cannot be, so the group falls back to a layer shadow on its
-                // bounding box and the square corners show through.
-                .background {
-                    ZStack {
-                        // Not applied at all when the state does not cast one,
-                        // rather than applied clear: a `.shadow` is an offscreen
-                        // pass whether or not anything comes out of it.
-                        if state.castsShadow {
-                            shape
-                                .fill(.black)
-                                .shadow(
-                                    color: .black.opacity(0.66),
-                                    radius: PillState.shadowRadius, y: PillState.shadowOffsetY
-                                )
-                        }
-                        // Never inside that branch. An `if/else` gives the two arms
-                        // separate identities, so opening the shell cross-faded one
-                        // black into the other — both halfway through at the
-                        // midpoint, leaving it a quarter see-through for the length
-                        // of the spring. The fill is one view that never leaves;
-                        // only the shadow behind it comes and goes.
-                        shape.fill(.black)
-                    }
-                }
-                .overlay { shape.strokeBorder(Tokens.shellRingOpen, lineWidth: 1) }
-                .overlay {
-                    // Not on the pinned panel: a 752×540 sheet with a light running
-                    // round it is a screensaver, and the panel is for reading.
-                    if chasesBorder {
-                        ChasingBorder(
-                            cornerRadius: state.cornerRadius, tone: tone,
-                            isRunning: snapshot?.isBurning == true
-                        )
-                    }
-                }
+            stateBody.frame(width: state.size.width, height: state.size.height)
         }
     }
 
@@ -299,13 +277,10 @@ struct PillView: View {
 
     /// Collapsed and expanded, never pinned — and never while the notch is
     /// pretending to be stock hardware.
-    /// The board puts the running light on "the panel that hangs below the notch",
-    /// which is now the only thing there is to run it around: the bar row has no
-    /// edge of its own to light.
     private var chasesBorder: Bool {
         switch state {
-        case .hover, .warning: true
-        case .pinned, .dormant, .ghost, .paused, .collapsed, .exhausted: false
+        case .pinned, .dormant, .ghost, .paused: false
+        case .collapsed, .hover, .warning, .exhausted: true
         }
     }
 
