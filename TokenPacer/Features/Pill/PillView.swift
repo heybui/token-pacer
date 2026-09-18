@@ -381,7 +381,7 @@ struct PillView: View {
     /// problem. A provider that reports nothing keeps its row and shows `--`:
     /// absent is a state worth seeing, and it is not the same as zero.
     private var hoverCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             // Kept even when the rows below say the same thing in figures. With
             // one provider tracked the card would otherwise be a single line, and
             // "Plenty of room" is the sentence the pill exists to say.
@@ -406,9 +406,12 @@ struct PillView: View {
                 ScaleRow(line: line, barWidth: providerBarWidth)
             }
         }
-        .padding(.top, bodyTop)
+        // The band above is already a full menu-bar row of clearance, so the card
+        // needs a line of air under it, not a margin. It was reading as a third
+        // empty.
+        .padding(.top, 4)
         .padding(.horizontal, 18)
-        .padding(.bottom, 12)
+        .padding(.bottom, 10)
     }
 
     /// Every window worth a row, in the order they belong to each other.
@@ -491,12 +494,11 @@ private struct ScaleRow: View {
                 .foregroundStyle(.white.opacity(0.62))
                 .frame(width: Self.wordmarkWidth, alignment: .leading)
 
-            CapsuleBar(
-                percent: line.percent,
-                weekPercent: line.weekPercent,
-                width: barWidth,
-                isBurning: line.isBurning
-            )
+            // No week dot here. The card has a column for that figure, and a
+            // marker that repeats a number sitting two columns away is clutter on
+            // the one surface with room to spell it out. The dot earns its place
+            // in the menu bar, where there is no room for a second number.
+            CapsuleBar(percent: line.percent, width: barWidth, isBurning: line.isBurning)
 
             OdometerText(text: Format.percent(line.percent), size: 11, color: tone(line.percent))
                 .frame(width: Self.percentWidth, alignment: .leading)
