@@ -25,8 +25,10 @@ final class UsageStore {
     private let sources: [any UsageSource]
     private let weights: TokenWeights
     private var events: [SourceID: [UsageEvent]] = [:]
-    /// Poll state per source. Only Claude needs it; Codex states its own limits
-    /// in its logs, so it never spawns anything.
+    /// Poll state per source. Claude has nowhere else to learn the figure;
+    /// Codex states it in its own logs and only needs a run once those have
+    /// gone quiet — `refreshLimits` counts a log-stated reading as a run, and
+    /// the same floors then do the rest.
     private var pollers: [SourceID: PanelPoller] = [:]
     private var liveLimits: [SourceID: RateLimits] = [:]
     /// When a reading last came back higher than the one before it.
@@ -95,9 +97,10 @@ final class UsageStore {
     /// outside Core — this is just where the snapshots already are.
     @ObservationIgnored var onSnapshot: ((UsageSnapshot) -> Void)?
 
-    /// Injected rather than defaulted: it is backed by a pseudo-terminal and a
-    /// spawned process, neither of which belongs in Core.
-    private let usagePanel: ClaudeUsagePanel?
+    /// Injected rather than defaulted: they are backed by a pseudo-terminal and
+    /// a spawned process, neither of which belongs in Core. One per source that
+    /// has a panel worth reading; a source with none is never spawned.
+    private let panels: [SourceID: any UsagePanel]
     private let archive: Archive?
 
     /// Survives relaunch, so "tracking is off" stays off.
@@ -121,13 +124,13 @@ final class UsageStore {
         sources: [any UsageSource] = [ClaudeCodeSource(), CodexSource()],
         weights: TokenWeights = .default,
         interval: TimeInterval = 5,
-        usagePanel: ClaudeUsagePanel? = nil,
+        panels: [SourceID: any UsagePanel] = [:],
         archive: Archive? = .default
     ) {
         self.sources = sources
         self.weights = weights
         self.interval = interval
-        self.usagePanel = usagePanel
+        self.panels = panels
         self.archive = archive
 
         let restored = archive?.load()
@@ -292,7 +295,8 @@ final class UsageStore {
                 // log poll used to wipe the message on the very next tick, so
                 // "Claude Code CLI not found" never stayed on screen.
                 errors[source.id] = Self.simulatedError ?? limitsErrors[source.id]
-                refreshLimits(for: source.id, events: fresh.events, now: now)
+                refreshLimits(for: source.id, events: fresh.events,
+                              stated: fresh.limits, now: now)
 
                 let panelIsStale = now.timeIntervalSince(
                     panelBuiltAt[source.id] ?? .distantPast
@@ -301,9 +305,11 @@ final class UsageStore {
 
                 snapshots[source.id] = SnapshotBuilder.build(
                     source: source.id,
-                    // A source that states its own limits wins; otherwise use the
-                    // last panel reading, rolled forward if its window has reset.
-                    limits: fresh.limits ?? currentLimits(for: source.id, at: now),
+                    // Whichever reading is newer: a source that states its own
+                    // limits has the better one while it is working, and the
+                    // panel has it once those logs go quiet. The panel reading is
+                    // rolled forward first if its window has reset.
+                    limits: Self.newer(fresh.limits, currentLimits(for: source.id, at: now)),
                     events: merged,
                     activity: fresh.activity ?? activities[source.id],
                     at: now,
@@ -324,6 +330,8 @@ final class UsageStore {
             }
         }
 
+        refreshPanelOnlyProviders(now: now)
+
         // One 5-hour slice across sources: their windows start independently, so
         // the clock is the only span both can be measured over.
         let recent = events.values.flatMap { $0 }
@@ -333,20 +341,55 @@ final class UsageStore {
         await persistEvents(now: now)
     }
 
-    /// Reads the CLI's `/usage` panel, but only when the poller says it is worth
-    /// spawning a process for.
+    /// A provider whose figures come only from its CLI's panel.
+    ///
+    /// Copilot logs nothing this app can read: its store is a SQLite database of
+    /// sessions with no per-request token rows, and the plan budget it spends
+    /// against was never on disk at all — §0.5. So there is no `UsageSource` to
+    /// poll, and the snapshot is the reading plus nothing: no sparkline, no
+    /// splits, no history. The card says so by having those sections empty, which
+    /// is the truth about what is knowable here.
+    private func refreshPanelOnlyProviders(now: Date) {
+        for id in panels.keys.sorted(by: { $0.rawValue < $1.rawValue })
+        where tracked.contains(id) && !sources.contains(where: { $0.id == id }) {
+            refreshLimits(for: id, events: [], stated: nil, now: now)
+            errors[id] = Self.simulatedError ?? limitsErrors[id]
+            snapshots[id] = SnapshotBuilder.build(
+                source: id,
+                limits: currentLimits(for: id, at: now),
+                events: [],
+                at: now,
+                weights: weights,
+                panelMovedAt: panelMovedAt[id],
+                windows: []
+            )
+            if id == activeSource, let snapshot = snapshots[id] { onSnapshot?(snapshot) }
+        }
+    }
+
+    /// Reads a CLI's own usage panel — Claude's `/usage`, Codex's `/status` —
+    /// but only when the poller says it is worth spawning a process for.
     ///
     /// The read is launched, never awaited here. It costs about four seconds — an
     /// HTTP call cost milliseconds — and awaiting it inline held up the snapshot
     /// for *both* sources while a CLI booted, so the pill froze every five minutes
     /// and again at launch. The result lands on a later tick, which is at most 5s
     /// behind a figure that only moves every five minutes anyway.
-    private func refreshLimits(for id: SourceID, events: [UsageEvent], now: Date) {
-        guard id == .claude, !limitsDisabled.contains(id), !limitsInFlight.contains(id),
-              let usagePanel
+    private func refreshLimits(
+        for id: SourceID, events: [UsageEvent], stated: RateLimits?, now: Date
+    ) {
+        guard let panel = panels[id], !limitsDisabled.contains(id), !limitsInFlight.contains(id)
         else { return }
 
         var poller = pollers[id] ?? PanelPoller()
+        // Codex writes the same figures into its rollout logs, and a line that
+        // has just been read is worth exactly what a run would have cost four
+        // seconds to fetch. Counting it as a run is what keeps the spawning to
+        // the case it is for: work done where nothing is logged here.
+        if let stated, stated.observedAt > (poller.lastRunAt ?? .distantPast) {
+            liveLimits[id] = stated
+            poller.ran(at: stated.observedAt)
+        }
         // Only what the last reading has not already seen. A cold start replays
         // every retained event, and 90 days of history would look like activity
         // that happened since the last run.
@@ -373,7 +416,7 @@ final class UsageStore {
         Task { [weak self] in
             let started = Date()
             do {
-                let limits = try await usagePanel.fetch(now: Date())
+                let limits = try await panel.fetch(now: Date())
                 self?.applyLimits(.success(limits), for: id, startedAt: started,
                                   hadLocalActivity: hadLocalActivity)
             } catch {
@@ -417,11 +460,18 @@ final class UsageStore {
             persist()
             let failure = error as? PanelError
             if failure?.isFatal == true { limitsDisabled.insert(id) }
-            limitsErrors[id] = failure?.message ?? error.localizedDescription
+            limitsErrors[id] = failure?.message(for: id.displayName) ?? error.localizedDescription
             errors[id] = Self.simulatedError ?? limitsErrors[id]
 
             Log.usage.error("failed \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms error=\(String(describing: failure), privacy: .public) fatal=\(failure?.isFatal == true, privacy: .public) failures=\(poller.failures, privacy: .public)")
         }
+    }
+
+    /// Whichever of two readings was taken later.
+    static func newer(_ one: RateLimits?, _ other: RateLimits?) -> RateLimits? {
+        guard let one else { return other }
+        guard let other else { return one }
+        return one.observedAt >= other.observedAt ? one : other
     }
 
     /// The last reading, with each window rolled forward past its own reset.

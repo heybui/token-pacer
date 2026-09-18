@@ -1,60 +1,128 @@
 import Darwin
 import Foundation
 
-/// Drives the `claude` CLI through a pseudo-terminal to read its `/usage` panel.
+/// Drives a coding CLI through a pseudo-terminal to read its own usage screen.
+///
+/// Claude Code and Codex both render one on a slash command — `/usage` and
+/// `/status` — and both only render it when they believe they are talking to a
+/// terminal, so a pipe will not do. Everything either of them needs beyond that
+/// is a `Spec`.
 ///
 /// Lives outside `Core/` for the same reason the Keychain reader did: this one
 /// spawns processes and talks to a tty, neither of which belongs in an engine
-/// that has to stay testable. `ClaudeUsagePanel` gets the text; everything about
-/// how it was obtained stops here.
-///
-/// The CLI only renders the panel when it believes it is talking to a terminal,
-/// so a pipe will not do — hence the pty.
-enum ClaudeCLI {
-    /// Where the installers put it. `TOKENPACER_CLAUDE_BIN` overrides, because a
-    /// GUI app inherits `PATH=/usr/bin:/bin:/usr/sbin:/sbin` from launchd and will
-    /// not find any of these by name.
-    static var searchPaths: [String] {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return [
-            ProcessInfo.processInfo.environment["TOKENPACER_CLAUDE_BIN"],
-            "\(home)/.local/bin/claude",
-            "\(home)/.claude/local/claude",
-            "/opt/homebrew/bin/claude",
-            "/usr/local/bin/claude",
-            "\(home)/.bun/bin/claude",
-            "\(home)/.volta/bin/claude",
-        ].compactMap { $0 }
+/// that has to stay testable. The panels get the text; everything about how it
+/// was obtained stops here.
+enum TerminalCLI {
+    /// One CLI's way in.
+    struct Spec: Sendable {
+        /// What the user calls it, for the one place a failure is shown.
+        var name: String
+        /// Where the installers put it, most specific first. A GUI app inherits
+        /// `PATH=/usr/bin:/bin:/usr/sbin:/sbin` from launchd and will not find
+        /// any of them by name.
+        var searchPaths: [String]
+        /// Typed at the prompt, without the newline — the driver sends that.
+        var command: String
+        /// Arguments the CLI is started with. Copilot loads MCP servers at boot
+        /// and takes twice as long for it; nothing here ever sends a prompt, so
+        /// there is nothing for a tool server to serve.
+        var arguments: [String] = []
+        /// Hard ceiling on a run. Copilot needs the larger one: ~12s to boot and
+        /// the plan row only lands once it has asked GitHub for the budget.
+        var budget: TimeInterval = 30
+        /// Text that only appears once the panel has been drawn. Searched for in
+        /// what arrives *after* the command was typed: both CLIs draw a status
+        /// line at boot that carries some of the same words.
+        var marker: String
+        /// Where to run it. For Claude and Codex this has to be a directory the
+        /// user already answered the trust dialog for — both draw that prompt
+        /// where the panel should be. Copilot asks per tool instead of per
+        /// directory, and nothing here ever runs a tool, so it runs in Copilot's
+        /// own store.
+        var workingDirectory: @Sendable () -> String?
     }
 
-    static func locate() -> String? {
-        searchPaths.first { FileManager.default.isExecutableFile(atPath: $0) }
+    fileprivate static var home: String {
+        FileManager.default.homeDirectoryForCurrentUser.path
     }
 
-    /// The CLI refuses to start in a directory the user has not trusted — it draws
-    /// a blocking "is this a project you trust?" prompt instead of the panel — so
-    /// the working directory has to be one they already answered for.
-    static func trustedDirectory() -> String? {
+    fileprivate static func paths(binary: String, override: String, extra: [String]) -> [String] {
+        ([ProcessInfo.processInfo.environment[override]].compactMap { $0 } + extra + [
+            "\(home)/.local/bin/\(binary)",
+            "/opt/homebrew/bin/\(binary)",
+            "/usr/local/bin/\(binary)",
+            "\(home)/.bun/bin/\(binary)",
+            "\(home)/.volta/bin/\(binary)",
+        ])
+    }
+
+    static func locate(_ spec: Spec) -> String? {
+        spec.searchPaths.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    /// Claude Code keeps its answers to the trust dialog in `~/.claude.json`.
+    static func claudeTrustedDirectory() -> String? {
         struct Config: Decodable {
             struct Project: Decodable { let hasTrustDialogAccepted: Bool? }
             let projects: [String: Project]?
         }
-        let url = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".claude.json")
-        guard let data = try? Data(contentsOf: url),
-              let config = try? JSONDecoder().decode(Config.self, from: data)
-        else { return nil }
-
-        var isDirectory: ObjCBool = false
-        return config.projects?
-            .filter { $0.value.hasTrustDialogAccepted == true }
-            .keys.sorted()
-            .first {
-                FileManager.default.fileExists(atPath: $0, isDirectory: &isDirectory)
-                    && isDirectory.boolValue
-            }
+        // The first file that *answers*, not the first that parses. A default
+        // install has a small `.claude.json` inside the configuration home as
+        // well as the real one beside it, and that one decodes perfectly into a
+        // `Config` with no projects in it — which read as "nothing is trusted"
+        // and stopped the reading for a whole provider. Caught by `--probe`.
+        for url in AgentHome.claudeConfigFiles {
+            guard let data = try? Data(contentsOf: url),
+                  let config = try? JSONDecoder().decode(Config.self, from: data),
+                  let directory = firstExisting(config.projects?
+                      .filter({ $0.value.hasTrustDialogAccepted == true })
+                      .keys.sorted() ?? [])
+            else { continue }
+            return directory
+        }
+        return nil
     }
 
-    /// One `/usage` run. Blocking — call it off the main thread.
+    /// Codex keeps its own in `~/.codex/config.toml`:
+    ///
+    /// ```toml
+    /// [projects."/Users/me/code/thing"]
+    /// trust_level = "trusted"
+    /// ```
+    ///
+    /// Matched with a regex rather than decoded. A TOML parser is a dependency
+    /// for one key of one table, and everything else in that file — models,
+    /// hooks, MCP servers, sandbox policy — is none of this app's business.
+    static func codexTrustedDirectory() -> String? {
+        let url = AgentHome.codex.appending(path: "config.toml")
+        guard let text = try? String(contentsOf: url, encoding: .utf8),
+              let regex = try? NSRegularExpression(
+                  pattern: #"\[projects\."([^"]+)"\][^\[]*?trust_level\s*=\s*"trusted""#,
+                  options: .dotMatchesLineSeparators
+              )
+        else { return nil }
+
+        let paths = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            .compactMap { Range($0.range(at: 1), in: text).map { String(text[$0]) } }
+        return firstExisting(paths.sorted())
+    }
+
+    /// Copilot runs in its own store — `AgentHome` is what follows a moved one.
+    static func copilotHome() -> String? { firstExisting([AgentHome.copilot.path]) }
+
+    /// Sorted, so the choice is the same from one run to the next, and checked,
+    /// because a trusted project that has since been deleted is not a directory
+    /// anything can start in.
+    private static func firstExisting(_ paths: [String]) -> String? {
+        var isDirectory: ObjCBool = false
+        return paths.first {
+            FileManager.default.fileExists(atPath: $0, isDirectory: &isDirectory)
+                && isDirectory.boolValue
+        }
+    }
+
+
+    /// One panel run. Blocking — call it off the main thread.
     ///
     /// - Parameters:
     ///   - budget: hard ceiling on the whole run, including boot.
@@ -62,9 +130,10 @@ enum ClaudeCLI {
     ///     taken as final. The panel paints a cached figure first and repaints
     ///     when the refresh lands, and nothing in the output says which is which,
     ///     so waiting for quiet is the only way to end up with the later one.
-    static func readUsagePanel(budget: TimeInterval = 30, settle: TimeInterval = 1.5) throws -> String {
-        guard let binary = locate() else { throw PanelError.cliNotFound }
-        guard let directory = trustedDirectory() else { throw PanelError.noTrustedDirectory }
+    static func readUsagePanel(_ spec: Spec, settle: TimeInterval = 1.5) throws -> String {
+        guard let binary = locate(spec) else { throw PanelError.cliNotFound }
+        guard let directory = spec.workingDirectory() else { throw PanelError.noTrustedDirectory }
+        let budget = spec.budget
 
         var size = winsize(ws_row: 60, ws_col: 120, ws_xpixel: 0, ws_ypixel: 0)
         var master: Int32 = -1
@@ -100,7 +169,7 @@ enum ClaudeCLI {
             posix_spawnattr_destroy(&attributes)
         }
 
-        var arguments = [binary].map { strdup($0) } + [nil]
+        var arguments = ([binary] + spec.arguments).map { strdup($0) } + [nil]
         var environment = childEnvironment(binary: binary).map { strdup($0) } + [nil]
         defer {
             for pointer in arguments + environment { free(pointer) }
@@ -121,7 +190,19 @@ enum ClaudeCLI {
             close(master)
         }
 
-        return try converse(with: master, budget: budget, settle: settle)
+        let text = try converse(with: master, spec: spec, budget: budget, settle: settle)
+        dump(text, spec: spec)
+        return text
+    }
+
+    /// `TOKENPACER_PANEL_DUMP=<dir>` writes every run's raw render there. A panel
+    /// that fails to parse only ever fails somewhere the debugger is not, and the
+    /// render is the whole evidence.
+    private static func dump(_ text: String, spec: Spec) {
+        guard let directory = ProcessInfo.processInfo.environment["TOKENPACER_PANEL_DUMP"] else { return }
+        let url = URL(filePath: directory)
+            .appending(path: "\(spec.name.replacing(" ", with: "-"))-\(Int(Date().timeIntervalSince1970)).raw")
+        try? text.write(to: url, atomically: true, encoding: .utf8)
     }
 
     /// Wait for the CLI to finish booting, ask for the panel, then read until the
@@ -132,25 +213,44 @@ enum ClaudeCLI {
     /// quiet for long enough to look ready, so the ask is repeated once if no
     /// panel follows it.
     ///
+    /// The command and the newline are two writes with a pause between them.
+    /// Typing `/status` opens a completion popup that swallows a newline arriving
+    /// in the same read, and the command is then left sitting in the composer
+    /// until the budget runs out — measured, on Codex 0.155.
+    ///
     /// Whatever was drawn comes back even when no panel did. The text is the only
-    /// evidence of *why* — a login prompt reads nothing like a layout change — and
-    /// `ClaudeUsagePanel` is where that is decided. Throwing here would collapse
+    /// evidence of *why* — a login prompt reads nothing like a layout change —
+    /// and the panels are where that is decided. Throwing here would collapse
     /// both into "the CLI did not answer in time".
-    private static func converse(with master: Int32, budget: TimeInterval, settle: TimeInterval) throws -> String {
+    private static func converse(
+        with master: Int32, spec: Spec, budget: TimeInterval, settle: TimeInterval
+    ) throws -> String {
         let deadline = Date().addingTimeInterval(budget)
         var output = Data()
         var lastByteAt = Date()
         var askedAt: Date?
+        /// Where the ask starts in `output`. Both CLIs put a summary of the same
+        /// figures in the status line at boot, so the marker is only meaningful
+        /// in what was drawn after the command was typed.
+        var askedAtOffset = 0
+        var submitted = false
         var asksLeft = 2
         var sawPanel = false
         var buffer = [UInt8](repeating: 0, count: 8192)
 
-        func ask() throws {
-            guard write(master, "/usage\r", 7) == 7 else {
+        func write(_ text: String) throws {
+            let bytes = Array(text.utf8)
+            guard Darwin.write(master, bytes, bytes.count) == bytes.count else {
                 throw PanelError.spawnFailed(code: errno)
             }
-            askedAt = Date()
             lastByteAt = Date()
+        }
+
+        func ask() throws {
+            askedAtOffset = output.count
+            try write(spec.command)
+            askedAt = Date()
+            submitted = false
             asksLeft -= 1
         }
 
@@ -163,9 +263,9 @@ enum ClaudeCLI {
                 if count > 0 {
                     output.append(contentsOf: buffer[0..<count])
                     lastByteAt = Date()
-                    if askedAt != nil, !sawPanel {
-                        sawPanel = String(decoding: output, as: UTF8.self)
-                            .range(of: "Resets") != nil
+                    if submitted, !sawPanel {
+                        sawPanel = String(decoding: output[askedAtOffset...], as: UTF8.self)
+                            .range(of: spec.marker) != nil
                     }
                 } else if count == 0 {
                     break                       // the CLI exited on its own
@@ -182,6 +282,12 @@ enum ClaudeCLI {
                 // Boot is done when it stops drawing. Only then does the prompt
                 // exist to type into.
                 if quiet >= 0.8, !output.isEmpty { try ask() }
+            } else if !submitted {
+                // The popup has finished drawing; now the newline is read as one.
+                if quiet >= 0.4 {
+                    try write("\r")
+                    submitted = true
+                }
             } else if sawPanel {
                 if quiet >= settle { return String(decoding: output, as: UTF8.self) }
             } else if asksLeft > 0, Date().timeIntervalSince(askedAt!) >= 4 {
@@ -196,11 +302,12 @@ enum ClaudeCLI {
     }
 
     /// `TERM` has to be set explicitly — launchd does not provide one, and without
-    /// it the CLI renders nothing worth reading. The `CLAUDE_CODE_*` markers are
-    /// stripped so a session started from inside Claude Code behaves like any other.
+    /// it the CLI renders nothing worth reading. The `CLAUDE_CODE_*` and `CODEX_*`
+    /// markers are stripped so a run started from inside either agent behaves like
+    /// any other session.
     private static func childEnvironment(binary: String) -> [String] {
         var environment = ProcessInfo.processInfo.environment
-            .filter { !$0.key.hasPrefix("CLAUDE_CODE_") }
+            .filter { !$0.key.hasPrefix("CLAUDE_CODE_") && !$0.key.hasPrefix("CODEX_") }
 
         environment["TERM"] = "xterm-256color"
         environment["CI"] = nil
@@ -211,14 +318,59 @@ enum ClaudeCLI {
         return environment.map { "\($0.key)=\($0.value)" }
     }
 
-    /// The reader `ClaudeUsagePanel` takes, moved off the main actor.
-    static var reader: ClaudeUsagePanel.Reader {
+    /// The reader a panel takes, moved off the main actor.
+    static func reader(_ spec: Spec) -> PanelReader {
         { @Sendable in
             try await withCheckedThrowingContinuation { continuation in
                 DispatchQueue.global(qos: .utility).async {
-                    continuation.resume(with: Result { try readUsagePanel() })
+                    continuation.resume(with: Result { try readUsagePanel(spec) })
                 }
             }
         }
+    }
+}
+
+extension TerminalCLI.Spec {
+    static var claude: Self {
+        Self(
+            name: "Claude Code",
+            searchPaths: TerminalCLI.paths(binary: "claude", override: "TOKENPACER_CLAUDE_BIN", extra: [
+                AgentHome.claude.appending(path: "local/claude").path,
+            ]),
+            command: "/usage",
+            marker: "Resets",
+            workingDirectory: TerminalCLI.claudeTrustedDirectory
+        )
+    }
+
+    /// Copilot's own `/usage` screen: `Plan ████ 39% used 7,074 / 18,000 AIC`.
+    ///
+    /// `--disable-builtin-mcps` halves the boot (23s → 12s) and costs nothing a
+    /// screen-read needs; `--no-auto-update` keeps a background read from
+    /// downloading a new CLI behind the user's back.
+    static var copilot: Self {
+        Self(
+            name: "Copilot",
+            searchPaths: TerminalCLI.paths(binary: "copilot", override: "TOKENPACER_COPILOT_BIN", extra: []),
+            command: "/usage",
+            arguments: ["--disable-builtin-mcps", "--no-auto-update"],
+            budget: 60,
+            // Only the plan row prints a percentage. The footer's running
+            // "Session: 0 AIC used" would otherwise match on every redraw.
+            marker: "% used",
+            workingDirectory: TerminalCLI.copilotHome
+        )
+    }
+
+    static var codex: Self {
+        Self(
+            name: "Codex",
+            searchPaths: TerminalCLI.paths(binary: "codex", override: "TOKENPACER_CODEX_BIN", extra: [
+                AgentHome.codex.appending(path: "packages/standalone/current/bin/codex").path,
+            ]),
+            command: "/status",
+            marker: "limit:",
+            workingDirectory: TerminalCLI.codexTrustedDirectory
+        )
     }
 }

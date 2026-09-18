@@ -162,7 +162,7 @@ private actor SilentSource: UsageSource {
 private func store(reading: @escaping ClaudeUsagePanel.Reader) async -> UsageStore {
     let store = UsageStore(
         sources: [SilentSource()], interval: 3600,
-        usagePanel: ClaudeUsagePanel(read: reading), archive: nil
+        panels: [.claude: ClaudeUsagePanel(read: reading)], archive: nil
     )
     await store.refresh()
     // The reading is launched, not awaited: give it the tick it lands on.
@@ -201,11 +201,11 @@ private func store(reading: @escaping ClaudeUsagePanel.Reader) async -> UsageSto
 @MainActor
 @Test func aLimitsFailureStaysOnScreenBetweenReadings() async {
     let store = await store(reading: { throw PanelError.cliNotFound })
-    #expect(store.errors[.claude] == PanelError.cliNotFound.message)
+    #expect(store.errors[.claude] == PanelError.cliNotFound.message(for: SourceID.claude.displayName))
 
     // Several ticks with no reading — cliNotFound is fatal, so there is no retry.
     for tick in 1...3 { await store.refresh(now: Date().addingTimeInterval(Double(tick) * 5)) }
-    #expect(store.errors[.claude] == PanelError.cliNotFound.message)
+    #expect(store.errors[.claude] == PanelError.cliNotFound.message(for: SourceID.claude.displayName))
 }
 
 /// `h:mma (UTC)`, the shape the panel prints.

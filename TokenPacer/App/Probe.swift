@@ -7,12 +7,18 @@ import Foundation
 enum Probe {
     static func run() async {
         let store = await UsageStore(
-            usagePanel: ClaudeUsagePanel(read: ClaudeCLI.reader)
+            panels: [
+                .claude: ClaudeUsagePanel(read: TerminalCLI.reader(.claude)),
+                .codex: CodexStatusPanel(read: TerminalCLI.reader(.codex)),
+                .copilot: CopilotUsagePanel(read: TerminalCLI.reader(.copilot)),
+            ]
         )
         await store.refresh()
         // The reading is launched, not awaited, so the first refresh only starts
         // the CLI. Wait for it, then refresh again to fold it into the snapshot.
-        let deadline = Date().addingTimeInterval(45)
+        // Copilot's CLI boots for ~12s and asks GitHub for the budget after
+        // that, so the slowest panel sets this, not the fastest.
+        let deadline = Date().addingTimeInterval(90)
         while await store.isReadingLimits, Date() < deadline {
             try? await Task.sleep(for: .milliseconds(200))
         }

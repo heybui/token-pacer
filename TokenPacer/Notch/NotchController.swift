@@ -28,7 +28,11 @@ final class NotchController {
         watchers = watched.watchers
         store = UsageStore(
             sources: watched.sources,
-            usagePanel: ClaudeUsagePanel(read: ClaudeCLI.reader)
+            panels: [
+                .claude: ClaudeUsagePanel(read: TerminalCLI.reader(.claude)),
+                .codex: CodexStatusPanel(read: TerminalCLI.reader(.codex)),
+                .copilot: CopilotUsagePanel(read: TerminalCLI.reader(.copilot)),
+            ]
         )
 
         let size = PillState.hostSize
