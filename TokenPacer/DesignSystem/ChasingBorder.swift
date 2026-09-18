@@ -106,7 +106,7 @@ final class BorderLight: NSView {
 
     private var strokes: [CAShapeLayer] = []
     /// Pending reinstall, coalesced. See `layout()`.
-    private var settle: DispatchWorkItem?
+    private var settle: Task<Void, Never>?
     private var look: Look?
     private var built: CGSize = .zero
 
@@ -126,8 +126,8 @@ final class BorderLight: NSView {
     /// edge is `minY`. Unflipped, the light would run around the top.
     override var isFlipped: Bool { true }
 
-    /// The pill's own tracking area owns the pointer. An overlay that answers
-    /// hit tests would swallow hover and the card would never open.
+    /// The host's tracking area owns the pointer. An overlay that answers hit
+    /// tests would swallow hover and the card would never open.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func layout() {
@@ -149,9 +149,11 @@ final class BorderLight: NSView {
         // Only the timing waits for the size to stop moving, which costs the
         // light the morph's own length at the old speed and nothing else.
         settle?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.animate() }
-        settle = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleDelay, execute: work)
+        settle = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.settleDelay))
+            guard !Task.isCancelled else { return }
+            self?.animate()
+        }
     }
 
     /// Longer than the shell's spring, so one reinstall lands after it, not during.
