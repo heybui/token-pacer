@@ -28,11 +28,8 @@ struct CapsuleBar: View {
     var width: CGFloat = 36
     var height: CGFloat = 4
     var markerHeight: CGFloat = 11
-    /// Accepted and ignored, for now. The board asks every mark to say "working"
-    /// in its own movement; the one implementation of that measured here cost
-    /// 10.5 points of a core, so the border says it instead until there is a
-    /// cheaper way. Kept in the signature because every caller already knows the
-    /// answer and the next attempt should not have to re-thread it.
+    /// Creeps the marker while a model is answering — the mark's own way of
+    /// saying "working", which is what the board asks every mark to carry.
     var isBurning: Bool = false
 
     @Environment(\.tone) private var tone
@@ -91,24 +88,22 @@ struct CapsuleBar: View {
     /// reason.
     private var dotSize: CGFloat { height + 2 }
 
-    /// The reading itself. It does not move on its own.
+    /// The reading itself, creeping while a model is answering.
     ///
-    /// A `repeatForever` creep on this marker costs **10.5 points of a core** —
-    /// measured as CPU time over a window, after `ps %cpu` misled an earlier
-    /// attempt into calling it free. It is not the drawing that costs: the
-    /// profile is `NSHostingView.layout()` on every display cycle, because an
-    /// animated geometry modifier re-lays out the whole hosting view, and this
-    /// app's host is sized for the pinned panel whether or not the panel is open.
-    ///
-    /// Anything that moves in here has to be paid for in a modifier that does not
-    /// touch layout, or on the clock the border already runs on. Until then the
-    /// border carries "working" alone.
+    /// The creep is a `CALayer` animation rather than a SwiftUI one, for the
+    /// reason `CreepingMarker` carries: moving this capsule with a SwiftUI
+    /// modifier re-lays out the whole hosting view on every display cycle and
+    /// cost 11% of a core. The position on the track is still SwiftUI's, because
+    /// that changes when a reading lands and not otherwise.
     private func marker(at percent: Double) -> some View {
         let clamped = min(100, max(0, percent))
-        return Capsule()
-            .fill(tone.light(clamped))
-            .frame(width: 2, height: markerHeight)
-            .offset(x: width * clamped / 100 - 1)
-            .animation(.easeOut(duration: 0.6), value: percent)
+        return CreepingMarker(
+            color: tone.light(clamped),
+            width: 2, height: markerHeight,
+            isRunning: isBurning
+        )
+        .frame(width: 2, height: markerHeight)
+        .offset(x: width * clamped / 100 - 1)
+        .animation(.easeOut(duration: 0.6), value: percent)
     }
 }

@@ -716,16 +716,20 @@ update path is — an installed copy will only accept an update signed the same 
   | | % of one core |
   |---|---|
   | before the capsule bar | 0.63% |
-  | capsule bar, marker creeping (`repeatForever`) | **11.00%** |
+  | capsule bar, marker creeping in SwiftUI (`repeatForever`) | **11.00%** |
   | capsule bar, creep removed | 0.43% |
-  | today's build, steady | ~1% |
+  | capsule bar, **creep on CoreAnimation** | 0.57 / 0.77 / 0.67% |
 
   It is not the drawing that costs. The profile is `NSHostingView.layout()` on **every
   display cycle**: an animated geometry modifier re-lays out the whole hosting view, and
-  this app's host is sized for the pinned panel whether or not the panel is open. So the
-  board's "every mark says working in its own movement" is unfunded until there is a way to
-  move something without touching layout, or until it rides the clock the border already
-  runs on. The border says it alone meanwhile.
+  this app's host is sized for the pinned panel whether or not the panel is open.
+
+  So movement in the band is drawn by CoreAnimation — a `CABasicAnimation` installed once
+  and run on the render server, nothing on the main thread per frame. `ChasingBorder` had
+  already learned this and written it down (`TimelineView` over a `Canvas`: ~18% of a core
+  for a decoration); `CreepingMarker` is the same lesson applied to the mark, after paying
+  for it a second time. The board's "every mark says working in its own movement" is funded
+  again, at the price of a `NSViewRepresentable` per moving part.
 
 - **`ps %cpu` is a lifetime average, not a rate.** It reported a creeping marker at 0.2–0.4%
   on a freshly launched process and that number went into a commit message and into this
