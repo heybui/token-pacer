@@ -25,7 +25,11 @@ struct CapsuleBar: View {
     /// "it wants 76px, which is what makes it expensive in a wing" — but that
     /// figure buys a 44pt wordmark beside it, and with one provider there is no
     /// wordmark to name. 46 is what the board actually draws.
-    var width: CGFloat = 36
+    var width: CGFloat = CapsuleBar.intrinsicWidth
+    /// What it draws when nobody stretches it. The band asks `Mark` for the
+    /// width it costs, and `Mark` measures the drawing — so this figure must not
+    /// come back from there, or the measurement would ask itself.
+    static let intrinsicWidth: CGFloat = 36
     var height: CGFloat = 4
     var markerHeight: CGFloat = 11
     /// Creeps the marker while a model is answering — the mark's own way of
@@ -33,6 +37,7 @@ struct CapsuleBar: View {
     var isBurning: Bool = false
 
     @Environment(\.tone) private var tone
+    @Environment(\.markEasing) private var markEasing
 
     /// Each boundary is a gap, not a line. The board leaves 2% between capsules,
     /// a point either side of the threshold, so the eye reads three objects
@@ -79,7 +84,7 @@ struct CapsuleBar: View {
             Circle().fill(tone.light(clamped)).frame(width: dotSize, height: dotSize)
         }
         .offset(x: width * clamped / 100 - (dotSize + 2) / 2)
-        .animation(.easeOut(duration: 0.6), value: percent)
+        .animation(markEasing, value: percent)
     }
 
     /// Wider than the track it sits on. At exactly the track's height the dark
@@ -104,6 +109,6 @@ struct CapsuleBar: View {
         )
         .frame(width: 2, height: markerHeight)
         .offset(x: width * clamped / 100 - 1)
-        .animation(.easeOut(duration: 0.6), value: percent)
+        .animation(markEasing, value: percent)
     }
 }

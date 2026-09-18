@@ -20,56 +20,56 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     PillStateResolver.resolve(inputs, at: now)
 }
 
-@Test func steadyUsageCollapses() {
+@MainActor @Test func steadyUsageCollapses() {
     #expect(resolve(PillInputs(snapshot: snapshot())) == .collapsed)
 }
 
-@Test func hoveringOpensTheCard() {
+@MainActor @Test func hoveringOpensTheCard() {
     #expect(resolve(PillInputs(snapshot: snapshot(), pointerInside: true)) == .hover)
 }
 
 /// "No Claude activity: the pill is gone entirely, notch reads as stock hardware."
-@Test func silenceWithdrawsThePill() {
+@MainActor @Test func silenceWithdrawsThePill() {
     let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
     #expect(resolve(PillInputs(snapshot: quiet)) == .dormant)
 }
 
-@Test func nothingReadYetIsAlsoDormant() {
+@MainActor @Test func nothingReadYetIsAlsoDormant() {
     #expect(resolve(PillInputs(snapshot: nil)) == .dormant)
     #expect(resolve(PillInputs(snapshot: snapshot(lastActivity: nil))) == .dormant)
 }
 
 /// The ghost is the only way to reach the menu while dormant.
-@Test func hoveringDeadSpaceRevealsTheGhost() {
+@MainActor @Test func hoveringDeadSpaceRevealsTheGhost() {
     let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
     #expect(resolve(PillInputs(snapshot: quiet, pointerInside: true)) == .ghost)
 }
 
-@Test func aFullWindowGoesToExhausted() {
+@MainActor @Test func aFullWindowGoesToExhausted() {
     #expect(resolve(PillInputs(snapshot: snapshot(percent: 100))) == .exhausted)
 }
 
-@Test func theWarningFiresOnceThenStandsDown() {
+@MainActor @Test func theWarningFiresOnceThenStandsDown() {
     let hot = snapshot(percent: 93)
     #expect(resolve(PillInputs(snapshot: hot)) == .warning)
     #expect(resolve(PillInputs(snapshot: hot, warningAcknowledged: true)) == .collapsed)
 }
 
-@Test func theWarningRespectsItsThreshold() {
+@MainActor @Test func theWarningRespectsItsThreshold() {
     let inputs = PillInputs(snapshot: snapshot(percent: 80), criticalAt: 75)
     #expect(resolve(inputs) == .warning)
     #expect(resolve(PillInputs(snapshot: snapshot(percent: 80), criticalAt: 90)) == .collapsed)
 }
 
 /// Off is off: no figures and no alerts, and hovering does not reveal any.
-@Test func pauseBeatsEverything() {
+@MainActor @Test func pauseBeatsEverything() {
     let inputs = PillInputs(
         snapshot: snapshot(percent: 100), pointerInside: true, isPinned: true, isPaused: true
     )
     #expect(resolve(inputs) == .paused)
 }
 
-@Test func pinningHoldsThePanelOpen() {
+@MainActor @Test func pinningHoldsThePanelOpen() {
     let inputs = PillInputs(snapshot: snapshot(), isPinned: true)
     #expect(resolve(inputs) == .pinned)
     // Even with nothing to show, a pinned panel stays pinned.
@@ -77,12 +77,12 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 }
 
 /// Hovering an exhausted pill must still open the card rather than sticking.
-@Test func hoverWinsOverExhausted() {
+@MainActor @Test func hoverWinsOverExhausted() {
     let inputs = PillInputs(snapshot: snapshot(percent: 100), pointerInside: true)
     #expect(resolve(inputs) == .hover)
 }
 
-@Test func everyStateHasDistinctGeometry() {
+@MainActor @Test func everyStateHasDistinctGeometry() {
     // Guards against a new state silently inheriting another's shell.
     let sizes = Set(PillState.allCases.map { "\($0.size.width)x\($0.size.height)x\($0.cornerRadius)" })
     #expect(sizes.count >= 4)
@@ -92,8 +92,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 
 // MARK: - model
 
-@MainActor
-@Test func hoveringAcknowledgesTheWarning() {
+@MainActor @Test func hoveringAcknowledgesTheWarning() {
     let model = PillModel()
     model.update(snapshot: snapshot(percent: 95), at: now)
     #expect(model.state == .warning)
@@ -106,8 +105,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 }
 
 /// A reset clears the acknowledgement so the next window warns again.
-@MainActor
-@Test func theNextWindowWarnsAgain() {
+@MainActor @Test func theNextWindowWarnsAgain() {
     let model = PillModel()
     model.update(snapshot: snapshot(percent: 95), at: now)
     model.setPointerInside(true, at: now)
@@ -121,8 +119,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 
 /// "Stays expanded until you mouse over it once" — opening the panel counts too,
 /// otherwise the warning re-fires the moment the panel closes.
-@MainActor
-@Test func pinningAcknowledgesTheWarningLikeHoverDoes() {
+@MainActor @Test func pinningAcknowledgesTheWarningLikeHoverDoes() {
     let model = PillModel()
     model.update(snapshot: snapshot(percent: 95), at: now)
     #expect(model.state == .warning)
@@ -137,7 +134,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 // MARK: - panel formatting
 
 /// The exponent is the currency's, not two by convention: 1199 yen is 1199 yen.
-@Test func amountsAreShownAtTheirCurrencysPrecision() {
+@MainActor @Test func amountsAreShownAtTheirCurrencysPrecision() {
     #expect(Format.amount(Money(amountMinor: 1199, currency: "SGD", exponent: 2))
         .contains("11"))
     #expect(Format.amount(Money(amountMinor: 1199, currency: "JPY", exponent: 0))
@@ -146,7 +143,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(Format.amount(nil) == "—")
 }
 
-@Test func spendProjectionScalesTheMonthElapsed() {
+@MainActor @Test func spendProjectionScalesTheMonthElapsed() {
     var utc = Calendar(identifier: .gregorian)
     utc.timeZone = TimeZone(identifier: "UTC")!
     // 15 January, S$11.99 spent: half the month gone, S$24.78 for a 31-day month.
@@ -163,8 +160,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 
 // MARK: - context menu
 
-@MainActor
-@Test func theMenuEnlargesTheClickableArea() {
+@MainActor @Test func theMenuEnlargesTheClickableArea() {
     let model = PillModel()
     model.menuHeight = PillState.menuHeight(items: 6)
     model.update(snapshot: snapshot(), at: now)
@@ -179,8 +175,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
         == PillState.collapsed.size.height + PillState.menuGap + model.menuHeight)
 }
 
-@MainActor
-@Test func theMenuLeavesWithThePointer() {
+@MainActor @Test func theMenuLeavesWithThePointer() {
     let model = PillModel()
     model.update(snapshot: snapshot(), at: now)
     model.setPointerInside(true, at: now)
@@ -193,8 +188,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 
 /// Pausing or quitting from the panel should not cost you the panel, so the menu
 /// opens over it too — and the host reserves the drop for it.
-@MainActor
-@Test func theMenuOpensOverThePinnedPanelToo() {
+@MainActor @Test func theMenuOpensOverThePinnedPanelToo() {
     let model = PillModel()
     model.menuHeight = PillState.menuHeight(items: 6)
     model.update(snapshot: snapshot(), at: now)
@@ -210,7 +204,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 
 /// "Fades out ~400ms after the pointer leaves the notch." Crossing the notch on
 /// the way somewhere else should not snap the pill away mid-glance.
-@Test func theGhostOutstaysThePointer() {
+@MainActor @Test func theGhostOutstaysThePointer() {
     let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
     let leaving = PillInputs(
         snapshot: quiet, pointerInside: false,
@@ -223,8 +217,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     ) == .dormant)
 }
 
-@MainActor
-@Test func leavingTheGhostSchedulesItsWithdrawal() async {
+@MainActor @Test func leavingTheGhostSchedulesItsWithdrawal() async {
     let model = PillModel()
     let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
     model.update(snapshot: quiet, at: now)
@@ -258,8 +251,7 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 /// The light runs left to right along an open track. The top edge is the one
 /// stretch it must never touch: that edge sits against the notch, where half the
 /// glow is behind the hardware and the rest reads as a seam.
-@MainActor
-@Test func theTrackStartsAndEndsAtTheTopAndNeverCrossesIt() {
+@MainActor @Test func theTrackStartsAndEndsAtTheTopAndNeverCrossesIt() {
     let rect = CGRect(x: 0, y: 0, width: 404, height: 136)
     let (points, subpaths) = trackPoints(ShellTrack(cornerRadius: 26, inset: 0.75), in: rect)
 
@@ -275,7 +267,7 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 /// The shell is only ever shadowed when it floats. Every small state sits flush
 /// in the menu bar row, continuous with the notch's own black, and a 31pt shadow
 /// under one reads as a seam across the top of the screen.
-@Test func onlyTheFloatingStatesCastAShadow() {
+@MainActor @Test func onlyTheFloatingStatesCastAShadow() {
     for state in PillState.allCases {
         #expect(state.castsShadow == !(state.fillsFlanks || state == .dormant))
     }
@@ -292,7 +284,7 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 
 /// The flank is the wider wing, and both get it: the shell is centred on the
 /// notch, so unequal sides would sit the hardware off-centre in its own shell.
-@Test func bothWingsTakeTheWiderSide() {
+@MainActor @Test func bothWingsTakeTheWiderSide() {
     let wide = PillState.Wings(mark: .capsuleBar, headline: "100%", tail: "12d 07h")
     let narrow = PillState.Wings(mark: .ringWings, headline: "4%", tail: "1h 02m")
     #expect(wide.flank > narrow.flank)
@@ -304,7 +296,7 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 }
 
 /// The ring is half the bar's width, and the band should show it.
-@Test func aNarrowerMarkNarrowsTheBand() {
+@MainActor @Test func aNarrowerMarkNarrowsTheBand() {
     let band = NotchBand(notchWidth: 200, height: 39)
     let bar = PillState.Wings(mark: .capsuleBar)
     let ring = PillState.Wings(mark: .ringWings)
@@ -314,7 +306,7 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 
 /// The window is resized by the controller and the shell by a spring inside it,
 /// so the host reserves the widest the wings can ever be, not the widest they are.
-@Test func theHostReservesTheWidestWings() {
+@MainActor @Test func theHostReservesTheWidestWings() {
     let band = NotchBand(notchWidth: 200, height: 39)
     let host = PillState.hostSize(around: band).width
     for mark in Mark.allCases {
@@ -326,17 +318,17 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 /// The bug this pins: the flank was measured from the figures alone, leaving out
 /// the row's own spacing either side of the notch, so a six-character countdown
 /// drew through its gutter and a seven-character one would have run off the end.
-@Test func theFlankLeavesRoomForTheCountdownAndItsGutter() {
+@MainActor @Test func theFlankLeavesRoomForTheCountdownAndItsGutter() {
     for mark in Mark.allCases {
         let wings = PillState.Wings(mark: mark, headline: "1.25M", tail: "12d 07h", hasBadge: true)
         let tail = Typography.monoWidth("12d 07h", size: 11.5)
-        #expect(wings.flank >= tail + PillState.trailingGutter + PillState.markGap)
+        #expect(wings.flank >= tail + PillState.trailingGutter + PillState.notchClearance)
     }
 }
 
 /// And that the figures are asked of the font rather than guessed at: a digit
 /// takes the odometer's own cell, everything else takes what it actually draws.
-@Test func monoWidthMeasuresLettersRatherThanAssumingThem() {
+@MainActor @Test func monoWidthMeasuresLettersRatherThanAssumingThem() {
     let digits = Typography.monoWidth("123456", size: 11.5)
     let letters = Typography.monoWidth("abcdef", size: 11.5)
     // Summed six times rather than multiplied once, so compare as the machine

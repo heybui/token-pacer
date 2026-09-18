@@ -145,3 +145,23 @@ private func crossings(_ percentages: [Double], resetsAt: Date = now.addingTimeI
     #expect(policy.crossing(percent: nil, resetsAt: now, thresholds: [75]) == nil)
     #expect(policy.crossing(percent: 99, resetsAt: nil, thresholds: [75]) == nil)
 }
+
+/// The chosen mark is stored by its raw value, so renaming a case would quietly
+/// hand every user back the default. Twelve names, pinned.
+@Test func everyMarkKeepsTheNameItIsStoredUnder() {
+    #expect(Mark.allCases.map(\.rawValue) == [
+        "capsuleBar", "ringWings", "notchTank", "pips", "halfGauge", "eclipse",
+        "tokenStack", "hourglass", "dottedArc", "dotMatrix", "signalStrength",
+        "thermometer",
+    ])
+}
+
+/// A mark nobody can name is a tile nobody can pick, and the axis is the board's
+/// own argument for having twelve of them.
+@MainActor @Test func everyMarkSaysWhatItIsAndWhatItEncodes() {
+    for mark in Mark.allCases {
+        #expect(!mark.displayName.isEmpty)
+        #expect(!mark.axis.isEmpty)
+        #expect(mark.width > 0)
+    }
+}

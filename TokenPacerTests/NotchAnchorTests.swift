@@ -22,11 +22,11 @@ private let external = ScreenMetrics(
     menuBarHeight: 24
 )
 
-@Test func notchWidthFromAuxiliaryAreas() {
+@MainActor @Test func notchWidthFromAuxiliaryAreas() {
     #expect(NotchAnchor.notchWidth(builtIn) == 202)
 }
 
-@Test func noNotchOnExternalDisplay() {
+@MainActor @Test func noNotchOnExternalDisplay() {
     #expect(NotchAnchor.notchWidth(external) == nil)
 }
 
@@ -34,7 +34,7 @@ private let external = ScreenMetrics(
 /// both auxiliary areas with it — notch-shaped, on hardware that has none. Left
 /// unchecked the shell sized its flanks around a phantom and came out far wider
 /// than the board ever drew.
-@Test func noNotchOnADisplayThatOnlyLooksLikeOne() {
+@MainActor @Test func noNotchOnADisplayThatOnlyLooksLikeOne() {
     var phantom = builtIn
     phantom.isBuiltIn = false
     #expect(NotchAnchor.notchWidth(phantom) == nil)
@@ -43,13 +43,13 @@ private let external = ScreenMetrics(
             == PillState.collapsed.size.width)
 }
 
-@Test func noNotchWhenSafeAreaIsZero() {
+@MainActor @Test func noNotchWhenSafeAreaIsZero() {
     var faked = builtIn
     faked.safeAreaTop = 0
     #expect(NotchAnchor.notchWidth(faked) == nil)
 }
 
-@Test func hostIsTopCentredFlushWithScreenTop() {
+@MainActor @Test func hostIsTopCentredFlushWithScreenTop() {
     let frame = NotchAnchor.hostFrame(for: builtIn, size: PillState.hostSize)
     #expect(frame.midX == builtIn.frame.midX)
     #expect(frame.maxY == builtIn.frame.maxY)
@@ -59,7 +59,7 @@ private let external = ScreenMetrics(
 /// to the end of the menu bar row. The figures go in the strips that leaves,
 /// which is the whole point — grow the shell without moving the content and the
 /// ring sits behind the camera.
-@Test func theShellSpansTheBandAndLeavesFlanksToFill() {
+@MainActor @Test func theShellSpansTheBandAndLeavesFlanksToFill() {
     let band = NotchAnchor.band(builtIn)
     #expect(band.notchWidth == 202)
     // The row, not the notch: they differ by a point, and a shell cut to the
@@ -88,7 +88,7 @@ private let external = ScreenMetrics(
 
 /// A menu bar set to hide automatically measures zero. The hardware is still
 /// there, so the safe area is the floor the band never drops below.
-@Test func aHiddenMenuBarFallsBackToTheNotch() {
+@MainActor @Test func aHiddenMenuBarFallsBackToTheNotch() {
     var hidden = builtIn
     hidden.menuBarHeight = 0
     #expect(NotchAnchor.band(hidden).height == builtIn.safeAreaTop)
@@ -97,14 +97,14 @@ private let external = ScreenMetrics(
 /// "No activity" means the notch reads as stock hardware. A black bar beside the
 /// camera is the one thing that would give it away, so dormant keeps the board's
 /// hairline and stays behind the hardware.
-@Test func dormantNeverSpansTheNotch() {
+@MainActor @Test func dormantNeverSpansTheNotch() {
     #expect(PillState.dormant.size(around: NotchAnchor.band(builtIn)) == PillState.dormant.size)
 }
 
 /// An external display has no hardware to reach around, but it has a menu bar
 /// row and the shell still has to end at the bottom of it. The board's 36pt
 /// collapsed pill hung a finger's width below the row on every external screen.
-@Test func theShellMeetsTheMenuBarWithoutANotch() {
+@MainActor @Test func theShellMeetsTheMenuBarWithoutANotch() {
     let band = NotchAnchor.band(external)
     #expect(band.notchWidth == 0)
     #expect(band.height == external.menuBarHeight)
@@ -121,7 +121,7 @@ private let external = ScreenMetrics(
 
 /// Nothing reported at all — no safe area, no row — and there is nothing to
 /// measure against, so the board stands.
-@Test func theShellIsUnchangedWithoutABand() {
+@MainActor @Test func theShellIsUnchangedWithoutABand() {
     var blank = external
     blank.menuBarHeight = 0
     #expect(NotchAnchor.band(blank).isEmpty)
@@ -131,13 +131,13 @@ private let external = ScreenMetrics(
 }
 
 /// The regression that matters on multi-monitor: a screen whose origin is not (0,0).
-@Test func hostFollowsScreenOrigin() {
+@MainActor @Test func hostFollowsScreenOrigin() {
     let frame = NotchAnchor.hostFrame(for: external, size: PillState.hostSize)
     #expect(frame.midX == 2792)
     #expect(frame.maxY == 1342)
 }
 
-@Test func shellOnlyEverGrowsDownward() {
+@MainActor @Test func shellOnlyEverGrowsDownward() {
     for state in PillState.allCases {
         let frame = NotchAnchor.hostFrame(for: builtIn, size: PillState.hostSize)
         #expect(state.size.height <= PillState.hostSize.height)
@@ -148,7 +148,7 @@ private let external = ScreenMetrics(
 
 /// The hosting view clips to its bounds, so a host that only just contains the
 /// pinned panel cuts its shadow off in a hard rectangle.
-@Test func theHostClearsTheLargestShellByTheWholeShadow() {
+@MainActor @Test func theHostClearsTheLargestShellByTheWholeShadow() {
     let panel = PillState.pinned.size
     let reach = PillState.shadowRadius * 2
 
@@ -158,8 +158,7 @@ private let external = ScreenMetrics(
 
 /// The menu opens under the pinned panel too, and a host that does not reserve
 /// its drop clips it — silently, because the rows simply are not drawn.
-@MainActor
-@Test func theHostReservesRoomForEveryMenuItem() {
+@MainActor @Test func theHostReservesRoomForEveryMenuItem() {
     let items = PillRootView(model: PillModel(), store: UsageStore(archive: nil)).menuItems
     let needed = PillState.pinned.size.height
         + PillState.menuGap + PillState.menuHeight(items: items.count)
@@ -171,7 +170,7 @@ private let external = ScreenMetrics(
 /// With an external display attached, the pill belongs in the notch — that is
 /// the product. `NSScreen.main` is the screen holding the key window, which for
 /// an app with no windows is wherever the user last clicked.
-@Test func theNotchedScreenWinsOverTheFocusedOne() {
+@MainActor @Test func theNotchedScreenWinsOverTheFocusedOne() {
     let external = ScreenMetrics(
         frame: CGRect(x: 0, y: 0, width: 2560, height: 1440), safeAreaTop: 0,
         auxiliaryTopLeft: nil, auxiliaryTopRight: nil

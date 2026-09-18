@@ -10,11 +10,13 @@ import SwiftUI
 struct RingMark: View {
     let percent: Double?
     var weekPercent: Double?
-    var size: CGFloat = 18
+    static let intrinsicSize: CGFloat = 18
+    var size: CGFloat = RingMark.intrinsicSize
     var lineWidth: CGFloat = 2.5
     var isBurning = false
 
     @Environment(\.tone) private var tone
+    @Environment(\.markEasing) private var markEasing
 
     /// A point of gap either side of each threshold, as on the bar.
     private static let gap: Double = 1
@@ -62,6 +64,6 @@ struct RingMark: View {
             Circle().fill(.black).frame(width: diameter + 1.5, height: diameter + 1.5)
         }
         .offset(x: radius * cos(angle.radians), y: radius * sin(angle.radians))
-        .animation(.easeOut(duration: 0.6), value: percent)
+        .animation(markEasing, value: percent)
     }
 }

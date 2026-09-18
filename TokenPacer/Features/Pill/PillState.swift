@@ -79,15 +79,15 @@ enum PillState: String, CaseIterable, Sendable {
             Typography.monoWidth(text, size: size)
         }
 
-        var flank: CGFloat {
+        @MainActor var flank: CGFloat {
             // The trailing `markGap` on each side is the row's own spacing between
             // the last thing in a wing and the gap held open for the notch. It is
             // not decoration and it is not optional: left it out, the formula came
             // up 12pt short a side, the row over-committed its shell, and the
             // countdown drew through its own gutter towards the edge.
             let left = leadingGutter + mark.width + markGap
-                + Self.mono(headline, 12) + markGap
-            let right = markGap + Self.mono(tail, 11.5)
+                + Self.mono(headline, 12) + notchClearance
+            let right = notchClearance + Self.mono(tail, 11.5)
                 + (hasBadge ? badgeSize + markGap : 0)
                 + trailingGutter
             return ceil(max(left, right))
@@ -113,15 +113,31 @@ enum PillState: String, CaseIterable, Sendable {
 
         /// What the host reserves: the widest either wing can ever be, so the
         /// window never has to grow while the shell inside it does.
-        static let widest = Wings(
+        @MainActor static let widest = Wings(
             mark: Mark.allCases.max { $0.width < $1.width } ?? .capsuleBar,
             headline: "1.25M", tail: "12d 07h", hasBadge: true
         ).flank
     }
 
-    static let leadingGutter: CGFloat = 11
-    static let trailingGutter: CGFloat = 13
+    /// How far the figures stop short of the shell's own edge.
+    ///
+    /// The board drew 11 and 13, from a row whose content sat against the outer
+    /// edge with the slack beside the notch. The wings lean the other way now —
+    /// towards the hardware, with the slack outside — so this is what is left at
+    /// the corner of the wider wing, and at 11 the mark was in the curve of it.
+    /// Equal on both sides: the shell is symmetric, and two different gutters on
+    /// a row that is now centred on the notch read as a mistake.
+    static let leadingGutter: CGFloat = 15
+    static let trailingGutter: CGFloat = 15
     static let markGap: CGFloat = 12
+    /// How far the figures stop short of the hardware.
+    ///
+    /// The row's own spacing, reused: the notch is one more thing in the row, so
+    /// what separates the mark from its percentage separates the percentage from
+    /// the camera. Named separately all the same, because the two are free to
+    /// disagree — this one is clearance from a piece of hardware, not spacing
+    /// between two figures.
+    static let notchClearance: CGFloat = 12
     static let badgeSize: CGFloat = 10
 
     /// Where an expanded body starts, under the band.
@@ -151,7 +167,7 @@ enum PillState: String, CaseIterable, Sendable {
     /// A notchless screen has a band too — the menu bar row — and it is the one
     /// that matters there: the board's 36pt collapsed pill hung below the row on
     /// an external display, its bottom edge lining up with nothing.
-    func size(around band: NotchBand, wings: Wings = Wings()) -> CGSize {
+    @MainActor func size(around band: NotchBand, wings: Wings = Wings()) -> CGSize {
         guard !band.isEmpty, self != .dormant else { return size }
         // Hovering changes the height, never the width. The shell is one object
         // growing downward out of the notch, and a pill that widened as well read
@@ -197,7 +213,7 @@ enum PillState: String, CaseIterable, Sendable {
 
     /// The host around the same notch: the shell starts a band higher, and on a
     /// wide notch the flanks can outgrow every shell the board drew.
-    static func hostSize(around band: NotchBand) -> CGSize {
+    @MainActor static func hostSize(around band: NotchBand) -> CGSize {
         CGSize(
             // The widest the flanks can ever be, not the widest they are now: the
             // window is resized by the controller, the shell by a spring inside
