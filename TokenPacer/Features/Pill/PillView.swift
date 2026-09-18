@@ -294,9 +294,11 @@ struct PillView: View {
                     .font(Typography.mono(12))
                     .foregroundStyle(.white.opacity(0.4))
             } else {
-                UsageRing(
+                // The board's default mark. The ring said how far along; this says
+                // that and where the boundaries are, which is the question the
+                // pill exists to answer at a glance.
+                CapsuleBar(
                     percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
-                    tone: tone, size: 17, lineWidth: 3,
                     isBurning: snapshot?.isBurning == true
                 )
                 OdometerText(text: headline, size: 12, color: tone)

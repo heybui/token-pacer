@@ -7,9 +7,21 @@ enum Tokens {
     static let red = Color(hex: 0xe2543f)
     static let blue = Color(hex: 0x5aa9d6)
 
+    /// The marker's own scale, one step brighter than the zone it sits in. A
+    /// marker in the zone's own colour disappears into the capsule under it.
+    static let lightGreen = Color(hex: 0xa5f0cd)
+    static let lightAmber = Color(hex: 0xfbcda2)
+    static let lightRed = Color(hex: 0xf4ab9e)
+
     /// The one tone rule. Session, weekly cap and every bar share it.
     static func tone(_ pct: Double, warnAt: Double = 75, critAt: Double = 90) -> Color {
         pct >= critAt ? red : pct >= warnAt ? amber : green
+    }
+
+    /// The same rule, one scale up, for whatever rides the zones rather than
+    /// filling them.
+    static func light(_ pct: Double, warnAt: Double = 75, critAt: Double = 90) -> Color {
+        pct >= critAt ? lightRed : pct >= warnAt ? lightAmber : lightGreen
     }
 
     /// The context menu's own surface. Not `.regularMaterial`: a system material

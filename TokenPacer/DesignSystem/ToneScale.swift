@@ -12,6 +12,11 @@ struct ToneScale: Equatable, Sendable {
     func callAsFunction(_ percent: Double?) -> Color {
         Tokens.tone(percent ?? 0, warnAt: warnAt, critAt: critAt)
     }
+
+    /// The marker scale, against the same two boundaries.
+    func light(_ percent: Double?) -> Color {
+        Tokens.light(percent ?? 0, warnAt: warnAt, critAt: critAt)
+    }
 }
 
 extension EnvironmentValues {
