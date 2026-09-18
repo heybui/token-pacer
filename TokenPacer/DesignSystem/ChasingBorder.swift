@@ -301,7 +301,12 @@ final class BorderLight: NSView {
         let length = piece.length * scale
         let trail = piece.trail * scale
         let distance = width + margin * scale
-        let duration = max(0.05, distance * track / piece.speed)
+        // Paced by default, timed when a piece names its own pass. Three runners
+        // handing off at the corners have to cross a 36pt side and a 390pt bottom
+        // in the same time, which no single speed can do.
+        let duration = piece.speed > 0
+            ? max(0.05, distance * track / piece.speed)
+            : max(0.05, piece.period)
 
         // The head of the whole effect, which this piece follows at its own
         // distance behind.

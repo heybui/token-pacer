@@ -525,7 +525,20 @@ layers, a dash train's one and a glow's two, and it keeps the whole set where th
 comet already was: on the render server, with nothing per frame on the main
 thread. **Twelve of them running in the Appearance grid cost 0.1–0.2% of a core.**
 
-Three things the set forced out, each of them a bug the single comet had hidden:
+The figures are the board's own, taken off its gradients: 26% of the outline lit
+for the comet and a 2.4s lap, 14% per head for the dual, 52% for the pulse wave's
+swell, 46% for an edge runner's band. Two corrections came out of drawing them
+side by side with the board:
+
+- **The tail keeps its width.** It used to thin to a third towards its end, on top
+  of fading, which read as a bright bead with a hair behind it. The board's
+  gradient runs through a constant-width ring: only the light goes.
+- **An edge runner is timed, not paced.** Three runners hand off at the corners
+  only if a 36pt side and a 390pt bottom take the same 2.2s, which no single
+  points-per-second can do.
+
+Three more things the set forced out, each of them a bug the single comet had
+hidden:
 
 - **A layer built at zero bounds stays black.** `apply` runs before AppKit has
   given the view any size, and the rebuild guard returned early; in the pill the

@@ -241,9 +241,9 @@ private actor TallyingSource: UsageSource {
             #expect(piece.width > 0)
             switch piece.motion {
             case .sweep:
-                // A piece that travels has to have somewhere to go and a length
-                // to be seen at.
-                #expect(piece.speed > 0)
+                // A piece that travels has to have somewhere to go, a length to
+                // be seen at, and either a pace or a time to do it in.
+                #expect(piece.speed > 0 || piece.period > 0)
                 #expect(piece.length > 0)
             case .pulse:
                 #expect(piece.period > 0)

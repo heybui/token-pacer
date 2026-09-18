@@ -68,31 +68,32 @@ enum BorderEffect: String, CaseIterable, Sendable {
     {
         switch self {
         case .comet:
-            Self.comet(tone: tone, head: light, lineWidth: lineWidth, speed: 200)
+            // 26% of the outline lit, one lap every 2.4s on the collapsed shell.
+            Self.comet(tone: tone, head: light, lineWidth: lineWidth, speed: 192, length: 0.26)
         case .dualComet:
-            Self.comet(tone: tone, head: light, lineWidth: lineWidth, speed: 170, length: 0.16)
+            Self.comet(tone: tone, head: light, lineWidth: lineWidth, speed: 154, length: 0.14)
                 + Self.comet(
                     tone: tone, head: light, lineWidth: lineWidth,
-                    speed: 170, length: 0.16, phase: 0.5
+                    speed: 154, length: 0.14, phase: 0.5
                 )
         case .counterPair:
-            Self.comet(tone: tone, head: light, lineWidth: lineWidth, speed: 190)
+            Self.comet(tone: tone, head: light, lineWidth: lineWidth, speed: 165, length: 0.16)
                 + Self.comet(
                     tone: tone, head: tone, lineWidth: lineWidth,
-                    speed: 145, reversed: true
+                    speed: 128, length: 0.16, reversed: true
                 )
         case .pulseWave:
             // No head at all: the swell fades in from nothing and back out, which
             // is why it reads as calm and why its direction barely reads.
             Self.band(
-                color: tone, lineWidth: lineWidth, length: 0.38,
-                speed: 150, peak: 0.85, segments: 14
+                color: tone, lineWidth: lineWidth, length: 0.52,
+                speed: 136, peak: 0.85, segments: 16
             )
         case .quarterTrace:
             // A quarter of the perimeter, lit flat, going fast.
-            [BorderPiece(color: tone, opacity: 0.9, width: lineWidth, length: 0.26, speed: 330)]
+            [BorderPiece(color: tone, opacity: 0.9, width: lineWidth, length: 0.26, speed: 243)]
         case .zoneSweep:
-            Self.palette(zones, lineWidth: lineWidth, speed: 120)
+            Self.palette(zones, lineWidth: lineWidth, speed: 92)
         case .marchingDashes:
             [BorderPiece(
                 motion: .dash, color: tone, opacity: 0.8, width: lineWidth,
@@ -115,20 +116,26 @@ enum BorderEffect: String, CaseIterable, Sendable {
                 ),
             ]
         case .edgeRunners:
-            Self.band(color: tone, lineWidth: lineWidth, speed: 150, on: .left)
+            // Timed, not paced: each edge gets its own runner and they hand off
+            // at the corners, which only works if the 36pt sides and the 390pt
+            // bottom take the same 2.2s to cross.
+            Self.band(color: tone, lineWidth: lineWidth, length: 0.46, pass: 2.2, on: .left)
                 + Self.band(
-                    color: light, lineWidth: lineWidth, speed: 150,
-                    phase: 0.33, on: .bottom
+                    color: light, lineWidth: lineWidth, length: 0.46,
+                    pass: 2.2, phase: 0.33, on: .bottom
                 )
-                + Self.band(color: tone, lineWidth: lineWidth, speed: 150, phase: 0.66, on: .right)
-        case .sideDrip:
-            Self.band(color: tone, lineWidth: lineWidth, speed: 90, on: .left)
                 + Self.band(
-                    color: tone, lineWidth: lineWidth, speed: 90,
-                    phase: 0.5, reversed: true, on: .right
+                    color: tone, lineWidth: lineWidth, length: 0.46,
+                    pass: 2.2, phase: 0.66, on: .right
+                )
+        case .sideDrip:
+            Self.band(color: tone, lineWidth: lineWidth, length: 0.52, pass: 2.6, on: .left)
+                + Self.band(
+                    color: tone, lineWidth: lineWidth, length: 0.52,
+                    pass: 2.6, phase: 0.5, reversed: true, on: .right
                 )
         case .bottomSweep:
-            Self.band(color: light, lineWidth: lineWidth, length: 0.18, speed: 170, on: .bottom)
+            Self.band(color: light, lineWidth: lineWidth, length: 0.46, pass: 2.4, on: .bottom)
         }
     }
 
@@ -152,8 +159,14 @@ enum BorderEffect: String, CaseIterable, Sendable {
             // composited and never seen.
             let t = Double(index + 1) / Double(segments)
             return BorderPiece(
-                color: tone, opacity: CGFloat(t * t * t),
-                width: lineWidth * (0.35 + 0.65 * t),
+                // The board's own ramp: nothing at the end of the tail, a third
+                // of the way up by two thirds along, full at the head. Cubed was
+                // too steep — it left a bright bead with a wisp behind it where
+                // the board draws a long lit smear.
+                color: tone, opacity: CGFloat(pow(t, 1.6)),
+                // One width the whole way. A tail that also thins reads as a
+                // hair, not as a light that is passing.
+                width: lineWidth,
                 // Overlapped: exact joins leave hairline gaps that strobe as the
                 // light moves.
                 length: step * 1.8, trail: length * (1 - t),
@@ -162,7 +175,7 @@ enum BorderEffect: String, CaseIterable, Sendable {
         }
         // The halo under the head, then the head itself.
         pieces.append(BorderPiece(
-            color: tone, opacity: 0.25, width: lineWidth * 3, length: step,
+            color: tone, opacity: 0.2, width: lineWidth * 3, length: step,
             speed: speed, reversed: reversed, phase: phase
         ))
         pieces.append(BorderPiece(
@@ -174,9 +187,10 @@ enum BorderEffect: String, CaseIterable, Sendable {
 
     /// A soft band with no head: bright in the middle, gone at both ends.
     private static func band(
-        color: Color, lineWidth: CGFloat, length: Double = 0.3, speed: Double,
-        phase: Double = 0, reversed: Bool = false, peak: CGFloat = 0.95,
-        segments: Int = 8, on segment: BorderPiece.Segment = .whole
+        color: Color, lineWidth: CGFloat, length: Double = 0.3, speed: Double = 0,
+        pass: Double = 0, phase: Double = 0, reversed: Bool = false,
+        peak: CGFloat = 0.95, segments: Int = 8,
+        on segment: BorderPiece.Segment = .whole
     ) -> [BorderPiece] {
         let step = length / Double(segments)
         return (0..<segments).map { index in
@@ -189,7 +203,8 @@ enum BorderEffect: String, CaseIterable, Sendable {
                 color: color, opacity: peak * ramp * ramp,
                 width: lineWidth * (0.4 + 0.6 * ramp),
                 length: step * 1.8, trail: length * (1 - t),
-                speed: speed, reversed: reversed, phase: phase, segment: segment
+                speed: speed, period: pass, reversed: reversed,
+                phase: phase, segment: segment
             )
         }
     }
