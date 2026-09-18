@@ -69,8 +69,9 @@ keeps that honest: it refuses to run without local token activity, which is exac
 when a frozen number is the correct one. The one thing inferred without a reading is
 a reset — the window is simply empty, no conversion required.
 
-`BurnRate` loses its calibrated input and falls back to `ceiling.weightedTokens / 100`
-from `CeilingEstimator`, which is the path API-key users were always on.
+`BurnRate` lost its calibrated input, leaned on `CeilingEstimator` for a while,
+and has since lost that too — see §0.4. It now reports a measured rate and
+projects nothing.
 
 ### Cadence
 
@@ -89,10 +90,9 @@ Codex needs none of this — its rollout logs already carry `rate_limits` with
 | 5-hour %, 7-day %, reset times | **Claude: the CLI's `/usage` panel, to the whole percent. Codex: rollout logs.** |
 | Copilot's monthly allowance | **The desktop app's own local daemon** (`~/.copilot/run/`), the same idea as the CLI panel — unproven, see §0 |
 | Monthly credit spend | the panel's `Usage credits` row — free, no Console admin key |
-| Burn rate, sparkline, headroom | Log token counts (the API gives no rate of change) |
+| Burn rate, sparkline | Log token counts (no provider states a rate of change) |
 | Splits by model / project / surface | Log token counts (the API gives no attribution) |
 | 30-day history | Log token counts |
-| Fallback % when the CLI cannot be read | `CeilingEstimator` over observed windows |
 
 So log parsing stays — it answers everything the panel cannot — but it stops being the source of the headline number.
 
@@ -131,8 +131,8 @@ The rule that follows, and the reason there is no per-provider arithmetic here:
 **a provider whose own figure cannot be read has no row.** Not an estimate, not a
 row built from token counts against an assumed plan size. Local token counts keep
 answering what no quota endpoint ever will — rate of change, attribution, history
-— and never the headline. `CeilingEstimator` stays as what feeds headroom, which
-is the job it can actually do.
+— and never the headline. Nothing infers a percentage any more: `CeilingEstimator`
+is deleted, §0.4.
 
 Toolchain: Xcode 27, Swift 6.4. **Deployment target macOS 15+**.
 
@@ -279,6 +279,37 @@ Retina rungs `icon_512x512_2x.png`, `iconutil` only recognises `@2x`, and it
 drops what it does not recognise without a word — which yields an icns that
 stops at 512 and looks soft in a Retina Finder.
 
+## 0.4 The ceiling is deleted (2026-09-18)
+
+`CeilingEstimator` is gone, and with it every number this app worked out for
+itself. What is on screen is what a provider said, or nothing.
+
+It had two jobs and both were already hollow:
+
+- **The fallback percentage** when a reading could not be taken. Dead the moment
+  the rule in §0 was written: a provider whose figure cannot be read has no row,
+  so there was nothing left for an inferred percentage to be shown *as*.
+- **The token→percent conversion** that turned a burn rate into headroom. The
+  conversion never existed to be measured — the panel prints `7%`, never how many
+  tokens made it — so it came from the largest window ever observed, which read
+  about 70% high (§4.1) and drifted with one heavy afternoon.
+
+**What went with it:** `Ceiling`, `CeilingEstimator`, `UsageSnapshot.Origin` and
+its three cases, `BurnRate.headroomMinutes`, the horizon guard, the "estimated"
+and "no ceiling yet" labels, the ceiling line in `--probe`, and nine tests. Net
+−225 lines, and `BurnRate` is now four lines of arithmetic over the trailing
+thirty minutes.
+
+**What it costs, stated plainly:** the board's over banner said "90% used, ~18 min
+left" and now says "90% used, 2h 04m to the reset". The hover card's pace line
+loses its projection the same way. A countdown to a reset is a fact; minutes of
+headroom was three guesses stacked — a rate, a conversion, and the assumption
+that the next hour looks like the last half one.
+
+`sessionTokens` stays, because a token count is a measurement: it is what the
+pinned panel's hero shows before the first reading lands, and what `1.25M` in the
+flank width is sized for.
+
 ## 1. Architecture
 
 Three layers, one process, no XPC, no daemon.
@@ -332,19 +363,16 @@ becomes `(path, last row id)` for that one source.
 
 **Engine** (pure, synchronous, fully testable — no I/O, no dates from `Date()`, inject a clock):
 - `WindowCalculator` — ccusage block rule: a block starts at the first event after a ≥5h gap, floored to the hour; block spans `[start, start+5h)`.
-- `CeilingEstimator` — ceiling = max observed weighted-token total across completed windows, persisted. Below one observed window → `.unknown`, UI shows raw tokens (`1.24M`).
-- `BurnRate` — weighted tokens/hour over a trailing 30 min → headroom minutes.
+- `BurnRate` — weighted tokens/hour over a trailing 30 min. A measurement, not a projection.
 - `Aggregator` — folds events into **5-minute buckets** keyed by `(source, model, project, surface)`. 30 days ≈ 8.6k buckets; the sparkline, splits and history all read buckets, never raw events. Persist buckets as JSON in Application Support; never persist raw events. No SQLite.
 
 Output is one value type the whole UI binds to:
 
 ```swift
 struct UsageSnapshot {
-    enum Origin { case authoritative, inferred, unknown }   // Codex vs Claude
-    var origin: Origin
-    var sessionPct: Double?, sessionTokens: Int, resetsAt: Date
+    var sessionPct: Double?, sessionTokens: Int, resetsAt: Date   // nil = not reported
     var weeklyPct: Double?, weeklyResetsAt: Date
-    var burnRatePerHour: Double, headroomMinutes: Int
+    var burnRatePerHour: Double
     var sparkline: [Double]          // 26 buckets, matches the design
     var splits: Splits               // by model / project / surface
     var history: [DayUsage]          // 30 days
@@ -371,7 +399,7 @@ bottom-only corners growing down out of the notch:
 | right wing alone | bar row | 226 × 34 — no notch, or the left wing has yielded | 12 |
 | stacked | drop panel | 226 × 34, two provider rows, bars at 2.5pt | 12 |
 | hover | drop panel | 404 × 98, one row per provider | 26 |
-| over | drop panel | big percentage, headroom, one coach line | 22 |
+| over | drop panel | big percentage, the countdown, one coach line | 26 |
 | pinned | drop panel | 752 × 540 | 26 |
 
 The board's old 226 × 3 dormant hairline is gone with the shell: hidden now means
@@ -423,7 +451,7 @@ TokenPacer/              the target's sources, named for it rather than "Sources
     Model/                UsageEvent.swift · UsageSnapshot.swift · TokenCounts.swift · SourceID.swift
     Ingest/               UsageSource.swift · ClaudeCodeSource.swift · CodexSource.swift
                           ClaudeUsagePanel.swift · JSONLReader.swift
-    Engine/               WindowCalculator.swift · CeilingEstimator.swift · BurnRate.swift
+    Engine/               WindowCalculator.swift · BurnRate.swift
                           Aggregator.swift · TokenWeights.swift · AlertPolicy.swift
                           PanelPoller.swift
     Store/                UsageStore.swift · Archive.swift
@@ -516,7 +544,7 @@ the same figures without asking for a credential at all. It absorbed most of the
   critical. Reset restores that scale and nothing else; the other rows are
   preferences, not a configuration to be undone.
 - **Three deltas against the design board**, chosen from a scan: the ring pops on
-  a threshold crossing, the ghost fades rather than cuts, and zero headroom reads
+  a threshold crossing, the ghost fades rather than cuts, and a spent window reads
   red. A silent return to dormant was offered and declined.
 - **A light runs the shell's border** while tokens flow — not in the design, asked
   for on top of it. Tone follows the alert scale; the pinned panel is exempt,
@@ -600,16 +628,16 @@ update path is — an installed copy will only accept an update signed the same 
   happening. 735 of 792 assistant lines in a real session are the model stopping for a tool, so
   reading "assistant" as "finished" was wrong most of the time. Capped at 15 minutes, so a CLI
   killed mid-turn does not pulse all day; a 12s quiet window (two polls) covers the rest.
-- **Headroom is only projected four sample-lengths ahead.** A rate measured over thirty minutes told
-  a live machine it had 269 minutes left at 0.3% used. It fitted inside the window, which was the
-  only guard there was. Past the horizon there is no figure, and the countdown speaks instead.
+- ~~**Headroom is only projected four sample-lengths ahead.**~~ Gone with the ceiling (§0.4). The
+  horizon guard existed because a rate measured over thirty minutes told a live machine it had 269
+  minutes left at 0.3% used. Nothing is projected now, so there is nothing to bound.
 
 ### Verified on hardware
 
 - `/usage` panel read over a pty: 4.1s, 4.2KB, parsed to 7% session / 19% weekly / S$11.99 of S$12.00,
   matching what the CLI draws on screen. `--probe` reports `[authoritative]`.
 - Single instance enforced, including a raw binary launched past LaunchServices.
-- Shadow follows the clipped shape; headroom no longer outlasts its window.
+- Shadow follows the clipped shape.
 - Collapsed pill and hover card, on screen, against live figures.
 - Context menu on right-click — and the reason it first rendered white-on-white: `.regularMaterial`
   follows the desktop appearance. Nothing in this app may track the system scheme.
@@ -630,14 +658,15 @@ update path is — an installed copy will only accept an update signed the same 
 
 ### Still unverified
 
-- **Notch hardware.** Every run so far has been on an external display with no notch, so the
-  no-notch fallback is what has been exercised. The notch path has unit tests only.
+- **Notch hardware.** Mostly run on an external display with no notch, so the no-notch fallback is
+  what has been exercised. `--probe` now resolves the built-in Retina display as the host — safe-area
+  top 38, notch 220 wide, a 39pt row, collapsed shell 368×39 against the board's 226×36 — so the
+  geometry is no longer theoretical. What it looks like around the real camera is still an eye
+  check nobody has made.
 - **Menu-bar click passthrough** and full-screen / space-switch behaviour.
-- ~~**Calibration over time**~~ — gone with the endpoint. Before it was removed it measured a
-  conversion near 190k weighted a point against an inferred ceiling of 324k, so **the ceiling reads
-  roughly 70% too high**: §4.1's outlier problem quantified rather than argued, and the one finding
-  worth keeping from that design. `CeilingEstimator` is now the only conversion there is — it feeds
-  headroom for everyone — so that 70% is a live inaccuracy, not a footnote.
+- ~~**Calibration over time**~~ — gone with the endpoint, and the ceiling it fed is gone too (§0.4).
+  Before it was removed it measured a conversion near 190k weighted a point against an inferred
+  ceiling of 324k: the ceiling read roughly 70% high. That is now a fact about a deleted file.
 - **The warning state on screen** — it needs a window past 90% to appear, which no run has reached.
   Every other state has now been seen, and with it the ring pop, which shares the crossing.
 
@@ -665,12 +694,12 @@ update path is — an installed copy will only accept an update signed the same 
   114ms is reading the 4.5MB archive. Raw events rather than the planned buckets, so windows, burn
   rate, splits and the ceiling keep their exact fidelity and nothing downstream changed.
   The loading state stays: the first read is still not instant, and a fake 0% would still be a lie.
-- **Outliers dominate the inferred ceiling.** Max-observed put Claude's ceiling at 32.4M weighted tokens, so a normal window reads ~4%. One unusually heavy day permanently flattens every later reading. Candidate fixes: a high percentile (p95) of completed windows instead of the max, or the max of the trailing N windows so the ceiling can decay. Needs a decision before the percentage is trustworthy.
+- ~~**Outliers dominate the inferred ceiling.**~~ ✅ answered by deletion, not by a better estimator (§0.4). Max-observed put Claude's ceiling at 32.4M weighted tokens, so a normal window read ~4%; p95 and a decaying trailing max were the candidate fixes. Neither was built. A percentage nobody publishes is not a percentage.
 
 ## 5. Standing risks
 
 1. **Undocumented log formats.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. Mitigation: decode defensively, and when a source yields no parseable usage record in a window where the CLI *is* running, show an explicit `no data` pill state — never a confident `0%`.
-2. **Claude's percentage is an estimate.** Until a full 5-hour window is observed the ceiling is unknown; the UI shows raw tokens (`1.24M`), not a percentage, and only switches to `%` once confident. Codex's authoritative number is the calibration reference — if the two diverge wildly on similar usage, the weights in `TokenWeights` are wrong, not the engine.
+2. **A provider can go quiet.** Every percentage is now the provider's own, so when a reading cannot be taken — the CLI moved, the panel changed, the daemon is down — there is no number at all rather than a wrong one. The pill shows the window's token count and the countdown; the risk is a user reading "no figure" as "no usage". `TokenWeights` no longer touches anything on screen except the burn rate and the splits, where only the ordering matters.
 3. ~~**Bundle id**~~ — settled: `com.redevify.token-pacer`, renamed with the product before release.
 4. **Copilot's quota comes from a daemon nobody documents.** The port and token
    in `~/.copilot/run/` belong to the desktop app and are rewritten when it
