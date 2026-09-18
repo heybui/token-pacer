@@ -31,6 +31,17 @@ enum SingleInstance {
         // over a locking problem is worse than the duplicate it would prevent.
         guard fd >= 0 else { return true }
 
+        // Close-on-exec, or the lock outlives the app that took it.
+        //
+        // This app spawns the user's own CLI to read its `/usage` panel, and a
+        // spawned child inherits every descriptor that is not marked this way.
+        // A CLI still running when the app goes away keeps the lock open on its
+        // behalf — so the app refuses to start again, against a process that is
+        // not it, until that orphan exits. Seen for real: TokenPacer quit, a
+        // `claude` process it had spawned held the descriptor with ppid 1, and
+        // every relaunch printed "Token Pacer is already running".
+        fcntl(fd, F_SETFD, FD_CLOEXEC)
+
         guard flock(fd, LOCK_EX | LOCK_NB) == 0 else {
             close(fd)
             return false
