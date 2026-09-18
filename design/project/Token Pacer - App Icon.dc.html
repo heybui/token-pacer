@@ -19,14 +19,14 @@
 </helmet>
 <div style="font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: #0b0b0d; color: #f2f2f4; min-height: 100vh; padding: 44px 32px 76px; display: flex; flex-direction: column; gap: 46px;">
 
-  <div style="display: flex; flex-direction: column; gap: 8px; max-width: 72ch;">
+  <div style="display: flex; flex-direction: column; gap: 8px; max-width: 74ch;">
     <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.015em;">Token Pacer — app icon</h1>
-    <p style="margin: 0; font-size: 13.5px; line-height: 1.6; color: rgba(255,255,255,.55); text-wrap: pretty;">B1 “notch bite”, finished. Slate ground, bite filled darker than the ground so it reads on any backdrop, half-full green with a brighter meniscus, strong inner bloom. The mark tints with state; green at rest.</p>
+    <p style="margin: 0; font-size: 13.5px; line-height: 1.6; color: rgba(255,255,255,.55); text-wrap: pretty;">The notch bite stays — it says where the app lives. Inside it, three capsules with air between them: safe, watch, over. A marker sits in the capsule you're currently in, in a lighter tint of that zone. The zones are always coloured; the marker's position and tint are what move.</p>
   </div>
 
   <div style="display: flex; flex-wrap: wrap; gap: 34px; align-items: flex-end;">
     <div style="display: flex; flex-direction: column; gap: 12px;">
-      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">1024 master · at rest</span>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">1024 master · resting state</span>
       <div style="position: relative; padding: 42px; border-radius: 20px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
         <div style="position: absolute; inset: -30px; background: radial-gradient(60% 70% at 26% 22%, #2f4a63, transparent 70%), radial-gradient(70% 80% at 78% 76%, #2c3b34, transparent 72%), linear-gradient(150deg, #1b2230, #14181d 60%, #221c24); filter: blur(26px); transform: scale(1.08);"></div>
         {{ heroIcon }}
@@ -34,12 +34,12 @@
     </div>
 
     <div style="display: flex; flex-direction: column; gap: 12px;">
-      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">State tints</span>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">Dock · parks at zone centre</span>
       <div style="display: flex; gap: 14px;">
-        <sc-for list="{{ tintInsets }}" as="ti" hint-placeholder-count="2">
+        <sc-for list="{{ dockStates }}" as="d" hint-placeholder-count="3">
           <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-            {{ ti.icon }}
-            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9.5px; color: rgba(255,255,255,.4); white-space: nowrap;">{{ ti.label }}</span>
+            {{ d.icon }}
+            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9.5px; color: {{ d.c }}; white-space: nowrap;">{{ d.label }}</span>
           </div>
         </sc-for>
       </div>
@@ -56,12 +56,26 @@
         </div>
       </sc-for>
     </div>
+    <p style="margin: 0; max-width: 80ch; font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.5); text-wrap: pretty;">Below 64px the zones stop being honest: safe/watch/over go from 75/15/10 to 50/25/25 so all three capsules survive. The marker stays proportionally placed <em>inside its own zone</em>, so it never lands in the wrong capsule at any size — only its exact offset differs.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">Marker travel · live values in the notch</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 28px; padding: 24px; border-radius: 14px; background: #101115; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);">
+      <sc-for list="{{ sweep }}" as="sw" hint-placeholder-count="6">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+          {{ sw.icon }}
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9.5px; color: {{ sw.c }}; white-space: nowrap;">{{ sw.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <p style="margin: 0; max-width: 80ch; font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.5); text-wrap: pretty;">At a boundary the marker snaps forward into the zone it's entering — 75% is already watch, 90% is already over. At 0% and 100% it clamps inside the bar rather than overhanging the ends.</p>
   </div>
 
   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 26px; align-items: start;">
 
     <div style="display: flex; flex-direction: column; gap: 14px;">
-      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">16px template glyph · simplified, no fill level</span>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">16px template glyph · notch only</span>
       <div style="display: flex; flex-direction: column; gap: 10px;">
         <div style="display: flex; align-items: center; gap: 12px; height: 26px; padding: 0 13px; border-radius: 8px; background: rgba(22,22,26,.96); font-size: 12px; color: rgba(255,255,255,.8);">
           <span style="flex: 1 1 auto;">Dark menu bar</span>
@@ -74,38 +88,26 @@
           <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: rgba(0,0,0,.6);">58%</span>
         </div>
       </div>
-      <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.5); text-wrap: pretty;">Single-colour template: notch silhouette only. The fill level and bloom are dropped — at 16px they turn to mush and macOS recolours templates anyway.</p>
+      <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.5); text-wrap: pretty;">Single-colour template: notch silhouette only. macOS recolours templates, so three tinted capsules would flatten to one grey blob — the number beside it carries the rate.</p>
     </div>
 
     <div style="display: flex; flex-direction: column; gap: 14px;">
-      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">DMG volume icon</span>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">DMG volume icon · always static</span>
       <div style="display: flex; align-items: center; justify-content: center; padding: 22px; border-radius: 14px; background: #101115; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);">
         <div style="position: relative; width: 168px; height: 168px; border-radius: 50%; background: linear-gradient(160deg, #fdfdfd, #e4e6ea); box-shadow: 0 10px 28px rgba(0,0,0,.4), inset 0 0 0 1px rgba(0,0,0,.08); display: flex; align-items: center; justify-content: center;">
           <div style="position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 50% 50%, rgba(0,0,0,.1) 0 13%, transparent 14%);"></div>
           {{ dmgIcon }}
         </div>
       </div>
-      <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.5); text-wrap: pretty;">App icon on the standard white disk, 62% of the disk diameter. The dark bite keeps the notch legible against white.</p>
+      <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.5); text-wrap: pretty;">App icon on the standard white disk, 62% of the disk diameter. Finder, the DMG and the App Store listing all show the resting marker — only the dock icon ever redraws.</p>
     </div>
   </div>
 
-  <div style="display: flex; flex-direction: column; gap: 14px;">
-    <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.34);">Bite width · built at 55%, for comparison</span>
-    <div style="display: flex; flex-wrap: wrap; gap: 28px; padding: 24px; border-radius: 14px; background: #101115; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);">
-      <sc-for list="{{ biteVariants }}" as="bv" hint-placeholder-count="3">
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
-          {{ bv.icon }}
-          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9.5px; color: {{ bv.c }}; white-space: nowrap;">{{ bv.label }}</span>
-        </div>
-      </sc-for>
-    </div>
-  </div>
-
-  <div style="display: flex; flex-direction: column; gap: 12px; max-width: 76ch;">
-    <h2 style="margin: 0; font-size: 16px; font-weight: 600;">Geometry</h2>
+  <div style="display: flex; flex-direction: column; gap: 12px; max-width: 78ch;">
+    <h2 style="margin: 0; font-size: 16px; font-weight: 600;">Geometry &amp; behaviour</h2>
     <div style="display: flex; flex-direction: column; gap: 7px;">
-      <sc-for list="{{ specs }}" as="s" hint-placeholder-count="7">
-        <div style="display: grid; grid-template-columns: 150px minmax(0,1fr); gap: 14px; align-items: baseline;">
+      <sc-for list="{{ specs }}" as="s" hint-placeholder-count="12">
+        <div style="display: grid; grid-template-columns: 158px minmax(0,1fr); gap: 14px; align-items: baseline;">
           <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: rgba(255,255,255,.4);">{{ s.k }}</span>
           <span style="font-size: 12.5px; line-height: 1.5; color: rgba(255,255,255,.66); text-wrap: pretty;">{{ s.v }}</span>
         </div>
@@ -114,100 +116,131 @@
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:1200}}">
-const GREEN = '#3ec98a', AMBER = '#f0913a', CRIT = '#e2543f';
-const GROUND = '#1d1f26', BITE = '#0f1014';
-const MENISCUS = { '#3ec98a': '#8fead:', a: 0 };
-const LIGHT = { '#3ec98a': '#93ebc0', '#f0913a': '#f8c08a', '#e2543f': '#f09b8c' };
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:1280},&quot;pace&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.5,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;State&quot;},&quot;watchStartsAt&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.7,&quot;min&quot;:0.4,&quot;max&quot;:0.9,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Zone boundaries&quot;},&quot;overStartsAt&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.95,&quot;min&quot;:0.75,&quot;max&quot;:1,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Zone boundaries&quot;},&quot;exaggerateSmall&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Small sizes&quot;}}">
+const GREEN='#3ec98a', AMBER='#f0913a', CRIT='#e2543f';
+const LIGHT={'#3ec98a':'#a5f0cd','#f0913a':'#fbcda2','#e2543f':'#f4ab9e'};
+const GROUND='#1d1f26', BITE='#0f1014';
+const BAR_L=10, BAR_W=80, BAR_Y=63.5, GAP=0.02;
 
 class Component extends DCLogic {
-  icon(size, opts) {
-    const o = opts || {};
-    const tint = o.tint || GREEN;
-    const bite = o.biteW || 0.55;
-    const fill = o.fill === undefined ? 0.5 : o.fill;
-    const r = Math.round(size * 0.2258);
-    const kids = [
-      React.createElement('div', { key: 'bloom', style: {
-        position: 'absolute', inset: 0,
-        background: 'radial-gradient(circle at 50% ' + (100 - fill * 100 + 14) + '%, ' + tint + '88, transparent 66%)'
-      } }),
-      React.createElement('div', { key: 'fill', style: {
-        position: 'absolute', left: 0, right: 0, bottom: 0, height: (fill * 100) + '%', background: tint
-      } }),
-      React.createElement('div', { key: 'men', style: {
-        position: 'absolute', left: 0, right: 0, bottom: (fill * 100) + '%',
-        height: Math.max(1, Math.round(size * 0.019)) + 'px', background: LIGHT[tint] || '#fff'
-      } }),
-      React.createElement('div', { key: 'bite', style: {
-        position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-        width: (bite * 100) + '%', height: '17%',
-        borderRadius: '0 0 ' + Math.max(1, Math.round(size * 0.085)) + 'px ' + Math.max(1, Math.round(size * 0.085)) + 'px',
-        background: BITE
-      } })
-    ];
-    return React.createElement('div', {
-      style: {
-        boxSizing: 'border-box', position: 'relative', width: size, height: size,
-        borderRadius: r, background: GROUND, overflow: 'hidden', flex: '0 0 auto',
-        boxShadow: size >= 48
-          ? '0 ' + Math.round(size * 0.045) + 'px ' + Math.round(size * 0.11) + 'px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.07)'
-          : 'inset 0 0 0 .5px rgba(255,255,255,.1)'
-      }
-    }, kids);
+  bounds(){
+    return [this.props.watchStartsAt ?? 0.75, this.props.overStartsAt ?? 0.90];
   }
-
-  glyph(size, color) {
-    return React.createElement('div', {
-      style: {
-        boxSizing: 'border-box', position: 'relative', width: size, height: size,
-        borderRadius: Math.max(2, Math.round(size * 0.24)), background: color, overflow: 'hidden', flex: '0 0 auto'
-      }
-    }, React.createElement('div', {
-      style: {
-        position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-        width: '55%', height: '30%', borderRadius: '0 0 ' + Math.max(1, Math.round(size * 0.1)) + 'px ' + Math.max(1, Math.round(size * 0.1)) + 'px',
-        background: 'transparent', boxShadow: '0 0 0 99px ' + color
-      }
-    }));
+  zones(size){
+    const [w,o] = this.bounds();
+    if ((this.props.exaggerateSmall ?? true) && size < 64)
+      return [[0,.5,GREEN],[.5,.75,AMBER],[.75,1,CRIT]];
+    const MIN = 0.14;
+    const raw = [w, o - w, 1 - o].map(v => Math.max(v, MIN));
+    const sum = raw[0] + raw[1] + raw[2];
+    const a = raw.map(v => v / sum);
+    return [[0,a[0],GREEN],[a[0],a[0]+a[1],AMBER],[a[0]+a[1],1,CRIT]];
   }
+  trueZones(){
+    const [w,o] = this.bounds();
+    return [[0,w,GREEN],[w,o,AMBER],[o,1,CRIT]];
+  }
+  markerW(size){ return Math.max(1.5, size * (size < 40 ? 0.075 : 0.036)); }
+  locate(pace, size){
+    const zs = this.zones(size), tz = this.trueZones();
+    let i = pace >= tz[2][0] ? 2 : (pace >= tz[1][0] ? 1 : 0);
+    const [a,b,c] = tz[i];
+    const t = Math.min(1, Math.max(0, (pace - a) / (b - a)));
+    const half = GAP/2;
+    const ia = zs[i][0] + (i ? half : 0), ib = zs[i][1] - (i < 2 ? half : 0);
+    const left = BAR_L + BAR_W*ia, right = BAR_L + BAR_W*ib;
+    const hw = (this.markerW(size) / size) * 100 / 2;
+    const lo = left + hw, hi = right - hw;
+    const x = hi <= lo ? (left + right) / 2 : lo + t * (hi - lo);
+    return { x, tint: c, zone: i };
+  }
+  icon(size, opts){
+    const o = opts||{};
+    const pace = o.pace === undefined ? (this.props.pace ?? 0.375) : o.pace;
+    const small = size < 40, zs = this.zones(size);
+    const barH = small ? 13 : 8.5;
+    const loc = this.locate(pace, size);
+    const light = LIGHT[loc.tint];
+    const kids = [];
 
-  glyphCut(size, color) {
-    return React.createElement('div', {
-      style: {
-        boxSizing: 'border-box', position: 'relative', width: size, height: size, flex: '0 0 auto',
-        borderRadius: Math.max(2, Math.round(size * 0.24)), background: color,
-        clipPath: 'polygon(0 0, 22.5% 0, 22.5% 30%, 77.5% 30%, 77.5% 0, 100% 0, 100% 100%, 0 100%)'
-      }
+    kids.push(React.createElement('div',{key:'bloom',style:{
+      position:'absolute', left:loc.x+'%', top:BAR_Y+'%', width:'120%', height:'120%',
+      transform:'translate(-50%,-50%)',
+      background:'radial-gradient(circle at 50% 50%, '+loc.tint+'40, transparent 38%)'}}));
+
+    zs.forEach((z,i)=>{
+      const half = GAP/2;
+      const a = z[0] + (i ? half : 0), b = z[1] - (i < zs.length-1 ? half : 0);
+      kids.push(React.createElement('div',{key:'z'+i,style:{
+        position:'absolute', left:(BAR_L + BAR_W*a)+'%', width:(BAR_W*(b-a))+'%',
+        top:BAR_Y+'%', height:barH+'%', transform:'translateY(-50%)',
+        borderRadius:'999px', background:z[2]}}));
     });
-  }
 
-  renderVals() {
-    const ladderSizes = [512, 256, 128, 64, 32, 16];
+    kids.push(React.createElement('div',{key:'mk',style:{
+      position:'absolute', left:loc.x+'%', top:BAR_Y+'%',
+      width:this.markerW(size)+'px', height:small?'26%':'20%',
+      transform:'translate(-50%,-50%)', borderRadius:(size*0.032)+'px',
+      background:light,
+      boxShadow:'0 '+Math.max(1,size*0.012)+'px '+Math.max(1,size*0.03)+'px rgba(0,0,0,.55)'}}));
+
+    kids.push(React.createElement('div',{key:'bite',style:{
+      position:'absolute', top:0, left:'50%', transform:'translateX(-50%)',
+      width:'55%', height:'17%',
+      borderRadius:'0 0 '+Math.max(1,Math.round(size*0.085))+'px '+Math.max(1,Math.round(size*0.085))+'px',
+      background:BITE}}));
+
+    return React.createElement('div',{style:{
+      boxSizing:'border-box', position:'relative', width:size, height:size,
+      borderRadius:Math.round(size*0.2258), background:GROUND, overflow:'hidden', flex:'0 0 auto',
+      boxShadow: size>=48
+        ? '0 '+Math.round(size*0.045)+'px '+Math.round(size*0.11)+'px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.07)'
+        : 'inset 0 0 0 .5px rgba(255,255,255,.1)'}}, kids);
+  }
+  glyphCut(size, color){
+    return React.createElement('div',{style:{
+      boxSizing:'border-box', position:'relative', width:size, height:size, flex:'0 0 auto',
+      borderRadius:Math.max(2,Math.round(size*0.24)), background:color,
+      clipPath:'polygon(0 0, 22.5% 0, 22.5% 30%, 77.5% 30%, 77.5% 0, 100% 0, 100% 100%, 0 100%)'}});
+  }
+  renderVals(){
+    const [w,o] = this.bounds();
+    const centre = [w/2, (w+o)/2, (o+1)/2];
     return {
       heroIcon: this.icon(232),
-      tintInsets: [
-        { label: '75–90%', icon: this.icon(64, { tint: AMBER, fill: 0.24 }) },
-        { label: '90%+', icon: this.icon(64, { tint: CRIT, fill: 0.08 }) }
+      dockStates: [
+        { label:'safe', c:GREEN, icon:this.icon(64,{pace:centre[0]}) },
+        { label:'watch', c:AMBER, icon:this.icon(64,{pace:centre[1]}) },
+        { label:'over', c:CRIT, icon:this.icon(64,{pace:centre[2]}) }
       ],
-      ladder: ladderSizes.map(s => ({ label: s + 'px', icon: this.icon(s) })),
-      glyphLight: this.glyphCut(16, 'rgba(255,255,255,.92)'),
-      glyphDark: this.glyphCut(16, 'rgba(0,0,0,.82)'),
+      ladder: [512,256,128,64,32,16].map(s=>({label:s+'px', icon:this.icon(s)})),
+      sweep: [
+        { label:'2%', c:'rgba(255,255,255,.4)', icon:this.icon(96,{pace:0.02}) },
+        { label:'37.5% · rest', c:GREEN, icon:this.icon(96,{pace:0.375}) },
+        { label:'58%', c:GREEN, icon:this.icon(96,{pace:0.58}) },
+        { label:Math.round(w*100)+'% · enters watch', c:AMBER, icon:this.icon(96,{pace:w}) },
+        { label:Math.round(o*100)+'% · enters over', c:CRIT, icon:this.icon(96,{pace:o}) },
+        { label:'100%', c:CRIT, icon:this.icon(96,{pace:1}) }
+      ],
+      glyphLight: this.glyphCut(16,'rgba(255,255,255,.92)'),
+      glyphDark: this.glyphCut(16,'rgba(0,0,0,.82)'),
       dmgIcon: this.icon(104),
-      biteVariants: [
-        { label: '42% — true-ish', c: 'rgba(255,255,255,.4)', icon: this.icon(96, { biteW: 0.42 }) },
-        { label: '55% — built', c: GREEN, icon: this.icon(96, { biteW: 0.55 }) },
-        { label: '70% — wide', c: 'rgba(255,255,255,.4)', icon: this.icon(96, { biteW: 0.7 }) }
-      ],
       specs: [
-        { k: 'corner radius', v: '22.58% of icon size — Apple squircle approximation.' },
-        { k: 'bite', v: '55% wide, 17% tall, bottom corners 8.5%, filled #0f1014 — darker than the ground so it never depends on the backdrop.' },
-        { k: 'fill', v: '50% at rest, flat top edge with a 1.9% meniscus in a lighter tint.' },
-        { k: 'bloom', v: 'Radial, tint at 53% alpha, centred just under the fill line, fading out at 66%.' },
-        { k: 'ground', v: '#1d1f26, flat. Hairline inner stroke at 7% white for edge definition on light wallpapers.' },
-        { k: 'tints', v: 'Green #3ec98a at rest · amber #f0913a from 75% · red #e2543f from 90%. Fill level drops as the tint escalates.' },
-        { k: '16px template', v: 'Notch silhouette only, single colour, clip-path cut — no fill, no bloom, no stroke.' },
-        { k: 'exports', v: 'icons/transparent/ and icons/opaque/, each holding the iconset ladder plus token-pacer-<size>.png. Project filenames cannot contain @, so @2x assets ship as _2x — icons/README.md has the one-line rename that rebuilds a real .iconset for iconutil.' }
+        { k:'corner radius', v:'22.58% of icon size — Apple squircle approximation.' },
+        { k:'bite', v:'55% wide, 17% tall, bottom corners 8.5%, filled #0f1014 — darker than the ground so it never depends on the backdrop.' },
+        { k:'bar', v:'80% wide, inset 10% each side, centred at 63.5% height. Capsule height 8.5%, fully rounded.' },
+        { k:'zones', v:'Three separate capsules with a 2% gap between them: safe #3ec98a to 75%, watch #f0913a to 90%, over #e2543f beyond. All three always at full colour.' },
+        { k:'drawn widths', v:'Boundaries stay at 75/90, but no capsule is drawn narrower than 14% of the bar — otherwise over would be thinner than the marker standing in it. Shares land at 72 / 14.4 / 13.5 of the bar\u2019s 80% width.' },
+        { k:'marker', v:'3.6% wide, 20% tall, radius 3.2%, in the lighter tint of the zone it stands in, with a soft drop shadow. About 53% of the narrowest capsule\u2019s width at every size down to 32px, rising to 70% at 16px — the zone colour always survives around it.' },
+        { k:'resting state', v:'Centred in the safe capsule — pace 37.5%, the same park-at-zone-centre rule the dock uses. Baked into every exported PNG, the DMG and the store listing.' },
+        { k:'boundaries', v:'At exactly 75% or 90% the marker snaps forward into the zone being entered; it never sits in a gap.' },
+        { k:'extremes', v:'The marker centre is clamped by its own half-width inside the capsule it stands in, so neither the capsule edge nor the bar\u2019s outer edge is ever broken — at 0% and 100% it sits flush inside.' },
+        { k:'below 64px', v:'Zones exaggerate to 50/25/25 so all three capsules stay visible; the marker keeps its proportional place inside its own zone.' },
+        { k:'below 40px', v:'Capsule height goes to 13% and the marker to 7.5% wide, floored at 1.5px — the bar survives where detail wouldn\u2019t.' },
+        { k:'dock', v:'Redraws on zone change only — three redraws a session at most — and parks the marker at the centre of the zone you\u2019re in. The dock reports zone; the notch pill reports pace.' },
+        { k:'static contexts', v:'Finder, the DMG and the App Store listing never redraw. No dock badge: the marker is the only indicator.' },
+        { k:'16px template', v:'Notch silhouette only, single colour, clip-path cut — no capsules, no bloom, no stroke.' },
+        { k:'exports', v:'icons/iconset/{transparent,opaque}/ holds the icon_*.png .icns ladder; icons/mark/{transparent,opaque}/ holds the flat token-pacer-<size>.png set. Project filenames cannot contain @, so @2x assets ship as _2x — icons/iconset/README.md has the one-line rename that rebuilds a real .iconset for iconutil.' }
       ]
     };
   }
