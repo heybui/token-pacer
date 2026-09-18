@@ -16,6 +16,19 @@ VERSION ?= $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString"
 BUILD   ?= $(shell git rev-list --count HEAD)
 DMG     := build/$(APP)-$(VERSION).dmg
 
+## Where the public can reach this. The source repo is private, and a private
+## repo's release assets have no unauthenticated URL at all — nothing Sparkle or
+## Homebrew fetches can live in it. Two public repos carry that instead: the site
+## serves the feed from a domain we own, so it survives a move off GitHub, and the
+## tap carries the cask. Both are checked out beside this one.
+SITE_REPO ?= heybui/tokenpacer.com
+SITE_DIR  ?= ../tokenpacer.com
+TAP_REPO  ?= heybui/homebrew-tap
+TAP_DIR   ?= ../homebrew-tap
+## Per release, so it is never the URL baked into a build — only the feed is that,
+## and the feed is the domain.
+RELEASE_URL := https://github.com/$(SITE_REPO)/releases/download
+
 ## Distribution needs a *Developer ID Application* certificate — the Apple
 ## Development one above is for this machine only and cannot be notarized.
 ## Requires the paid Developer Program.
@@ -30,7 +43,7 @@ SPARKLE_BIN := .build/artifacts/sparkle/Sparkle/bin
 ## Release signing adds these; a debug build gets neither.
 SIGNFLAGS ?=
 
-.PHONY: run build app test xcbuild xctest clean release-app dmg notarize cask appcast check-devid
+.PHONY: run build app test xcbuild xctest clean release-app dmg notarize cask appcast check-devid release
 
 ## SPM links Sparkle but leaves no usable rpath in the bare binary, so an
 ## in-place run has to be told where the framework is. The bundle does not need
@@ -99,13 +112,21 @@ dmg: release-app
 	rm -rf build/dmg
 	@echo "→ $(DMG)"
 
+## `appcast` and `cask` both describe an image that already exists — the one Apple
+## stapled. Rebuilding it here would hand them a different file from the one that
+## was notarized, so the image is a prerequisite they check rather than build.
+$(DMG):
+	@echo "No $(DMG) yet. Run 'make dmg' or 'make notarize' first: the feed and"; \
+	 echo "the cask have to describe the stapled image, not a freshly built one."; \
+	 exit 1
+
 ## The feed Sparkle reads. Uploaded as a release asset next to the DMG, so
 ## `releases/latest/download/appcast.xml` always points at the newest one.
 ## Signs each update with the EdDSA key in the login Keychain — without it an
 ## installed copy refuses the download, which is the whole point of the key.
 appcast: $(DMG)
 	$(SPARKLE_BIN)/generate_appcast --download-url-prefix \
-	  https://github.com/heybui/token-pacer/releases/download/v$(VERSION)/ build
+	  $(RELEASE_URL)/v$(VERSION)/ build
 	@echo "→ build/appcast.xml"
 
 ## Apple staples the ticket to the image, so a first launch works offline.
@@ -117,17 +138,17 @@ notarize: dmg
 
 ## Generated, never checked in: only the version and the hash change per release,
 ## and a stale copy in the repo is how a tap ships the wrong checksum.
-cask: dmg
+cask: $(DMG)
 	@mkdir -p build
 	@printf '%s\n' \
 	'cask "token-pacer" do' \
 	'  version "$(VERSION)"' \
 	'  sha256 "$(shell shasum -a 256 $(DMG) | cut -d" " -f1)"' \
 	'' \
-	'  url "https://github.com/heybui/token-pacer/releases/download/v#{version}/$(APP)-#{version}.dmg"' \
+	'  url "$(RELEASE_URL)/v#{version}/$(APP)-#{version}.dmg"' \
 	'  name "Token Pacer"' \
 	'  desc "Claude Code and Codex usage in the notch"' \
-	'  homepage "https://github.com/heybui/token-pacer"' \
+	'  homepage "https://tokenpacer.com"' \
 	'' \
 	'  depends_on macos: ">= :sequoia"' \
 	'' \
@@ -139,6 +160,31 @@ cask: dmg
 	'  ]' \
 	'end' > build/token-pacer.rb
 	@echo "→ build/token-pacer.rb"
+
+## Cut a release. Everything above this line is local; this is the only target
+## that publishes, and the only one that pushes anywhere.
+##
+## Sequenced by hand rather than by prerequisites, because the order is load
+## bearing: stapling rewrites the disk image, so the feed has to be generated
+## after it or it signs bytes nobody downloads.
+release:
+	$(MAKE) notarize
+	$(MAKE) appcast
+	$(MAKE) cask
+	gh release create v$(VERSION) --repo $(SITE_REPO) \
+	  --title "$(APP) $(VERSION)" --generate-notes $(DMG) build/appcast.xml
+	@# The feed lives at the domain, not at the release: a build polls the URL it
+	@# shipped with for ever, and that one has to outlive wherever the DMG sits.
+	cp build/appcast.xml $(SITE_DIR)/appcast.xml
+	git -C $(SITE_DIR) add appcast.xml
+	git -C $(SITE_DIR) commit -m "release: $(APP) $(VERSION)"
+	git -C $(SITE_DIR) push
+	mkdir -p $(TAP_DIR)/Casks
+	cp build/token-pacer.rb $(TAP_DIR)/Casks/token-pacer.rb
+	git -C $(TAP_DIR) add Casks/token-pacer.rb
+	git -C $(TAP_DIR) commit -m "token-pacer $(VERSION)"
+	git -C $(TAP_DIR) push
+	@echo "→ released $(APP) $(VERSION)"
 
 xcbuild:   ## shipping path: signing, entitlements, hardened runtime
 	xcodebuild -project $(APP).xcodeproj -scheme $(APP) -configuration Debug build
