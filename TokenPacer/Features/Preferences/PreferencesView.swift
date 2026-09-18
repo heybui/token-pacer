@@ -1,8 +1,52 @@
 import SwiftUI
 
-/// The design's three groups. Read-only surfaces elsewhere; this is the only
-/// place in the app that changes anything.
+/// Two panes, as the board draws them: everything numeric and behavioural in
+/// General, the two choices made by eye in Appearance.
+///
+/// A window with tabs rather than one long scroll, because the second pane is a
+/// grid of twenty-four live drawings and nothing above it should be scrolled
+/// past to reach it.
 struct PreferencesView: View {
+    @Bindable var preferences: Preferences
+    var launchAtLogin: LaunchAtLogin
+
+    @State private var pane: Pane = .general
+
+    enum Pane: String, CaseIterable, Identifiable {
+        case general = "General", appearance = "Appearance"
+        var id: Self { self }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Picker("", selection: $pane) {
+                ForEach(Pane.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Group {
+                switch pane {
+                case .general:
+                    GeneralPane(preferences: preferences, launchAtLogin: launchAtLogin)
+                case .appearance:
+                    AppearancePane(preferences: preferences)
+                }
+            }
+            // One height for both. The window is sized once, from whichever pane
+            // is showing when it is built, and it is not resizable — so a pane
+            // that asks for more than the first one got is simply cut off.
+            .frame(height: 330, alignment: .top)
+        }
+        .padding(26)
+        .frame(width: 420)
+        .background(Color(hex: 0x141416))
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+/// The numbers and the behaviour.
+private struct GeneralPane: View {
     @Bindable var preferences: Preferences
     var launchAtLogin: LaunchAtLogin
 
@@ -47,10 +91,6 @@ struct PreferencesView: View {
             }
 
         }
-        .padding(26)
-        .frame(width: 420)
-        .background(Color(hex: 0x141416))
-        .environment(\.colorScheme, .dark)
         .onAppear { launchEnabled = launchAtLogin.isEnabled }
     }
 
