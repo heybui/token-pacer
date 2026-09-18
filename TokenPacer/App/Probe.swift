@@ -18,8 +18,8 @@ enum Probe {
         // the CLI. Wait for it, then refresh again to fold it into the snapshot.
         // Copilot's CLI boots for ~12s and asks GitHub for the budget after
         // that, so the slowest panel sets this, not the fastest.
-        let deadline = Date().addingTimeInterval(90)
-        while await store.isReadingLimits, Date() < deadline {
+        let deadline = Date.now.addingTimeInterval(90)
+        while await store.isReadingLimits, Date.now < deadline {
             try? await Task.sleep(for: .milliseconds(200))
         }
         await store.refresh()

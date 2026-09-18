@@ -17,7 +17,7 @@ private func defaults() -> UserDefaults {
     #expect(preferences.warnAt == 75)
     #expect(preferences.criticalAt == 90)
     #expect(preferences.soundOnThreshold)
-    #expect(preferences.hideWhenDormant)
+    #expect(preferences.hideWhenNothingRuns)
 }
 
 @MainActor
@@ -25,33 +25,41 @@ private func defaults() -> UserDefaults {
     let store = defaults()
     let first = Preferences(store: store)
     first.warnAt = 60
-    first.hideWhenDormant = false
+    first.hideWhenNothingRuns = false
 
     let second = Preferences(store: store)
     #expect(second.warnAt == 60)
-    #expect(second.hideWhenDormant == false)
+    #expect(second.hideWhenNothingRuns == false)
 }
 
-/// Reset sits beside the scale, so it touches the scale and nothing else.
+/// "Restore defaults" sits in *App* and says defaults, plural: every switch the
+/// two panes can touch goes back, not just the scale it used to sit beside.
 @MainActor
-@Test func resetReturnsTheMarksAndLeavesTheRestAlone() {
+@Test func restoreDefaultsReturnsEverySetting() {
     let store = defaults()
     let preferences = Preferences(store: store)
     preferences.warnAt = 55
     preferences.criticalAt = 65
     preferences.soundOnThreshold = false
-    preferences.hideWhenDormant = false
-    #expect(!preferences.hasDefaultThresholds)
+    preferences.notifiesWhenOver = false
+    preferences.hideWhenNothingRuns = false
+    preferences.mark = .thermometer
+    preferences.bordersOn = false
+    preferences.set(tracking: false, for: .codex)
+    #expect(!preferences.hasDefaults)
 
-    preferences.resetThresholds()
-    #expect(preferences.hasDefaultThresholds)
+    preferences.restoreDefaults()
+    #expect(preferences.hasDefaults)
     #expect(preferences.warnAt == 75)
     #expect(preferences.criticalAt == 90)
-    // The toggles two rows down are not the scale's business.
-    #expect(preferences.soundOnThreshold == false)
-    #expect(preferences.hideWhenDormant == false)
-    // And it is written, not just held: a relaunch stays reset.
-    #expect(Preferences(store: store).hasDefaultThresholds)
+    #expect(preferences.soundOnThreshold)
+    #expect(preferences.notifiesWhenOver)
+    #expect(preferences.hideWhenNothingRuns)
+    #expect(preferences.mark == .capsuleBar)
+    #expect(preferences.bordersOn)
+    #expect(preferences.trackedSources == Set(SourceID.allCases))
+    // And it is written, not just held: a relaunch stays restored.
+    #expect(Preferences(store: store).hasDefaults)
 }
 
 /// The scale clamps as you drag, but the stored values are the last line of
@@ -81,16 +89,16 @@ private func defaults() -> UserDefaults {
     #expect(model.state == .warning)   // 55% is past a critical mark of 50
 }
 
-/// "Hide pill when dormant" off keeps the collapsed pill on screen through a
+/// "Hide pill when hidden" off keeps the collapsed pill on screen through a
 /// quiet spell rather than withdrawing to the 3pt sliver.
 @Test func dormancyCanBeTurnedOff() {
     var snapshot = UsageSnapshot(source: .claude)
     snapshot.sessionPercent = 20
     snapshot.lastActivity = now.addingTimeInterval(-40 * 60)
 
-    #expect(PillStateResolver.resolve(PillInputs(snapshot: snapshot), at: now) == .dormant)
+    #expect(PillStateResolver.resolve(PillInputs(snapshot: snapshot), at: now) == .hidden)
     #expect(PillStateResolver.resolve(
-        PillInputs(snapshot: snapshot, hideWhenDormant: false), at: now
+        PillInputs(snapshot: snapshot, hideWhenNothingRuns: false), at: now
     ) == .collapsed)
 }
 

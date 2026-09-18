@@ -43,11 +43,11 @@ final class PillModel {
     @ObservationIgnored private var ghostWithdrawal: Task<Void, Never>?
 
     /// Recomputed whenever anything feeding the decision changes.
-    func update(snapshot: UsageSnapshot?, at now: Date = Date()) {
+    func update(snapshot: UsageSnapshot?, at now: Date = Date.now) {
         inputs.snapshot = snapshot
         if let preferences {
             inputs.criticalAt = preferences.criticalAt
-            inputs.hideWhenDormant = preferences.hideWhenDormant
+            inputs.hideWhenNothingRuns = preferences.hideWhenNothingRuns
         }
         // Seeing the pill expanded counts as acknowledging the warning, so it
         // fires once per window rather than every poll.
@@ -61,13 +61,13 @@ final class PillModel {
 
     /// Clicking the pill pins the panel; ✕ and Esc let it go. Seeing the panel
     /// acknowledges a warning, exactly as hovering does.
-    func setPinned(_ pinned: Bool, at now: Date = Date()) {
+    func setPinned(_ pinned: Bool, at now: Date = Date.now) {
         inputs.isPinned = pinned
         if pinned { inputs.warningAcknowledged = true }
         update(snapshot: inputs.snapshot, at: now)
     }
 
-    func togglePinned(at now: Date = Date()) { setPinned(!inputs.isPinned, at: now) }
+    func togglePinned(at now: Date = Date.now) { setPinned(!inputs.isPinned, at: now) }
 
     /// Right-click opens it in every state, the panel included — pausing or
     /// copying should not cost you the panel you just opened.
@@ -75,12 +75,12 @@ final class PillModel {
 
     func closeMenu() { isMenuOpen = false }
 
-    func setPaused(_ paused: Bool, at now: Date = Date()) {
+    func setPaused(_ paused: Bool, at now: Date = Date.now) {
         inputs.isPaused = paused
         update(snapshot: inputs.snapshot, at: now)
     }
 
-    func setPointerInside(_ inside: Bool, at now: Date = Date()) {
+    func setPointerInside(_ inside: Bool, at now: Date = Date.now) {
         inputs.pointerInside = inside
         if inside {
             inputs.ghostHeldUntil = nil

@@ -23,11 +23,7 @@ struct PreferencesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Picker("", selection: $pane) {
-                ForEach(Pane.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            PaneSwitcher(pane: $pane)
 
             Group {
                 switch pane {
@@ -41,14 +37,19 @@ struct PreferencesView: View {
             // showing when it is built — always General — and it is not
             // resizable, so a *fixed* height here is a height that has to be
             // edited every time a row is added: Copilot's provider switch was
-            // the third one, and it pushed "Hide pill when dormant" straight
+            // the third one, and it pushed "Hide when nothing is running" straight
             // through the footer. General sizes itself now; Appearance holds two
             // grids of twelve and scrolls inside whatever that comes to.
             .frame(minHeight: 380, alignment: .top)
 
             footer
         }
-        .padding(26)
+        .padding(.horizontal, 26)
+        .padding(.bottom, 26)
+        // Less than the other three. The window keeps a 28pt titlebar above this
+        // and the board leaves 12 under it — 26 all round put the switcher 54pt
+        // down a window whose first control it is.
+        .padding(.top, 12)
         .frame(width: 420)
         .background(Color(hex: 0x141416))
         .environment(\.colorScheme, .dark)
@@ -64,9 +65,10 @@ private extension PreferencesView {
         VStack(spacing: 0) {
             Divider().overlay(.white.opacity(0.06))
             HStack(spacing: 10) {
-                // Not the app's name as well: the window's title bar already
-                // carries that, and the row only just fits as it is.
-                Text("Version \(AppInfo.versionLine)")
+                // The name, not the word "Version". The titlebar carries the name
+                // too, but this is the line that gets pasted into a bug report,
+                // and "0.1.0 (186)" on its own names no app.
+                Text("\(AppInfo.name) \(AppInfo.versionLine)")
                     .font(Typography.mono(10.5))
                     .foregroundStyle(.white.opacity(0.32))
                     .fixedSize()
@@ -93,7 +95,11 @@ private extension PreferencesView {
     }
 }
 
-/// The numbers and the behaviour.
+/// The numbers and the behaviour, in the board's three groups.
+///
+/// *Zones* is the scale and what it means; *Alerts* is what happens when you
+/// cross it; *App* is the app itself. Providers sits between them — the board
+/// does not draw it, and it is the only way to stop a CLI being asked anything.
 private struct GeneralPane: View {
     @Bindable var preferences: Preferences
     var launchAtLogin: LaunchAtLogin
@@ -102,35 +108,37 @@ private struct GeneralPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            group("Alerts") {
+            group("Zones") {
                 ThresholdScale(warn: $preferences.warnAt, critical: $preferences.criticalAt)
                 // Directly under the control it describes: a legend at the far
                 // end of the window is read after the fact, if at all.
-                HStack(alignment: .bottom, spacing: 16) {
-                    Text(footnote)
-                        .font(Typography.sans(11))
-                        .foregroundStyle(.white.opacity(0.4))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                    Button("Reset") { preferences.resetThresholds() }
-                        .buttonStyle(.plain)
-                        .font(Typography.sans(11.5))
-                        .foregroundStyle(
-                            preferences.hasDefaultThresholds ? .white.opacity(0.25) : Tokens.amber
-                        )
-                        .disabled(preferences.hasDefaultThresholds)
-                        .help("Back to 75% and 90%")
-                        .fixedSize()
+                Text(footnote)
+                    .font(Typography.sans(11))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            divider
+
+            group("Alerts") {
+                row("Notify when over", note: "Banner once per window") {
+                    Toggle("Notify when over", isOn: $preferences.notifiesWhenOver)
+                        .labelsHidden()
                 }
-                row("Sound on threshold") {
-                    Toggle("", isOn: $preferences.soundOnThreshold).labelsHidden()
+                row("Sound when over") {
+                    Toggle("Sound when over", isOn: $preferences.soundOnThreshold)
+                        .labelsHidden()
+                        // A sound with no banner to carry it is nothing at all.
+                        .disabled(!preferences.notifiesWhenOver)
                 }
             }
+
+            divider
 
             group("Providers") {
                 ForEach(SourceID.allCases, id: \.self) { source in
                     row(source.displayName) {
-                        Toggle("", isOn: Binding(
+                        Toggle(source.displayName, isOn: Binding(
                             get: { preferences.tracks(source) },
                             set: { preferences.set(tracking: $0, for: source) }
                         ))
@@ -142,27 +150,45 @@ private struct GeneralPane: View {
                 }
             }
 
-            group("General") {
+            divider
+
+            group("App") {
                 row("Launch at login") {
-                    Toggle("", isOn: $launchEnabled)
+                    Toggle("Launch at login", isOn: $launchEnabled)
                         .labelsHidden()
                         .onChange(of: launchEnabled) { _, on in launchAtLogin.set(on) }
                 }
-                row("Hide pill when dormant") {
-                    Toggle("", isOn: $preferences.hideWhenDormant).labelsHidden()
+                row("Hide when nothing is running") {
+                    Toggle("Hide when nothing is running", isOn: $preferences.hideWhenNothingRuns)
+                        .labelsHidden()
+                }
+                row("Restore defaults") {
+                    Button("Reset", action: preferences.restoreDefaults)
+                        .buttonStyle(.plain)
+                        .font(Typography.sans(11.5))
+                        .foregroundStyle(
+                            preferences.hasDefaults ? .white.opacity(0.25) : Tokens.amber
+                        )
+                        .disabled(preferences.hasDefaults)
+                        .help("Back to the board's own settings, both panes")
+                        .fixedSize()
                 }
             }
-
         }
         .onAppear { launchEnabled = launchAtLogin.isEnabled }
     }
 
+    private var divider: some View {
+        Rectangle().fill(.white.opacity(0.06)).frame(height: 1)
+    }
+
     /// The thresholds are the app's whole opinion, so say what they do rather
-    /// than leaving two sliders to be guessed at.
+    /// than leaving two handles to be guessed at.
     private var footnote: String {
-        "Amber from \(Int(preferences.warnAt))%, red from \(Int(preferences.criticalAt))% — "
-            + "for the session ring, the weekly cap and the history alike. "
-            + "The warning card opens itself once per window at the critical mark."
+        "Safe to \(Int(preferences.warnAt))%, watch from \(Int(preferences.warnAt))%, "
+            + "over from \(Int(preferences.criticalAt))% — for the session window, the "
+            + "weekly cap and the history alike. The same two boundaries colour every "
+            + "mark and every border in Appearance."
     }
 
     private func group(
@@ -178,15 +204,27 @@ private struct GeneralPane: View {
         }
     }
 
-    private func row(_ label: String, @ViewBuilder control: () -> some View) -> some View {
+    /// A row is a label and its control. `note` is the board's second line — the
+    /// one that says what the switch above it actually does.
+    private func row(
+        _ label: String, note: String? = nil, @ViewBuilder control: () -> some View
+    ) -> some View {
         HStack(spacing: 16) {
-            Text(label)
-                .font(Typography.sans(12.5))
-                .foregroundStyle(.white.opacity(0.85))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(label)
+                    .font(Typography.sans(12.5))
+                    .foregroundStyle(.white.opacity(0.85))
+                if let note {
+                    Text(note)
+                        .font(Typography.sans(11))
+                        .foregroundStyle(.white.opacity(0.42))
+                }
+            }
             Spacer(minLength: 0)
             control()
         }
-        .frame(height: 24)
+        // A floor, not a height: the noted row is two lines tall.
+        .frame(minHeight: 24)
     }
 }
 
@@ -212,9 +250,9 @@ private struct ThresholdScale: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack(spacing: 0) {
-                legend("Warn", warn, Tokens.amber)
+                legend("Watch starts at", warn, Tokens.amber)
                 Spacer(minLength: 12)
-                legend("Critical", critical, Tokens.red)
+                legend("Over starts at", critical, Tokens.red)
             }
 
             GeometryReader { geometry in
@@ -250,10 +288,10 @@ private struct ThresholdScale: View {
         .accessibilityRepresentation {
             VStack {
                 Slider(value: $warn, in: 0...max(0, critical - minimumGap), step: 1) {
-                    Text("Warn at")
+                    Text("Watch starts at")
                 }
                 Slider(value: $critical, in: min(100, warn + minimumGap)...100, step: 1) {
-                    Text("Critical at")
+                    Text("Over starts at")
                 }
             }
         }

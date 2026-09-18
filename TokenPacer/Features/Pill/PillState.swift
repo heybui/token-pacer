@@ -2,12 +2,12 @@ import CoreGraphics
 
 /// The eight states from the design board. One object, one shell, different sizes.
 enum PillState: String, CaseIterable, Sendable {
-    case dormant, ghost, collapsed, hover, warning, exhausted, paused, pinned
+    case hidden, ghost, collapsed, hover, warning, exhausted, paused, pinned
 
     /// Shell dimensions, verbatim from the design board.
     var size: CGSize {
         switch self {
-        case .dormant: CGSize(width: 226, height: 3)
+        case .hidden: CGSize(width: 226, height: 3)
         case .ghost, .collapsed, .exhausted, .paused: CGSize(width: 226, height: 36)
         // A floor, not the height. These two size to their content (`fitsContent`)
         // because the card's rows are a list now — one per provider plus the week,
@@ -28,7 +28,7 @@ enum PillState: String, CaseIterable, Sendable {
     var fitsContent: Bool {
         switch self {
         case .hover, .warning: true
-        case .dormant, .ghost, .collapsed, .exhausted, .paused, .pinned: false
+        case .hidden, .ghost, .collapsed, .exhausted, .paused, .pinned: false
         }
     }
 
@@ -37,7 +37,7 @@ enum PillState: String, CaseIterable, Sendable {
     var fillsFlanks: Bool {
         switch self {
         case .collapsed, .ghost, .paused, .exhausted: true
-        case .dormant, .hover, .warning, .pinned: false
+        case .hidden, .hover, .warning, .pinned: false
         }
     }
 
@@ -48,10 +48,14 @@ enum PillState: String, CaseIterable, Sendable {
     ///
     /// It is also an offscreen render pass, and the collapsed pill is on screen
     /// for hours at a time.
+    ///
+    /// The two states you open yourself — hover and pinned — dropped theirs as
+    /// well. Only the warning still casts one: it is the one surface that
+    /// arrives unasked, and the depth is what says so.
     var castsShadow: Bool {
         switch self {
-        case .hover, .warning, .pinned: true
-        case .dormant, .ghost, .collapsed, .paused, .exhausted: false
+        case .warning: true
+        case .hidden, .ghost, .collapsed, .hover, .paused, .exhausted, .pinned: false
         }
     }
 
@@ -218,7 +222,7 @@ enum PillState: String, CaseIterable, Sendable {
     /// definition. A state that fits there is exactly the band tall, so its
     /// bottom edge lines up with the end of the menu bar.
     ///
-    /// Dormant is the exception and keeps the board's hairline: "no activity"
+    /// Hidden is the exception and keeps the board's hairline: "no activity"
     /// means the notch reads as stock hardware, and a black bar beside the
     /// camera is the one thing that would give it away.
     ///
@@ -226,7 +230,7 @@ enum PillState: String, CaseIterable, Sendable {
     /// that matters there: the board's 36pt collapsed pill hung below the row on
     /// an external display, its bottom edge lining up with nothing.
     @MainActor func size(around band: NotchBand, wings: Wings = Wings()) -> CGSize {
-        guard !band.isEmpty, self != .dormant else { return size }
+        guard !band.isEmpty, self != .hidden else { return size }
         // Hovering changes the height, never the width. The shell is one object
         // growing downward out of the notch, and a pill that widened as well read
         // as a second one sliding in behind the first. The panel is the exception:
@@ -244,7 +248,7 @@ enum PillState: String, CaseIterable, Sendable {
     /// Bottom corner radius; the shell only ever grows downward out of the notch.
     var cornerRadius: CGFloat {
         switch self {
-        case .dormant: 6
+        case .hidden: 6
         case .ghost, .collapsed, .exhausted, .paused: 13
         case .hover, .warning, .pinned: 26
         }

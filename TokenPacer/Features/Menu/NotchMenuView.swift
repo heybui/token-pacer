@@ -41,29 +41,35 @@ private struct MenuRow: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text(item.title)
-            Spacer(minLength: 0)
-            if !item.key.isEmpty {
-                Text(item.key)
-                    .font(Typography.mono(11))
-                    .foregroundStyle(.white.opacity(0.4))
+        Button(action: choose) {
+            HStack(spacing: 10) {
+                Text(item.title)
+                Spacer(minLength: 0)
+                if !item.key.isEmpty {
+                    Text(item.key)
+                        .font(Typography.mono(11))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
             }
+            .font(Typography.sans(12.5))
+            // `.disabled` already dims a plain button; the row's own opacity is
+            // the design's figure, so it is stated rather than inherited.
+            .foregroundStyle(.white.opacity(item.isEnabled ? 0.9 : 0.35))
+            .padding(.horizontal, 9)
+            .frame(height: PillState.menuRowHeight)
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(.white.opacity(isHovering && item.isEnabled ? 0.12 : 0))
+            )
+            .contentShape(.rect)
         }
-        .font(Typography.sans(12.5))
-        .foregroundStyle(.white.opacity(item.isEnabled ? 0.9 : 0.35))
-        .padding(.horizontal, 9)
-        .frame(height: PillState.menuRowHeight)
-        .background(
-            RoundedRectangle(cornerRadius: 5)
-                .fill(.white.opacity(isHovering && item.isEnabled ? 0.12 : 0))
-        )
-        .contentShape(.rect)
+        .buttonStyle(.plain)
+        .disabled(!item.isEnabled)
         .onHover { isHovering = $0 }
-        .onTapGesture {
-            guard item.isEnabled else { return }
-            item.action()
-            onDismiss()
-        }
+    }
+
+    private func choose() {
+        item.action()
+        onDismiss()
     }
 }

@@ -17,6 +17,13 @@ final class Preferences {
         didSet { store.set(criticalAt, forKey: Key.criticalAt) }
     }
 
+    /// The banner itself. Off, going over is carried by the pill alone — which is
+    /// the whole product, so this is a switch and not a feature gate: the figure
+    /// never stops being on screen.
+    var notifiesWhenOver: Bool {
+        didSet { store.set(notifiesWhenOver, forKey: Key.notifiesWhenOver) }
+    }
+
     /// A threshold crossing makes a sound. Only ever heard with the banner, which
     /// only appears when a full-screen app hides the notch.
     var soundOnThreshold: Bool {
@@ -25,8 +32,8 @@ final class Preferences {
 
     /// "No Claude activity: the pill is gone entirely, notch reads as stock
     /// hardware." Off keeps the collapsed pill on screen instead.
-    var hideWhenDormant: Bool {
-        didSet { store.set(hideWhenDormant, forKey: Key.hideWhenDormant) }
+    var hideWhenNothingRuns: Bool {
+        didSet { store.set(hideWhenNothingRuns, forKey: Key.hideWhenNothingRuns) }
     }
 
     /// Which mark the pill leads with. No UI yet — the Appearance pane is the
@@ -83,10 +90,12 @@ final class Preferences {
         // zero, which would silently make every pill red.
         warnAt = store.object(forKey: Key.warnAt) as? Double ?? Default.warnAt
         criticalAt = store.object(forKey: Key.criticalAt) as? Double ?? Default.criticalAt
+        notifiesWhenOver = store.object(forKey: Key.notifiesWhenOver) as? Bool
+            ?? Default.notifiesWhenOver
         soundOnThreshold = store.object(forKey: Key.soundOnThreshold) as? Bool
             ?? Default.soundOnThreshold
-        hideWhenDormant = store.object(forKey: Key.hideWhenDormant) as? Bool
-            ?? Default.hideWhenDormant
+        hideWhenNothingRuns = store.object(forKey: Key.hideWhenNothingRuns) as? Bool
+            ?? Default.hideWhenNothingRuns
         mark = (store.string(forKey: Key.mark).flatMap(Mark.init(rawValue:))) ?? Default.mark
         showsPercentage = store.object(forKey: Key.showsPercentage) as? Bool
             ?? Default.showsPercentage
@@ -116,24 +125,46 @@ final class Preferences {
         store.set(SourceID.allCases.map(\.rawValue).sorted(), forKey: Key.knownSources)
     }
 
-    /// Back to the design board's own marks. Scoped to the scale it sits beside:
-    /// a button that also silently flipped the toggles two rows down would be
-    /// doing more than it says.
-    func resetThresholds() {
+    /// Back to the design board's own marks — every one of them.
+    ///
+    /// It used to be a Reset beside the scale and reset only the scale, because a
+    /// button sitting under two handles must not silently flip the toggles two
+    /// rows down. The board moved it into *App* and named it "Restore defaults",
+    /// which is a different promise, so it keeps it: everything the two panes can
+    /// change goes back, tracked providers included.
+    func restoreDefaults() {
         warnAt = Default.warnAt
         criticalAt = Default.criticalAt
+        notifiesWhenOver = Default.notifiesWhenOver
+        soundOnThreshold = Default.soundOnThreshold
+        hideWhenNothingRuns = Default.hideWhenNothingRuns
+        mark = Default.mark
+        border = Default.border
+        bordersOn = Default.bordersOn
+        showsPercentage = Default.showsPercentage
+        trackedSources = Default.trackedSources
     }
 
-    var hasDefaultThresholds: Bool {
+    /// Nothing left to restore, so the row's button greys out rather than
+    /// promising a change it would not make.
+    var hasDefaults: Bool {
         warnAt == Default.warnAt && criticalAt == Default.criticalAt
+            && notifiesWhenOver == Default.notifiesWhenOver
+            && soundOnThreshold == Default.soundOnThreshold
+            && hideWhenNothingRuns == Default.hideWhenNothingRuns
+            && mark == Default.mark && border == Default.border
+            && bordersOn == Default.bordersOn
+            && showsPercentage == Default.showsPercentage
+            && trackedSources == Default.trackedSources
     }
 
     /// One place, so `init` and `reset` cannot disagree about what default means.
     private enum Default {
         static let warnAt: Double = 75
         static let criticalAt: Double = 90
+        static let notifiesWhenOver = true
         static let soundOnThreshold = true
-        static let hideWhenDormant = true
+        static let hideWhenNothingRuns = true
         static let mark = Mark.capsuleBar
         static let showsPercentage = true
         static let border = BorderEffect.comet
@@ -149,8 +180,9 @@ final class Preferences {
     private enum Key {
         static let warnAt = "pref.warnAt"
         static let criticalAt = "pref.criticalAt"
+        static let notifiesWhenOver = "pref.notifiesWhenOver"
         static let soundOnThreshold = "pref.soundOnThreshold"
-        static let hideWhenDormant = "pref.hideWhenDormant"
+        static let hideWhenNothingRuns = "pref.hideWhenNothingRuns"
         static let mark = "pref.mark"
         static let showsPercentage = "pref.showsPercentage"
         static let border = "pref.border"

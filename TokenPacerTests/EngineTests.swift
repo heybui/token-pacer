@@ -246,7 +246,7 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
 
     #expect(snapshot.lastActivity == moved)
     #expect(PillStateResolver.resolve(
-        PillInputs(snapshot: snapshot), at: now) != .dormant)
+        PillInputs(snapshot: snapshot), at: now) != .hidden)
 
     // ...but the ring still answers to the logs. A reading proves work happened
     // somewhere in the last half hour, not that tokens are flowing this second.

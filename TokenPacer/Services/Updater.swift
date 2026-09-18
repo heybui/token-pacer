@@ -11,7 +11,10 @@ import Sparkle
 // @preconcurrency: Sparkle's delegate protocol predates strict concurrency and
 // is not annotated, but it calls back on the main thread.
 final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
-    private var controller: SPUStandardUpdaterController!
+    /// Optional, not implicitly unwrapped: it cannot be built before `super.init()`
+    /// because Sparkle takes `self` as its user-driver delegate, and an `!` there is
+    /// a force unwrap with the crash moved to first use.
+    private var controller: SPUStandardUpdaterController?
     private let notifier: Notifier
 
     init(notifier: Notifier = Notifier()) {
@@ -24,11 +27,11 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
 
     /// False while a check is already running — the menu row greys out rather
     /// than queueing a second one.
-    var canCheck: Bool { controller.updater.canCheckForUpdates }
+    var canCheck: Bool { controller?.updater.canCheckForUpdates ?? false }
 
     func checkForUpdates() {
         NSApp.activate()
-        controller.updater.checkForUpdates()
+        controller?.updater.checkForUpdates()
     }
 
     // MARK: - gentle reminders

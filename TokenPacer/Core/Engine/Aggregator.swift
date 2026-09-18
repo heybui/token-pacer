@@ -29,7 +29,7 @@ struct PanelData: Equatable, Sendable {
     static let empty = PanelData()
 }
 
-/// Folds raw events into the shapes the panel reads. Pure: no I/O, no `Date()`.
+/// Folds raw events into the shapes the panel reads. Pure: no I/O, no `Date.now`.
 ///
 /// The plan called for persisted 5-minute buckets; the store already retains 30
 /// days of events in memory for exactly this range, so the buckets are computed

@@ -22,9 +22,9 @@ private func registry(_ entries: [(pid: Int32, kind: String, status: String, wro
 private let now = Date().timeIntervalSince1970 * 1000
 
 /// The badge counts background jobs with work in flight. An interactive session
-/// that is busy is already on screen in the terminal running it, and a job that
-/// is idle is not doing anything — neither belongs in the figure.
-@Test func registryCountsOnlyWorkingBackgroundJobs() {
+/// that is idle is not doing anything, and one that is waiting has stopped to
+/// ask — neither belongs in a count of what is running.
+@Test func registryCountsEveryWorkingSession() {
     let root = registry([
         (pid: 101, kind: "bg", status: "busy", wroteAt: now),
         (pid: 102, kind: "bg", status: "idle", wroteAt: now - 1000),
@@ -33,7 +33,8 @@ private let now = Date().timeIntervalSince1970 * 1000
     ])
     let sessions = SessionRegistry.read(root: root) { _, _ in true }
     #expect(sessions.count == 4)
-    #expect(sessions.count(where: \.isRunningJob) == 1)
+    // Both kinds count: 101 is a background job, 103 an interactive session.
+    #expect(sessions.count(where: \.isWorking) == 2)
     // Newest change first: the panel and the badge both read this order.
     #expect(sessions.map(\.pid) == [101, 102, 103, 104])
     #expect(sessions.first?.name == "the border work")
@@ -76,11 +77,11 @@ private let now = Date().timeIntervalSince1970 * 1000
 }
 
 /// A kind this build has never heard of — a cloud session, whatever comes next —
-/// is read and kept, but it is not a background job on this machine and does not
+/// is read and kept, but it is not work running on this machine and does not
 /// reach the badge.
 @Test func registryKeepsAnUnknownKindOutOfTheCount() {
     let root = registry([(pid: 101, kind: "cloud", status: "busy", wroteAt: now)])
     let sessions = SessionRegistry.read(root: root) { _, _ in true }
     #expect(sessions.count == 1)
-    #expect(sessions.count(where: \.isRunningJob) == 0)
+    #expect(sessions.count(where: \.isWorking) == 0)
 }

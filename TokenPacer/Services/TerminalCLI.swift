@@ -201,7 +201,7 @@ enum TerminalCLI {
     private static func dump(_ text: String, spec: Spec) {
         guard let directory = ProcessInfo.processInfo.environment["TOKENPACER_PANEL_DUMP"] else { return }
         let url = URL(filePath: directory)
-            .appending(path: "\(spec.name.replacing(" ", with: "-"))-\(Int(Date().timeIntervalSince1970)).raw")
+            .appending(path: "\(spec.name.replacing(" ", with: "-"))-\(Int(Date.now.timeIntervalSince1970)).raw")
         try? text.write(to: url, atomically: true, encoding: .utf8)
     }
 
@@ -225,9 +225,9 @@ enum TerminalCLI {
     private static func converse(
         with master: Int32, spec: Spec, budget: TimeInterval, settle: TimeInterval
     ) throws -> String {
-        let deadline = Date().addingTimeInterval(budget)
+        let deadline = Date.now.addingTimeInterval(budget)
         var output = Data()
-        var lastByteAt = Date()
+        var lastByteAt = Date.now
         var askedAt: Date?
         /// Where the ask starts in `output`. Both CLIs put a summary of the same
         /// figures in the status line at boot, so the marker is only meaningful
@@ -243,18 +243,18 @@ enum TerminalCLI {
             guard Darwin.write(master, bytes, bytes.count) == bytes.count else {
                 throw PanelError.spawnFailed(code: errno)
             }
-            lastByteAt = Date()
+            lastByteAt = Date.now
         }
 
         func ask() throws {
             askedAtOffset = output.count
             try write(spec.command)
-            askedAt = Date()
+            askedAt = Date.now
             submitted = false
             asksLeft -= 1
         }
 
-        while Date() < deadline {
+        while Date.now < deadline {
             var descriptor = pollfd(fd: master, events: Int16(POLLIN), revents: 0)
             let ready = poll(&descriptor, 1, 200)
 
@@ -262,7 +262,7 @@ enum TerminalCLI {
                 let count = read(master, &buffer, buffer.count)
                 if count > 0 {
                     output.append(contentsOf: buffer[0..<count])
-                    lastByteAt = Date()
+                    lastByteAt = Date.now
                     if submitted, !sawPanel {
                         sawPanel = String(decoding: output[askedAtOffset...], as: UTF8.self)
                             .range(of: spec.marker) != nil
@@ -277,7 +277,7 @@ enum TerminalCLI {
                 }
             }
 
-            let quiet = Date().timeIntervalSince(lastByteAt)
+            let quiet = Date.now.timeIntervalSince(lastByteAt)
             if askedAt == nil {
                 // Boot is done when it stops drawing. Only then does the prompt
                 // exist to type into.
@@ -290,7 +290,7 @@ enum TerminalCLI {
                 }
             } else if sawPanel {
                 if quiet >= settle { return String(decoding: output, as: UTF8.self) }
-            } else if asksLeft > 0, Date().timeIntervalSince(askedAt!) >= 4 {
+            } else if asksLeft > 0, let askedAt, Date.now.timeIntervalSince(askedAt) >= 4 {
                 try ask()                       // the boot pause fooled us
             }
         }
@@ -319,6 +319,14 @@ enum TerminalCLI {
     }
 
     /// The reader a panel takes, moved off the main actor.
+    ///
+    /// The second `DispatchQueue` in the app, and the one the rule in CLAUDE.md
+    /// does not describe: it wraps no C callback. It is here because
+    /// `readUsagePanel` **blocks** — `poll(2)` and `read(2)` in a loop, for up to
+    /// the spec's whole budget, 60s for Copilot. Swift's cooperative pool has one
+    /// thread per core, so parking one there for a minute (which `Task.detached`
+    /// would also do) starves everything else; a blocking syscall loop wants a
+    /// thread of its own. Three providers could hold three at once.
     static func reader(_ spec: Spec) -> PanelReader {
         { @Sendable in
             try await withCheckedThrowingContinuation { continuation in

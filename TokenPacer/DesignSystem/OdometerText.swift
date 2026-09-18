@@ -61,9 +61,15 @@ private struct DigitStrip: View {
         .clipped()
         .blur(radius: settled ? 0 : 0.5)
         .animation(.timingCurve(0.32, 0.72, 0, 1, duration: 0.34), value: value)
+        // Out and back, chained on the completion. Written as two plain writes
+        // the blur never rendered at all: both landed before SwiftUI's next
+        // pass, so the view was only ever evaluated with `settled` true.
         .onChange(of: value) { _, _ in
-            settled = false
-            withAnimation(.easeOut(duration: 0.34)) { settled = true }
+            withAnimation(.easeOut(duration: 0.17)) {
+                settled = false
+            } completion: {
+                withAnimation(.easeOut(duration: 0.17)) { settled = true }
+            }
         }
     }
 }

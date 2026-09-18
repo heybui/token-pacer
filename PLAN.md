@@ -223,8 +223,8 @@ idea that the band goes unpainted.
   short of the Accessibility permission says. One system prompt, for one app's
   worth of politeness, is the wrong trade. Both wings are always drawn; an app with
   a very long menu bar will overlap the left one.
-- Off a notch: **right wing alone, 226 × 34, radius 12** — mark, bar, percentage,
-  countdown in one row.
+- Off a notch: **one row, radius 12** — mark, bar, percentage, countdown. The
+  board draws 226 × 34; shipped at 226 × **36** (`PillState.size`).
 
 ### Three providers, not two
 
@@ -232,16 +232,18 @@ Claude, Codex and **Copilot**. Every provider gets the same bar — 0–100% of 
 own quota — and differs only in the clock behind it: Claude a rolling 5 hours,
 Codex a week, Copilot a month. Each row carries its own reset.
 
-- **Measured left, estimated right.** The left wing takes the highest *measured*
-  provider, the right the highest *estimated* one; position carries attribution
-  once the wordmark no longer fits.
+- ~~**Measured left, estimated right.**~~ Cut. The left wing was to take the
+  highest *measured* provider and the right the highest *estimated* one, with
+  position carrying attribution once the wordmark no longer fits. Dead since
+  §0.4: `CeilingEstimator` was the only thing that produced an estimate, so the
+  right wing would have had nothing to hold. It carries the countdown instead.
 - **Estimated is drawn, not just stated.** The `~` on the number says it
   everywhere. The hollow marker — an outlined dot instead of a filled one — says it
   on the **ring**, which has a 6.5pt dot to put a ring inside. The **capsule bar
   stays solid in every case**: its marker is a 2pt rule, too narrow to read as an
   outline at menu-bar size, and widening it stops it reading as a position.
-- **Stacked, 226 × 34** below the notch when two need showing: bars halve to
-  2.5pt, each row keeps its own countdown.
+- ~~**Stacked, 226 × 34**~~ below the notch when two need showing, bars halved
+  to 2.5pt. Cut 2026-09-19, never built — see §1.3.
 - **Hover card, 404 × 98**: one row per provider, same capsules, same domain, each
   ending in its own reset — because 81% of a week and 81% of a month are not the
   same problem. The board drew it at 116; the shipped 98 stands and the board was
@@ -310,12 +312,19 @@ space is the constraint.
 
 ### Preferences becomes two panes
 
-- **General** — *Alerts*: the dual-handle track (Warn / Critical), the sentence
-  that says what the two numbers do, Reset beside it, and the sound. *Providers*:
-  one switch per provider — off means its CLI is not asked anything. *General*:
-  launch at login, hide pill when dormant. The board drew three groups named
-  Zones / Alerts / App and relabelled the handles "Watch starts at" / "Over starts
-  at"; the shipped pane stands and the board was changed to match it (§0.7).
+- **General** — the board's three groups, adopted 2026-09-19. *Zones*: the
+  dual-handle track, its handles named "Watch starts at" / "Over starts at", and
+  the sentence that says what the two numbers do. *Alerts*: "Notify when over"
+  (with "Banner once per window" under it) and "Sound when over", the sound
+  greyed out when the banner is off — a sound with nothing to carry it is
+  nothing at all. *App*: launch at login, "Hide when nothing is running", and
+  "Restore defaults", which is where Reset went. The name is a wider promise
+  than the old one, so it keeps it: every switch in both panes goes back.
+  *Providers* — one switch per provider, off means its CLI is not asked
+  anything — sits between Alerts and App and is **not on the board**: it is the
+  only way to stop a CLI being read, and dropping it to match a drawing would
+  cost the feature. The earlier note here said the shipped pane stood and the
+  board should change; that was reversed.
 - **Appearance** — two grids of twelve tiles, drawn live at real size, and
   between them the one switch that changes what the menu bar *holds* rather than
   how it looks: **percentage beside the mark**, on by default. A popup menu is
@@ -645,7 +654,7 @@ band, which is 11:1, it is about 53%. That is the construction doing what it doe
 rather than a defect — the alternative is a host scaled to the shell's own aspect,
 which evens the travel out and is no longer what the board drew.
 
-### Every expanded state leads with the mark### Every expanded state leads with the mark
+### Every expanded state leads with the mark
 
 The over card led with a red ring and the pinned panel with a 118pt one, which
 made them a second opinion on the reading the band had just given. `MarkHero`
@@ -726,7 +735,7 @@ The design morphs the shell between sizes with a spring that overshoots. **Do no
 
 Instead: one `NSPanel`, and SwiftUI animates the shell *inside* it. The figure is derived rather than typed in — `PillState.hostSize(around:)` takes the pinned panel, the menu's drop, the shadow's whole reach and the band, so it cannot drift from the shells it has to clear.
 
-**Sized to the largest state permanently — revised 2026-09-19.** The rule that matters is "the frame never moves *while a spring runs*"; "never at all" was the cheap way to hold it. The window now tracks the state, and the timing is what keeps the rule: it **grows at once** when a state change asks for more room, before the spring starts, and **shrinks 0.75s after** the shell has settled, with the pending shrink cancelled by whatever happens next. `NotchController.fit` is the whole of it, and the content view fills the host (`maxWidth/maxHeight: .infinity`, top-aligned) rather than being pinned to the largest size, which would centre the shell in a smaller window and pull it off the top edge it hangs from.
+**Sized to the largest state permanently — revised 2026-09-19.** The rule that matters is "the frame never moves *while a spring runs*"; "never at all" was the cheap way to hold it. The window now tracks the state, and the timing is what keeps the rule: it **grows at once** when a state change asks for more room, before the spring starts, and **shrinks 0.75s after** the shell has settled, with the pending shrink cancelled by whatever happens next. `NotchController.fit` is the whole of it. What does **not** move is the hosting view: it keeps the largest state's frame for ever and `NotchClipView` repositions it as the window shrinks around it (`clip.pin(host, size:)`), so SwiftUI never sees a bounds change. Letting the content fill the host instead is the trap described next, and it was paid for once already — do not "simplify" it back.
 
 Why bother: macOS's screenshot picker highlights the *window*, not what is drawn in it, so ⌘⇧4-space over the pill offered an 876 × 795 frame for a 226 × 30 shell — a capture 1.0% of which was opaque. Measured after: 350 × 114, the margin being the room the shell's own shadow falls into. That margin is also the spring's overshoot headroom.
 
@@ -753,7 +762,7 @@ Notch geometry: notch present when `screen.safeAreaInsets.top > 0`; notch width 
 
 ```swift
 protocol UsageSource: Actor {
-    nonisolated var id: SourceID { get }          // .claude | .codex
+    nonisolated var id: SourceID { get }          // .claude | .codex — Copilot is panel-only (§0.5)
     func poll() throws -> SourceSnapshot          // events since last cursor + optional stated limits
     func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>)
     func cursors() -> [String: JSONLReader.Cursor]
@@ -769,7 +778,7 @@ A source states limits when its logs carry them (Codex) and `nil` when they do
 not (Claude); the panel readings arrive on a separate path, `UsageStore` holding
 one `UsagePanel` per source, and the newer of the two readings wins.
 
-**Incremental reading is mandatory.** Re-parsing every JSONL every 5s would read hundreds of MB. `JSONLCursor` keeps `(path, inode, offset)`; each poll stats mtime, seeks to offset, decodes only new lines, and drops a cursor whose inode changed (log rotation).
+**Incremental reading is mandatory.** Re-parsing every JSONL every 5s would read hundreds of MB. `JSONLReader.Cursor` keeps `(path, inode, offset)`; each poll stats mtime, seeks to offset, decodes only new lines, and drops a cursor whose inode changed (log rotation).
 
 **Engine** (pure, synchronous, fully testable — no I/O, no dates from `Date()`, inject a clock):
 - `WindowCalculator` — ccusage block rule: a block starts at the first event after a ≥5h gap, floored to the hour; block spans `[start, start+5h)`.
@@ -779,23 +788,38 @@ Output is one value type the whole UI binds to:
 
 ```swift
 struct UsageSnapshot {
-    var sessionPct: Double?, sessionTokens: Int, resetsAt: Date   // nil = not reported
-    var weeklyPct: Double?, weeklyResetsAt: Date
-    var sparkline: [Double]          // 26 buckets, matches the design
-    var splits: Splits               // by model / project / surface
-    var history: [DayUsage]          // 30 days
+    var source: SourceID
+    var sessionPercent: Double?          // nil = not reported, never 0
+    var sessionTokens: Int = 0
+    var resetsAt: Date?
+    var weeklyPercent: Double?
+    var weeklyResetsAt: Date?
+    var isActive: Bool = false           // a window with something in it
+    var isBurning: Bool = false          // a model is answering right now
+    var confirmedAt: Date?               // when the panel last stated this
+    var lastActivity: Date?
+    var planType: String?                // Codex states one; Claude's panel never does
+    var panel: PanelData = .empty        // sparkline · byModel · byProject · history
+    var spend: Spend?                    // only where the account buys past the plan
 }
 ```
+
+The sparkline, the splits and the 30-day history live on `PanelData`
+(`Core/Engine/Aggregator.swift`) rather than on the snapshot itself: they are
+what the *pinned panel* reads, and the band never touches them.
 
 Weighted tokens: one `TokenWeights` struct (output ×5, cache-write ×1.25, cache-read ×0.1 — ccusage's ratios), per-model overrides in a plist. Calibration knob, not a constant buried in code — the real ratios drift with pricing.
 
 ### 1.3 UI: one view tree, state enum drives size
 
-`PillState` enum mirrors the design exactly: `dormant, ghost, collapsed, hover, warning, exhausted, paused, pinned` — the redrawn board renames them (hidden, ghost, collapsed·resting, hover card, over, over·at the cap, paused, pinned panel) but keeps all eight. Derived from `(snapshot, pointerInside, isPinned, warnAcknowledged, trackingPaused)` in one function — no scattered booleans.
+`PillState` enum mirrors the design exactly: `hidden, ghost, collapsed, hover, warning, exhausted, paused, pinned` — the redrawn board's own names (hidden, ghost, collapsed·resting, hover card, over, over·at the cap, paused, pinned panel), all eight of them. Derived from `(snapshot, pointerInside, isPinned, warnAcknowledged, trackingPaused)` in one function — no scattered booleans.
 
 **Two surfaces, not one shell.** Four states live in the flat bar row either side
 of the notch and draw no background at all; four are the drop panel, a shell with
 bottom-only corners growing down out of the notch:
+
+Eight rows, because there are eight cases. Anything below that is not in the
+enum is not a state:
 
 | State | Surface | W × H | radius |
 |---|---|---|---|
@@ -804,26 +828,39 @@ bottom-only corners growing down out of the notch:
 | collapsed | bar row | mark + exact % left, time left right | — |
 | exhausted | bar row | split across both wings, mark full, % and countdown red | — |
 | paused | bar row | pause glyph left, the word "paused" right | — |
-| right wing alone | bar row | 226 × 34 — no notch, or the left wing has yielded | 12 |
-| stacked | drop panel | 226 × 34, two provider rows, bars at 2.5pt | 12 |
-| hover | drop panel | 404 × 98, one row per provider | 26 |
-| over | drop panel | big percentage, the countdown, one coach line | 26 |
+| hover | drop panel | 404 × 98 floor, then sizes to its rows | 26 |
+| warning — the board's "over" | drop panel | big percentage, the countdown, one coach line | 26 |
 | pinned | drop panel | 752 × 540 | 26 |
 
-The board's old 226 × 3 dormant hairline is gone with the shell: hidden now means
+Two rows used to sit in this table and neither was a state:
+
+- **"Right wing alone"** is not one. Off a notched screen every bar-row state
+  draws as a single row — `PillState.size`, **226 × 36**; the board drew 34 and
+  the shipped figure is what stands. Same case, different surface.
+- ~~**"Stacked"**~~ — 226 × 34, two provider rows, bars halved to 2.5pt, each
+  keeping its own countdown. **Cut 2026-09-19, never built.** Comparing providers
+  is the hover card's job and it does it on one scale with room for the wordmark
+  and both figures; the menu bar is where less is the product, which is the same
+  argument that kept the weekly dot out of the wing (§0.6).
+
+The board's old 226 × 3 hidden hairline is gone with the shell: hidden now means
 both wings are simply empty.
 
 Animation: `Animation.spring(duration: 0.6, bounce: 0.18)` — the board's `interpolatingSpring(stiffness: 220, damping: 24)` restated as the thing actually being tuned, which is how long the expansion reads for. Reduce Motion is not honoured anywhere, by decision: there is no branch on it in the app and none is wanted.
 
 Components worth owning (everything else is stock SwiftUI):
-- `OdometerText` — digit strips translated by `-d em`, spring transition + brief blur. Used at 5 sizes (11/11.5/12/26/30px).
+- `OdometerText` — digit strips translated by `-d em`, spring transition + brief blur. Used at six sizes (11 / 11.5 / 12 / 22 / 26 / 30 pt).
 - **`Mark`** — one protocol, twelve conformances, each drawing a zone track and a
   marker and owning its own working animation (§0.2). `UsageRing` becomes *Ring
   wings*, one of the twelve; the capsule bar is the default and the only one that
   shows position and all three boundaries at once.
 - **`BorderEffect`** — twelve edge treatments over the existing `ShellTrack`.
   `ChasingBorder` becomes *Comet*, the default.
-- `CapBar`, `Sparkline`, `SplitRow`, `HistoryRow` (monospace `█`/`░` blocks, as designed).
+- `CapBar`, `Sparkline`, `SplitColumn`, `HistoryHeatmap`. The last two are not
+  what was drawn: the splits became columns rather than rows, and the history
+  became a calendar grid rather than monospace `█`/`░` bars — one square per day,
+  one column per week, shaded against the busiest day in range. A quarter fits in
+  the space seven rows took.
 
 Tokens (`DesignSystem/Tokens.swift`): `green #3ec98a`, `amber #e8b33c`, `red #e2543f`, `blue #5aa9d6`, shell `#000`, thresholds 75 / 90 but user-set. Marker lights are a second scale: `#a5f0cd` / `#fbcda2` / `#f4ab9e`. One `tone(for:)` function — the design applies the same rule to session, weekly, every mark and every border; it must exist in exactly one place.
 
@@ -848,13 +885,16 @@ TokenPacer/              the target's sources, named for it rather than "Sources
   Resources/              InstrumentSans.ttf · TokenPacer.icns
   App/                    main.swift · AppDelegate.swift · Probe.swift · LogWatcher.swift
   Notch/                  NotchPanel.swift · NotchController.swift · NotchAnchor.swift
-                          PassthroughHostingView.swift
+                          PassthroughHostingView.swift · NotchClipView.swift
   Features/
     Pill/                 PillView.swift · PillState.swift · PillStateResolver.swift
-                          PillModel.swift · PillRootView.swift
+                          PillModel.swift · PillRootView.swift · PillWings.swift
+                          HoverCard.swift · WarningCard.swift
+                          ScaleLine.swift · ScaleRow.swift
     Panel/                PinnedPanelView.swift
     Menu/                 NotchMenuView.swift
     Preferences/          PreferencesWindow.swift · PreferencesView.swift · AppearancePane.swift
+                          PaneSwitcher.swift
   Core/
     Model/                UsageEvent.swift · UsageSnapshot.swift · TokenCounts.swift · SourceID.swift
     Ingest/               UsageSource.swift · ClaudeCodeSource.swift · CodexSource.swift
@@ -945,7 +985,7 @@ the same figures without asking for a credential at all. It absorbed most of the
 ### Carried out of phase 4
 
 - **Preferences shipped** with four rows: the alert scale, sound on threshold,
-  launch at login (`SMAppService.mainApp`), and hide-when-dormant. Alerts fire
+  launch at login (`SMAppService.mainApp`), and hide-when-nothing-runs. Alerts fire
   through `AlertPolicy` → `UNUserNotificationCenter`. It fired only when the notch
   was hidden — a full-screen app or another space — on the grounds that a pill
   already showing 93% does not need to be told. ~~That~~ ✅ changed with the
@@ -957,11 +997,13 @@ the same figures without asking for a credential at all. It absorbed most of the
   it. Removed from the board along with the group that held them.
 - **One scale, two handles.** The design's two sliders became a single 0–100
   track with a warn handle and a critical one, clamped so warn can never pass
-  critical. Reset restores that scale and nothing else; the other rows are
-  preferences, not a configuration to be undone.
+  critical. ~~Reset restores that scale and nothing else~~ — true while the
+  button sat beside the scale. The board moved it into *App* and renamed it
+  **"Restore defaults"** (2026-09-19), which is a wider promise, so it keeps it:
+  every switch in both panes goes back, tracked providers included.
 - **Three deltas against the design board**, chosen from a scan: the ring pops on
   a threshold crossing, the ghost fades rather than cuts, and a spent window reads
-  red. A silent return to dormant was offered and declined.
+  red. A silent return to hidden was offered and declined.
 - **A light runs the shell's border** while tokens flow — not in the design, asked
   for on top of it. Tone follows the alert scale; the pinned panel is exempt,
   since a 752×540 sheet with a light running round it is a screensaver.

@@ -63,6 +63,7 @@ struct PinnedPanelView: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close panel")
         }
         .frame(height: 20)
     }
@@ -253,7 +254,7 @@ private struct HistoryHeatmap: View {
     var cell: CGFloat = 15
     var gap: CGFloat = 4
 
-    private var calendar: Calendar { .current }
+    private static let calendar = Calendar.current
 
     private struct Week: Identifiable {
         let id: Date
@@ -273,10 +274,14 @@ private struct HistoryHeatmap: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: gap) {
+        // Grouped once and handed down. Read straight off the computed property
+        // it regrouped the whole range on every access, and `startsNewMonth`
+        // asked for it twice per column — 2N + 2 groupings for one body pass.
+        let weeks = self.weeks
+        return HStack(alignment: .top, spacing: gap) {
             weekdayLabels
             VStack(alignment: .leading, spacing: 4) {
-                monthLabels
+                monthLabels(weeks)
                 HStack(spacing: gap) {
                     ForEach(weeks) { week in
                         VStack(spacing: gap) {
@@ -317,10 +322,10 @@ private struct HistoryHeatmap: View {
     }
 
     /// Named where the month turns, so thirteen identical columns can be placed.
-    private var monthLabels: some View {
+    private func monthLabels(_ weeks: [Week]) -> some View {
         HStack(spacing: gap) {
             ForEach(Array(weeks.enumerated()), id: \.element.id) { index, week in
-                Text(startsNewMonth(index) ? week.id.formatted(.dateTime.month(.abbreviated)) : "")
+                Text(startsNewMonth(index, in: weeks) ? week.id.formatted(.dateTime.month(.abbreviated)) : "")
                     .font(Typography.mono(9))
                     .foregroundStyle(.white.opacity(0.3))
                     .fixedSize()
@@ -329,23 +334,23 @@ private struct HistoryHeatmap: View {
         }
     }
 
-    private func startsNewMonth(_ index: Int) -> Bool {
+    private func startsNewMonth(_ index: Int, in weeks: [Week]) -> Bool {
         guard index > 0 else { return true }
-        return calendar.component(.month, from: weeks[index].id)
-            != calendar.component(.month, from: weeks[index - 1].id)
+        return Self.calendar.component(.month, from: weeks[index].id)
+            != Self.calendar.component(.month, from: weeks[index - 1].id)
     }
 
     private func weekdayName(_ row: Int) -> String {
-        let index = (calendar.firstWeekday - 1 + row) % 7
-        return String(calendar.shortWeekdaySymbols[index].prefix(3))
+        let index = (Self.calendar.firstWeekday - 1 + row) % 7
+        return String(Self.calendar.shortWeekdaySymbols[index].prefix(3))
     }
 
     private func weekStart(of date: Date) -> Date {
-        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        Self.calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
     }
 
     private func row(of date: Date) -> Int {
-        (calendar.component(.weekday, from: date) - calendar.firstWeekday + 7) % 7
+        (Self.calendar.component(.weekday, from: date) - Self.calendar.firstWeekday + 7) % 7
     }
 }
 

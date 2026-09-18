@@ -14,11 +14,9 @@ struct AgentSession: Equatable, Sendable, Identifiable {
     /// `idle` both mean nothing is expected of the user.
     enum Status: String, Sendable { case busy, waiting, idle }
 
-    /// How the session was started. A background job runs with no window of its
-    /// own, which is the whole reason a notch has anything to say about it — an
-    /// interactive one is already on screen, in the terminal that started it.
-    /// Anything the CLI grows later (a cloud session, say) lands in `other` and
-    /// is counted as nothing.
+    /// How the session was started. Both kinds this build knows about count
+    /// towards the badge; anything the CLI grows later (a cloud session, say)
+    /// lands in `other` and is counted as nothing.
     enum Kind: String, Sendable { case bg, interactive, other }
 
     let pid: Int32
@@ -36,8 +34,14 @@ struct AgentSession: Equatable, Sendable, Identifiable {
 
     var id: Int32 { pid }
     var isWaiting: Bool { status == .waiting }
-    /// A background job with work in flight: nothing on screen says so.
-    var isRunningJob: Bool { kind == .bg && status == .busy }
+    /// Work in flight, wherever it was started from.
+    ///
+    /// It counted `.bg` alone to begin with, on the grounds that an interactive
+    /// session is already visible in the terminal running it. That holds for the
+    /// terminal you are looking at and for no other: six checkouts deep, the
+    /// windows are behind something. `.other` stays out — a kind this build has
+    /// never heard of is not a claim worth making.
+    var isWorking: Bool { kind != .other && status == .busy }
 }
 
 /// Reads every session Claude Code has registered on this machine.

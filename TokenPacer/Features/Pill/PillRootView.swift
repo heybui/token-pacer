@@ -4,7 +4,9 @@ import SwiftUI
 struct PillRootView: View {
     let model: PillModel
     let store: UsageStore
-    var preferences = Preferences()
+    /// Never defaulted. `Preferences.init` reads and writes `UserDefaults`, and a
+    /// default on a view property runs it every time SwiftUI rebuilds the struct.
+    let preferences: Preferences
     /// Nil in tests and in a `swift run` build: constructing one starts
     /// Sparkle's scheduler, and a menu row is not worth a network call.
     var updater: Updater?
@@ -37,7 +39,7 @@ struct PillRootView: View {
     /// the same answer the model measures the wing with.
     private var badge: PillState.Badge? {
         if store.errors[store.activeSource] != nil { return .alert }
-        let working = store.runningJobs
+        let working = store.workingSessions
         return working > 0 ? .working(working) : nil
     }
 
@@ -53,7 +55,7 @@ struct PillRootView: View {
             border: preferences.border,
             bordersOn: preferences.bordersOn,
             attention: store.errors[store.activeSource],
-            workingJobs: store.runningJobs,
+            workingSessions: store.workingSessions,
             bySource: store.bySource,
             onTogglePinned: { model.togglePinned() },
             onClose: { model.setPinned(false) },
@@ -91,7 +93,7 @@ struct PillRootView: View {
             // The tone rule reaches every bar, ring and square from one place.
             .environment(\.tone, preferences.thresholds)
             .onChange(of: preferences.criticalAt) { _, _ in model.update(snapshot: store.snapshot) }
-            .onChange(of: preferences.hideWhenDormant) { _, _ in
+            .onChange(of: preferences.hideWhenNothingRuns) { _, _ in
                 model.update(snapshot: store.snapshot)
             }
             // The shell is black in every state, so its contents are never styled

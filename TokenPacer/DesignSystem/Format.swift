@@ -6,12 +6,12 @@ enum Format {
     /// "2h 04m" — the design always shows both units. Past a day it switches to
     /// "4d 11h": a weekly window has 150 hours in it, and nobody reads that as a
     /// duration.
-    static func countdown(to date: Date?, from now: Date = Date()) -> String {
+    static func countdown(to date: Date?, from now: Date = Date.now) -> String {
         guard let date else { return "--" }
         let minutes = max(0, Int(date.timeIntervalSince(now) / 60))
         let hours = minutes / 60
         if hours >= 24 { return "\(hours / 24)d \(hours % 24)h" }
-        return "\(hours)h \(String(format: "%02d", minutes % 60))m"
+        return "\(hours)h \((minutes % 60).formatted(.number.precision(.integerLength(2))))m"
     }
 
     static func percent(_ value: Double?) -> String {
@@ -38,7 +38,7 @@ enum Format {
 
     /// Straight-line: spend so far over the month elapsed. Says "projected"
     /// because a quiet week would make a liar of it.
-    static func projection(used: Money?, now: Date = Date(), calendar: Calendar = .current) -> String {
+    static func projection(used: Money?, now: Date = Date.now, calendar: Calendar = .current) -> String {
         guard let used, used.amountMinor > 0,
               let month = calendar.range(of: .day, in: .month, for: now)
         else { return "no spend yet this month" }

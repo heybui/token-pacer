@@ -90,7 +90,7 @@ struct AppearancePane: View {
                         .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
-                    Toggle("", isOn: $preferences.showsPercentage).labelsHidden()
+                    Toggle("Percentage beside the mark", isOn: $preferences.showsPercentage).labelsHidden()
                 }
 
                 Divider().overlay(.white.opacity(0.08))
@@ -105,7 +105,7 @@ struct AppearancePane: View {
                     // One switch gates the whole group. Off dims the grid rather than
                     // hiding it, so the twelve stay discoverable and the selection
                     // survives being turned off and on again.
-                    Toggle("", isOn: $preferences.bordersOn).labelsHidden()
+                    Toggle("Running border", isOn: $preferences.bordersOn).labelsHidden()
                 }
 
                 LazyVGrid(columns: columns, spacing: 10) {

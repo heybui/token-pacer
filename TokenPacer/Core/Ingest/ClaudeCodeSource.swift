@@ -28,7 +28,7 @@ actor ClaudeCodeSource: UsageSource {
         changed: ChangeGate? = nil
     ) {
         self.root = root
-        self.cutoff = retention.map { Date().addingTimeInterval(-$0) }
+        self.cutoff = retention.map { Date.now.addingTimeInterval(-$0) }
         self.changed = changed
     }
 
@@ -49,7 +49,7 @@ actor ClaudeCodeSource: UsageSource {
     func cursors() -> [String: JSONLReader.Cursor] { scanner.cursors }
 
     func poll() throws -> SourceSnapshot {
-        let now = Date()
+        let now = Date.now
         guard !canSkipScan(at: now) else {
             return SourceSnapshot(source: .claude, events: [], limits: nil, activity: scanner.activity)
         }

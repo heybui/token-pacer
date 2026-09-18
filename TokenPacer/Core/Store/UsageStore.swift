@@ -77,7 +77,7 @@ final class UsageStore {
     /// How many background jobs are working right now — the one figure the pill
     /// carries. Background, because an interactive session is already on screen
     /// in the terminal that started it; these have nowhere else to show.
-    var runningJobs: Int { sessions.count(where: \.isRunningJob) }
+    var workingSessions: Int { sessions.count(where: \.isWorking) }
     private var pump: Task<Void, Never>?
 
     /// Does appending these break the order of what is already held?
@@ -143,7 +143,7 @@ final class UsageStore {
     /// panel draws, so the first poll reads only what has been appended since the
     /// last run instead of the whole log corpus.
     private func restoreEvents() async {
-        let started = Date()
+        let started = Date.now
         guard let archived = archive?.loadEvents() else { return }
         var count = 0
 
@@ -158,7 +158,7 @@ final class UsageStore {
             )
         }
 
-        let ms = Int(Date().timeIntervalSince(started) * 1000)
+        let ms = Int(Date.now.timeIntervalSince(started) * 1000)
         Log.ingest.info("restored \(count, privacy: .public) events in \(ms, privacy: .public)ms")
     }
 
@@ -168,7 +168,7 @@ final class UsageStore {
     private var lastEventSave: Date?
     private var reportedFirstSnapshot = false
 
-    private func persistEvents(now: Date = Date(), force: Bool = false) async {
+    private func persistEvents(now: Date = Date.now, force: Bool = false) async {
         guard let archive else { return }
         if !force, let last = lastEventSave, now.timeIntervalSince(last) < Self.eventSaveInterval {
             return
@@ -201,7 +201,7 @@ final class UsageStore {
         sessions = fresh
         Log.ingest.debug("""
             registry: \(fresh.count, privacy: .public) sessions, \
-            \(fresh.count(where: \.isRunningJob), privacy: .public) jobs working
+            \(fresh.count(where: \.isWorking), privacy: .public) sessions working
             """)
     }
 
@@ -220,14 +220,14 @@ final class UsageStore {
     func start() {
         guard pump == nil else { return }
         refreshSessions()   // the watcher only fires on a change; this is the first reading
-        let launchedAt = Date()
+        let launchedAt = Date.now
         pump = Task { [weak self] in
             await self?.restoreEvents()
             while !Task.isCancelled {
                 await self?.refresh()
                 if let self, !reportedFirstSnapshot {
                     reportedFirstSnapshot = true
-                    let ms = Int(Date().timeIntervalSince(launchedAt) * 1000)
+                    let ms = Int(Date.now.timeIntervalSince(launchedAt) * 1000)
                     let events = SourceID.allCases.reduce(0) { $0 + eventCount($1) }
                     Log.ingest.info("first snapshot in \(ms, privacy: .public)ms over \(events, privacy: .public) events")
                 }
@@ -250,7 +250,7 @@ final class UsageStore {
         }
     }
 
-    func refresh(now: Date = Date()) async {
+    func refresh(now: Date = Date.now) async {
         // A session that dies without tidying its file leaves the registry
         // claiming it is still waiting, and nothing writes to that directory
         // afterwards to say otherwise. The watcher cannot see a process exit, so
@@ -414,9 +414,9 @@ final class UsageStore {
         let hadLocalActivity = poller.hasNewActivity
 
         Task { [weak self] in
-            let started = Date()
+            let started = Date.now
             do {
-                let limits = try await panel.fetch(now: Date())
+                let limits = try await panel.fetch(now: Date.now)
                 self?.applyLimits(.success(limits), for: id, startedAt: started,
                                   hadLocalActivity: hadLocalActivity)
             } catch {
@@ -433,7 +433,7 @@ final class UsageStore {
     ) {
         limitsInFlight.remove(id)
         var poller = pollers[id] ?? PanelPoller()
-        let now = Date()
+        let now = Date.now
         let ms = Int(now.timeIntervalSince(startedAt) * 1000)
 
         switch result {

@@ -36,6 +36,13 @@ enum Tokens {
     static let shellRingIdle = Color.white.opacity(0.06)
     static let shellRingOpen = Color.white.opacity(0.13)
 
+    /// The settings pane switcher, as the board draws it: a sunken track with the
+    /// chosen pane raised out of it. A system segmented control is lighter than
+    /// the window it sits in and stretches to the full width; this one hugs its
+    /// two words and sits in the middle.
+    static let switcherTrack = Color(hex: 0x1e1f24)
+    static let switcherSelected = Color(hex: 0x35373e)
+
     /// The shell opening and closing. Stated as a duration, not as a stiffness:
     /// how long the expansion reads for is the thing being tuned, and
     /// `interpolatingSpring(stiffness:damping:)` hides that behind two figures

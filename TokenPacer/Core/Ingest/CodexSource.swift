@@ -28,7 +28,7 @@ actor CodexSource: UsageSource {
         changed: ChangeGate? = nil
     ) {
         self.root = root
-        self.cutoff = retention.map { Date().addingTimeInterval(-$0) }
+        self.cutoff = retention.map { Date.now.addingTimeInterval(-$0) }
         self.changed = changed
     }
 
@@ -42,7 +42,7 @@ actor CodexSource: UsageSource {
         // A machine with Codex installed but unused still had its tree walked
         // every five seconds, for ever. The limits are the last reading either
         // way — nothing was written, so nothing has moved.
-        let now = Date()
+        let now = Date.now
         if let changed, !changed(), now.timeIntervalSince(lastScan) < Self.scanAtLeastEvery {
             return SourceSnapshot(
                 source: .codex, events: [], limits: latestLimits, activity: scanner.activity

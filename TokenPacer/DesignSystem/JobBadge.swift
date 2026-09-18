@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// How many Claude Code background jobs are working right now.
+/// How many Claude Code sessions are working right now.
 ///
 /// Neutral grey on purpose, and the board says why: the mark owns the zone
 /// colour, the badge owns the number. A count tinted green or amber would read
@@ -20,7 +20,7 @@ struct JobBadge: View {
     @State private var pops = 0
 
     private var label: String {
-        count == 1 ? "1 job working" : "\(count) jobs working"
+        count == 1 ? "1 session working" : "\(count) sessions working"
     }
 
     private var width: CGFloat {

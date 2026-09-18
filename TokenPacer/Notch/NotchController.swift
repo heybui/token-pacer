@@ -102,6 +102,9 @@ final class NotchController {
     /// Entering watch stays silent and visual; the mark simply tints amber.
     private func considerAlert(for snapshot: UsageSnapshot) {
         guard !store.isPaused else { return }   // "No alerts fire while paused."
+        // The board's "Notify when over". Off, the crossing is still carried by
+        // the pill — this silences the banner, not the reading.
+        guard preferences.notifiesWhenOver else { return }
         guard alerts.crossing(
             percent: snapshot.sessionPercent,
             resetsAt: snapshot.resetsAt,

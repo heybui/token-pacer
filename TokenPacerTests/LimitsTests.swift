@@ -24,7 +24,7 @@ private func at(_ minutes: Double) -> Date { t0.addingTimeInterval(minutes * 60)
 
 /// A reading that rose with nothing in the logs to explain it means the work is
 /// happening off-CLI. Track it at the normal cadence — on the idle floor alone
-/// the pill would go dormant for twenty minutes out of every thirty.
+/// the pill would go hidden for twenty minutes out of every thirty.
 @Test func offLogActivityPollsAtTheNormalFloor() {
     var poller = PanelPoller()
     poller.ran(at: at(0))

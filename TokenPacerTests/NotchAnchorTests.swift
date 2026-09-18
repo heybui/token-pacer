@@ -1,3 +1,4 @@
+import Foundation
 import CoreGraphics
 import Testing
 @testable import TokenPacer
@@ -67,7 +68,7 @@ private let external = ScreenMetrics(
     #expect(band.height == builtIn.menuBarHeight)
     #expect(band.height > builtIn.safeAreaTop)
 
-    for state in PillState.allCases where state != .dormant {
+    for state in PillState.allCases where state != .hidden {
         let drawn = state.size(around: band)
         #expect(drawn.width >= band.notchWidth + 2 * PillState.Wings().flank)
         #expect(drawn.height
@@ -77,7 +78,7 @@ private let external = ScreenMetrics(
         #expect(drawn.height > builtIn.safeAreaTop)
     }
     // Hovering grows the shell downward and nothing else: one object, one width.
-    let widths = Set(PillState.allCases.filter { $0 != .dormant && $0 != .pinned }
+    let widths = Set(PillState.allCases.filter { $0 != .hidden && $0 != .pinned }
         .map { $0.size(around: band).width })
     #expect(widths.count == 1)
     #expect(PillState.pinned.size(around: band).width == PillState.pinned.size.width)
@@ -95,10 +96,10 @@ private let external = ScreenMetrics(
 }
 
 /// "No activity" means the notch reads as stock hardware. A black bar beside the
-/// camera is the one thing that would give it away, so dormant keeps the board's
+/// camera is the one thing that would give it away, so hidden keeps the board's
 /// hairline and stays behind the hardware.
-@MainActor @Test func dormantNeverSpansTheNotch() {
-    #expect(PillState.dormant.size(around: NotchAnchor.band(builtIn)) == PillState.dormant.size)
+@MainActor @Test func hiddenNeverSpansTheNotch() {
+    #expect(PillState.hidden.size(around: NotchAnchor.band(builtIn)) == PillState.hidden.size)
 }
 
 /// An external display has no hardware to reach around, but it has a menu bar
@@ -109,7 +110,7 @@ private let external = ScreenMetrics(
     #expect(band.notchWidth == 0)
     #expect(band.height == external.menuBarHeight)
 
-    for state in PillState.allCases where state != .dormant {
+    for state in PillState.allCases where state != .hidden {
         // No notch, no flanks to measure: the width is the one the board drew.
         #expect(state.size(around: band).width == state.size.width)
     }
@@ -159,7 +160,11 @@ private let external = ScreenMetrics(
 /// The menu opens under the pinned panel too, and a host that does not reserve
 /// its drop clips it — silently, because the rows simply are not drawn.
 @MainActor @Test func theHostReservesRoomForEveryMenuItem() {
-    let items = PillRootView(model: PillModel(), store: UsageStore(archive: nil)).menuItems
+    let items = PillRootView(
+        model: PillModel(),
+        store: UsageStore(archive: nil),
+        preferences: Preferences(store: UserDefaults(suiteName: #function) ?? .standard)
+    ).menuItems
     let needed = PillState.pinned.size.height
         + PillState.menuGap + PillState.menuHeight(items: items.count)
 

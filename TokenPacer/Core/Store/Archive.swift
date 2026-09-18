@@ -25,7 +25,7 @@ struct ArchivedState: Codable, Sendable {
     /// after launch, for no reason.
     var limits: [SourceID: RateLimits] = [:]
     var isPaused = false
-    var savedAt = Date()
+    var savedAt = Date.now
 }
 
 /// Events and cursors: the expensive half.
@@ -45,7 +45,7 @@ struct ArchivedEvents: Codable, Sendable {
 
     var version = currentVersion
     var sources: [SourceID: PerSource] = [:]
-    var savedAt = Date()
+    var savedAt = Date.now
 }
 
 /// One JSON file in Application Support. No database: this is a few hundred
@@ -98,13 +98,13 @@ struct Archive: Sendable {
 
     func saveEvents(_ archived: ArchivedEvents) {
         var archived = archived
-        archived.savedAt = Date()
+        archived.savedAt = Date.now
         write(archived, to: eventsURL, pretty: false)
     }
 
     func save(_ state: ArchivedState) {
         var state = state
-        state.savedAt = Date()
+        state.savedAt = Date.now
         write(state, to: url, pretty: true)
     }
 

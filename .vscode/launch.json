@@ -1,0 +1,44 @@
+{
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:token-pacer}",
+      "name": "Debug BurnTracker",
+      "target": "BurnTracker",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug BurnTracker"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:token-pacer}",
+      "name": "Release BurnTracker",
+      "target": "BurnTracker",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release BurnTracker"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:token-pacer}",
+      "name": "Debug TokenPacer",
+      "target": "TokenPacer",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug TokenPacer"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:token-pacer}",
+      "name": "Release TokenPacer",
+      "target": "TokenPacer",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release TokenPacer"
+    }
+  ]
+}

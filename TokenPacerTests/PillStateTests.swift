@@ -31,15 +31,15 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 /// "No Claude activity: the pill is gone entirely, notch reads as stock hardware."
 @MainActor @Test func silenceWithdrawsThePill() {
     let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
-    #expect(resolve(PillInputs(snapshot: quiet)) == .dormant)
+    #expect(resolve(PillInputs(snapshot: quiet)) == .hidden)
 }
 
-@MainActor @Test func nothingReadYetIsAlsoDormant() {
-    #expect(resolve(PillInputs(snapshot: nil)) == .dormant)
-    #expect(resolve(PillInputs(snapshot: snapshot(lastActivity: nil))) == .dormant)
+@MainActor @Test func nothingReadYetIsAlsoHidden() {
+    #expect(resolve(PillInputs(snapshot: nil)) == .hidden)
+    #expect(resolve(PillInputs(snapshot: snapshot(lastActivity: nil))) == .hidden)
 }
 
-/// The ghost is the only way to reach the menu while dormant.
+/// The ghost is the only way to reach the menu while hidden.
 @MainActor @Test func hoveringDeadSpaceRevealsTheGhost() {
     let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
     #expect(resolve(PillInputs(snapshot: quiet, pointerInside: true)) == .ghost)
@@ -86,7 +86,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     // Guards against a new state silently inheriting another's shell.
     let sizes = Set(PillState.allCases.map { "\($0.size.width)x\($0.size.height)x\($0.cornerRadius)" })
     #expect(sizes.count >= 4)
-    #expect(PillState.dormant.size.height == 3)
+    #expect(PillState.hidden.size.height == 3)
     #expect(PillState.pinned.size == CGSize(width: 752, height: 540))
 }
 
@@ -214,7 +214,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(resolve(leaving) == .ghost)
     #expect(PillStateResolver.resolve(
         leaving, at: now.addingTimeInterval(PillStateResolver.ghostFade + 0.1)
-    ) == .dormant)
+    ) == .hidden)
 }
 
 @MainActor @Test func leavingTheGhostSchedulesItsWithdrawal() async {
@@ -236,10 +236,10 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     // tested is that the withdrawal happens without a poll, not that it lands
     // inside a particular millisecond.
     let deadline = Date().addingTimeInterval(3)
-    while model.state != .dormant, Date() < deadline {
+    while model.state != .hidden, Date() < deadline {
         try? await Task.sleep(for: .milliseconds(50))
     }
-    #expect(model.state == .dormant)
+    #expect(model.state == .hidden)
 }
 
 private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], Int) {
@@ -273,19 +273,17 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 }
 
 
-/// The shell is only ever shadowed when it floats. Every small state sits flush
-/// in the menu bar row, continuous with the notch's own black, and a 31pt shadow
-/// under one reads as a seam across the top of the screen.
-@MainActor @Test func onlyTheFloatingStatesCastAShadow() {
+/// Only the warning casts a shadow. Every small state sits flush in the menu bar
+/// row, continuous with the notch's own black, and a 31pt shadow under one reads
+/// as a seam across the top of the screen. Hover and pinned gave theirs up too:
+/// a surface you opened yourself does not have to announce that it is floating.
+@MainActor @Test func onlyTheWarningCastsAShadow() {
     for state in PillState.allCases {
-        #expect(state.castsShadow == !(state.fillsFlanks || state == .dormant))
+        #expect(state.castsShadow == (state == .warning))
     }
-    #expect(PillState.collapsed.castsShadow == false)
-    #expect(PillState.hover.castsShadow)
-    #expect(PillState.pinned.castsShadow)
 
-    // The host still has to clear the shadow of the states that do cast one.
-    #expect(PillState.hostSize.height - PillState.pinned.size.height
+    // The host still has to clear the shadow of the state that does cast one.
+    #expect(PillState.hostSize.height - PillState.warning.size.height
             >= PillState.shadowReach + PillState.shadowOffsetY)
 }
 

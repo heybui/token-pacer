@@ -17,7 +17,7 @@ import Foundation
 struct CodexStatusPanel: UsagePanel {
     var read: PanelReader
 
-    func fetch(now: Date = Date()) async throws -> RateLimits {
+    func fetch(now: Date = Date.now) async throws -> RateLimits {
         let text = try await read()
         guard let limits = Self.parse(text, now: now) else {
             throw PanelText.looksLikeSignIn(text) ? PanelError.notSignedIn : PanelError.unreadable

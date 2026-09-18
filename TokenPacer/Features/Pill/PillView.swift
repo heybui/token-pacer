@@ -28,16 +28,16 @@ struct PillView: View {
     /// Non-nil when the last refresh failed. The figure stays; it is marked
     /// unverified rather than hidden.
     var attention: String?
-    /// Claude Code background jobs working — anywhere on the machine, not only
-    /// in this project. They have no window of their own; the pill is the one
-    /// thing on screen that can say they are running at all.
-    var workingJobs = 0
+    /// Claude Code sessions with work in flight — anywhere on the machine, not
+    /// only in this project. Their own windows are behind something; the pill is
+    /// the one thing always in sight that can say they are running at all.
+    var workingSessions = 0
 
     /// One slot, and a source that cannot be read takes it first: an unverified
     /// figure is worse news than a job running.
     private var badge: PillState.Badge? {
         if attention != nil { return .alert }
-        return workingJobs > 0 ? .working(workingJobs) : nil
+        return workingSessions > 0 ? .working(workingSessions) : nil
     }
     /// Cross-source split, drawn only by the pinned panel.
     var bySource: [UsageSplit] = []
@@ -50,19 +50,15 @@ struct PillView: View {
     /// one. Empty only on a screen reporting no row at all.
     var band = NotchBand()
 
-    /// Whether this state is drawn around the notch at all. Dormant never is:
+    /// Whether this state is drawn around the notch at all. Hidden never is:
     /// "no activity" means the notch reads as stock hardware.
-    private var spansNotch: Bool { !band.isEmpty && state != .dormant }
+    private var spansNotch: Bool { !band.isEmpty && state != .hidden }
 
     /// The board's 26pt was clearance for the notch. With a band above carrying
     /// that, the body opens right under the hardware instead.
     private var bodyTop: CGFloat {
         spansNotch ? PillState.bandedBodyTop : PillState.boardBodyTop
     }
-    /// Nil until the first poll lands. On a cold start that reads hundreds of
-    /// megabytes it is several seconds, and a fake 0% would be a lie.
-    var isLoading: Bool { snapshot == nil }
-
     @Environment(\.tone) private var toneScale
 
     /// What the figure under the pointer means. The card is the only place with
@@ -254,11 +250,18 @@ struct PillView: View {
     @ViewBuilder
     private var stateBody: some View {
         switch state {
-        case .dormant: Color.clear
+        case .hidden: Color.clear
         case .paused: pausedPill
         case .exhausted: exhaustedPill
-        case .warning: warningCard
-        case .hover: hoverCard
+        case .warning:
+            WarningCard(
+                snapshot: snapshot, mark: mark, headline: headline, topInset: bodyTop
+            )
+        case .hover:
+            HoverCard(
+                snapshot: snapshot, providers: providers,
+                attention: attention, barWidth: providerBarWidth
+            )
         case .pinned:
             PinnedPanelView(
                 snapshot: snapshot, bySource: bySource, mark: mark, attention: attention,
@@ -283,8 +286,8 @@ struct PillView: View {
                 .foregroundStyle(.white.opacity(0.38))
             if let attention {
                 AttentionBadge(message: attention, size: 10)
-            } else if workingJobs > 0 {
-                JobBadge(count: workingJobs, scale: PillState.badgePinnedScale)
+            } else if workingSessions > 0 {
+                JobBadge(count: workingSessions, scale: PillState.badgePinnedScale)
             }
             notchGap
             Button(action: onClose) {
@@ -295,6 +298,7 @@ struct PillView: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close panel")
         }
         .padding(.leading, 11)
         .padding(.trailing, 13)
@@ -341,7 +345,7 @@ struct PillView: View {
     private var chasesBorder: Bool {
         guard bordersOn else { return false }
         return switch state {
-        case .pinned, .dormant, .ghost, .paused: false
+        case .pinned, .hidden, .ghost, .paused: false
         case .collapsed, .hover, .warning, .exhausted: true
         }
     }
@@ -356,297 +360,30 @@ struct PillView: View {
         // wing is the narrower one has some — collects beside the notch, where
         // there is nothing to read anyway.
         HStack(spacing: 0) {
-            leadingWing
-                .padding(.leading, PillState.leadingGutter)
-                .padding(.trailing, PillState.notchClearance)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            LeadingWing(
+                snapshot: snapshot, mark: mark, showsPercentage: showsPercentage,
+                isGhost: isGhost, headline: wings.headline, tone: tone
+            )
+            .padding(.leading, PillState.leadingGutter)
+            .padding(.trailing, PillState.notchClearance)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             notchGap
 
-            trailingWing
-                .padding(.leading, PillState.notchClearance)
-                .padding(.trailing, PillState.trailingGutter)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-
-    /// The mark and its figure.
-    private var leadingWing: some View {
-        // 12, not the row's usual 8: the bar ends in a capsule whose rounded cap
-        // already eats two of those points, so at 8 the over zone sat against the
-        // first digit of the percentage.
-        HStack(spacing: PillState.markGap) {
-            // The ring waits for a figure to mirror. Drawn while the logs are
-            // still being read it is an empty track next to the word "reading",
-            // and the pair does not fit a flank that holds one or the other.
-            if isLoading {
-                Text("reading…")
-                    .font(Typography.mono(12))
-                    .foregroundStyle(.white.opacity(0.4))
-            } else {
-                // The window alone. A second marker with no room for its number
-                // is a mark nobody can read the meaning of, and the menu bar is
-                // the one place where less is the whole product.
-                MarkView(
-                    mark: mark,
-                    percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
-                    isBurning: snapshot?.isBurning == true
-                )
-                if showsPercentage {
-                    OdometerText(text: wings.headline, size: 12, color: tone)
-                }
-            }
-        }
-    }
-
-    /// The clock, and the badge: a refresh that failed, or jobs working.
-    private var trailingWing: some View {
-        HStack(spacing: badge?.gap ?? PillState.markGap) {
-            if let attention {
-                AttentionBadge(message: attention, size: 10)
-            } else if workingJobs > 0 {
-                JobBadge(count: workingJobs)
-            }
-            if isGhost {
-                Text("week")
-                    .font(Typography.mono(11.5))
-                    .foregroundStyle(.white.opacity(0.4))
-            } else {
-                OdometerText(
-                    text: Format.countdown(to: snapshot?.resetsAt),
-                    size: 11.5, color: .white.opacity(0.5), weight: .regular
-                )
-            }
-        }
-    }
-
-    /// Fires once when the window crosses critical: the figure big enough to read
-    /// from across the desk, and the one number that matters — how long is left.
-    ///
-    /// No dismiss button by design: mousing over it acknowledges, and it never
-    /// re-fires for this window.
-    private var warningCard: some View {
-        HStack(spacing: 16) {
-            // The mark the menu bar wears, twice the size. The card is the same
-            // reading opened up, and a different drawing here would make it a
-            // second opinion.
-            MarkHero(
-                mark: mark, percent: snapshot?.sessionPercent,
-                isBurning: snapshot?.isBurning == true, scale: 2
+            TrailingWing(
+                snapshot: snapshot, isGhost: isGhost, attention: attention,
+                workingSessions: workingSessions, badge: badge
             )
-            VStack(alignment: .leading, spacing: 4) {
-                OdometerText(text: headline, size: 26, color: Tokens.red)
-                Text(warningLine)
-                    .font(Typography.sans(12.5))
-                    .foregroundStyle(.white.opacity(0.66))
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.top, bodyTop)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 16)
-    }
-
-    /// The reset, never a projection of when the window runs dry: that needed a
-    /// conversion from tokens to points that no provider publishes.
-    private var warningLine: String {
-        "\(Format.countdown(to: snapshot?.resetsAt)) to reset · wrap up soon"
-    }
-
-    /// One row per provider, on the same scale.
-    ///
-    /// The band above already carries the active source; this is where the others
-    /// become comparable — same capsules, same domain, each ending in its own
-    /// reset, because 81% of a five-hour window and 81% of a week are not the same
-    /// problem. A provider that reports nothing keeps its row and shows `--`:
-    /// absent is a state worth seeing, and it is not the same as zero.
-    private var hoverCard: some View {
-        // 11 between lines. Each row is a whole reading — a provider, where it
-        // stands, its week, its reset — and at 6 they stacked into a block the eye
-        // had to take apart. The card sizes to its content, so the air costs
-        // nothing but the height it is worth.
-        VStack(alignment: .leading, spacing: 11) {
-            // Kept even when the rows below say the same thing in figures. With
-            // one provider tracked the card would otherwise be a single line, and
-            // "Plenty of room" is the sentence the pill exists to say.
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(statusLine)
-                    .font(Typography.sans(13, .semibold))
-                    .foregroundStyle(.white)
-                    .onHover { caption = $0 ? zoneRule : nil }
-                Spacer(minLength: 8)
-                if let attention {
-                    AttentionBadge(message: attention, size: 10)
-                } else if let snapshot, snapshot.sessionPercent != nil {
-                    // How old the figure is. Between readings the pill is showing
-                    // the last one unmoved, and saying so is the difference
-                    // between a stale number and a lying one.
-                    Text(reportedLabel(snapshot))
-                        .font(Typography.mono(9.5))
-                        .foregroundStyle(.white.opacity(0.34))
-                        .onHover { caption = $0 ? "When the numbers were last read" : nil }
-                }
-            }
-
-            ForEach(scaleLines) { line in
-                ScaleRow(line: line, barWidth: providerBarWidth) { caption = $0 }
-            }
-
-            Text(caption ?? Self.hint)
-                .font(Typography.mono(9.5))
-                .foregroundStyle(.white.opacity(caption == nil ? 0.3 : 0.55))
-                .lineLimit(1)
-                // A change of words, not of place: the line fades from one to the
-                // next rather than swapping under the pointer.
-                .contentTransition(.opacity)
-                .animation(.easeInOut(duration: 0.18), value: caption)
-        }
-        // The band above is already a full menu-bar row of clearance, so the card
-        // needs a line of air under it, not a margin. It was reading as a third
-        // empty.
-        .padding(.top, 4)
-        .padding(.horizontal, 18)
-        .padding(.bottom, 10)
-    }
-
-    /// The line under the rows when nothing is under the pointer: what this
-    /// window can do, since neither gesture is one you would guess at.
-    private static let hint = "Double-click details · right-click settings"
-
-    /// What the colours mean, in the user's own numbers.
-    private var zoneRule: String {
-        "Safe to \(Int(toneScale.warnAt))% · watch to \(Int(toneScale.critAt))% · over above"
-    }
-
-    /// Every window worth a row, in the order they belong to each other.
-    ///
-    /// The weekly cap is a provider's, not the app's: Claude states one and so
-    /// does Codex, and they run out on different days. So the week follows its own
-    /// provider rather than sitting once at the bottom, where it silently belonged
-    /// to whichever source happened to be active.
-    private var scaleLines: [ScaleLine] {
-        providers.map { provider in
-            ScaleLine(
-                id: provider.source.rawValue,
-                label: provider.source.wordmark,
-                name: provider.source.displayName,
-                percent: provider.sessionPercent,
-                resetsAt: provider.resetsAt,
-                weekPercent: provider.weeklyPercent,
-                isBurning: provider.isBurning
-            )
+            .padding(.leading, PillState.notchClearance)
+            .padding(.trailing, PillState.trailingGutter)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
-    /// What is left for the bar once the row's fixed columns are paid for.
+    /// What is left for a hover-card bar once the row's fixed columns are paid
+    /// for. Measured here because only the shell knows how wide it is drawn.
     private var providerBarWidth: CGFloat {
         let shell = spansNotch ? state.size(around: band, wings: wings).width : state.size.width
         return max(60, shell - ScaleRow.fixedColumns - 36)
-    }
-
-    /// "reported" alone would imply the figure was just read. Between anchors it
-    /// is that reading carried forward by local token flow, so say how old it is.
-    private func reportedLabel(_ snapshot: UsageSnapshot) -> String {
-        guard let confirmedAt = snapshot.confirmedAt else { return "reported" }
-        let minutes = Int(Date().timeIntervalSince(confirmedAt) / 60)
-        return minutes < 1 ? "reported" : "reported \(minutes)m ago"
-    }
-
-    private var statusLine: String {
-        guard let percent = snapshot?.sessionPercent else { return "Measuring" }
-        if percent >= toneScale.critAt { return "Wrap up soon" }
-        return percent >= toneScale.warnAt ? "Running hot" : "Plenty of room"
-    }
-
-}
-
-/// One line on the shared scale: what it is, where it is, and when it resets.
-///
-/// A provider's window and the weekly cap are the same shape of fact, so they are
-/// the same row. The columns are fixed and the bar takes what is left, so every
-/// row lines up down the card however wide the shell is — which is the whole
-/// point of putting them on one scale.
-struct ScaleLine: Identifiable {
-    let id: String
-    let label: String
-    /// The provider's name in full. The row has room for a wordmark; the
-    /// tooltips have room to say which product it is.
-    var name: String = ""
-    let percent: Double?
-    let resetsAt: Date?
-    /// The provider's weekly cap, drawn hollow on the same track.
-    var weekPercent: Double?
-    var isBurning = false
-}
-
-private struct ScaleRow: View {
-    let line: ScaleLine
-    let barWidth: CGFloat
-    /// Called with what the column under the pointer means, and with nil when it
-    /// leaves. The card prints it; the row only knows what it is drawing.
-    var explain: (String?) -> Void = { _ in }
-
-    /// Each column is its widest content and no more, and the numeric ones are
-    /// trailing so what slack is left falls between the columns rather than
-    /// inside them. Left-aligned and oversized, every number sat at the far side
-    /// of its own gap and the row read as four islands.
-    static let wordmarkWidth: CGFloat = 48    // "COPILOT" at 9.5pt mono
-    static let percentWidth: CGFloat = 28     // "100%"
-    static let weekWidth: CGFloat = 28        // "100%"
-    static let resetWidth: CGFloat = 42       // "12d 07h"
-    /// 14, not the 8 the rest of the app uses between neighbours. These columns
-    /// are not neighbours — each is a different kind of fact about the same line,
-    /// and at 8 the bar ran into its own percentage and the three figures read as
-    /// one string. The bar pays for it, which is the right pocket: it is the only
-    /// column that can be any length at all.
-    static let spacing: CGFloat = 14
-    static var fixedColumns: CGFloat {
-        wordmarkWidth + percentWidth + weekWidth + resetWidth + spacing * 4
-    }
-
-    @Environment(\.tone) private var tone
-
-    var body: some View {
-        HStack(spacing: Self.spacing) {
-            Text(line.label)
-                .font(Typography.mono(9.5, .semibold))
-                .tracking(0.95)
-                .foregroundStyle(.white.opacity(0.62))
-                .frame(width: Self.wordmarkWidth, alignment: .leading)
-                .onHover { explain($0 ? line.name : nil) }
-
-            // The capsule bar whatever the menu bar is wearing. These rows are a
-            // comparison — four readings down a column, on one domain — and that
-            // is the job position on a line does better than any of the other
-            // eleven. It is also the only mark that can take the width the card
-            // has to give it. The choice in Preferences dresses the menu bar,
-            // where space is the constraint; here it is not.
-            CapsuleBar(
-                percent: line.percent,
-                weekPercent: line.weekPercent,
-                width: barWidth,
-                isBurning: line.isBurning
-            )
-            .onHover { explain($0 ? "5-hour window · the dot is the week" : nil) }
-
-            OdometerText(text: Format.percent(line.percent), size: 11, color: tone(line.percent))
-                .frame(width: Self.percentWidth, alignment: .trailing)
-                .onHover { explain($0 ? "Used in this 5-hour window" : nil) }
-
-            // The dot's own figure. Without it the second marker is a position
-            // with no number, which is half a reading.
-            Text(line.weekPercent == nil ? "" : Format.percent(line.weekPercent))
-                .font(Typography.mono(9.5))
-                .foregroundStyle(.white.opacity(0.5))
-                .frame(width: Self.weekWidth, alignment: .trailing)
-                .onHover { explain($0 ? "Used of the weekly cap" : nil) }
-
-            Text(Format.countdown(to: line.resetsAt))
-                .font(Typography.mono(9.5))
-                .foregroundStyle(.white.opacity(0.42))
-                .frame(width: Self.resetWidth, alignment: .trailing)
-                .onHover { explain($0 ? "Time left until the window resets" : nil) }
-        }
     }
 }

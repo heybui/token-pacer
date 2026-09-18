@@ -15,7 +15,7 @@ struct PillInputs: Equatable, Sendable {
     var ghostHeldUntil: Date?
     /// Off keeps the collapsed pill on screen through a quiet spell rather than
     /// withdrawing to the 3pt sliver.
-    var hideWhenDormant = true
+    var hideWhenNothingRuns = true
     /// What the right wing carries at its end, when anything does — a source
     /// complaining, or a count of sessions waiting for an answer. Geometry only;
     /// what either one says lives on the store.
@@ -31,25 +31,25 @@ struct PillInputs: Equatable, Sendable {
 /// exclusive, so deciding them in one place is what keeps them that way.
 enum PillStateResolver {
     /// Silence for this long reads as "no Claude activity" and the pill withdraws.
-    static let dormantAfter: TimeInterval = 10 * 60
+    static let hiddenAfter: TimeInterval = 10 * 60
     /// How long the ghost lingers once the pointer has gone.
     static let ghostFade: TimeInterval = 0.4
 
     static func resolve(
         _ inputs: PillInputs,
         at now: Date,
-        dormantAfter: TimeInterval = dormantAfter
+        hiddenAfter: TimeInterval = hiddenAfter
     ) -> PillState {
         // Off is off: no figures, no alerts, and hovering does not reveal any.
         if inputs.isPaused { return .paused }
         if inputs.isPinned { return .pinned }
 
-        if inputs.hideWhenDormant, isDormant(inputs, at: now, dormantAfter: dormantAfter) {
+        if inputs.hideWhenNothingRuns, nothingRunning(inputs, at: now, hiddenAfter: hiddenAfter) {
             // Hovering dead space reveals the ghost — the only way to reach the
-            // menu while dormant. "Fades out ~400ms after the pointer leaves."
+            // menu while hidden. "Fades out ~400ms after the pointer leaves."
             if inputs.pointerInside { return .ghost }
             if let held = inputs.ghostHeldUntil, now < held { return .ghost }
-            return .dormant
+            return .hidden
         }
 
         // Hovering counts as seeing the warning, so it never fires again this
@@ -63,11 +63,11 @@ enum PillStateResolver {
         return .collapsed
     }
 
-    private static func isDormant(
-        _ inputs: PillInputs, at now: Date, dormantAfter: TimeInterval
+    private static func nothingRunning(
+        _ inputs: PillInputs, at now: Date, hiddenAfter: TimeInterval
     ) -> Bool {
         guard let snapshot = inputs.snapshot else { return true }
         guard let lastActivity = snapshot.lastActivity else { return true }
-        return now.timeIntervalSince(lastActivity) > dormantAfter
+        return now.timeIntervalSince(lastActivity) > hiddenAfter
     }
 }
