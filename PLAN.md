@@ -249,6 +249,19 @@ runners, Side drip, Bottom sweep. All take their colour from the zone the panel 
 in; all leave the top edge dark, which `ShellTrack` already does. One switch gates
 the whole group. `ChasingBorder` is one of the twelve, not the only one.
 
+### The mark is chosen, and the card is not
+
+`Mark` names the choice, its axis and what it costs in a wing; `MarkView` is the
+one place a reading becomes a drawn mark. The choice is stored in `Preferences`
+already — the Appearance pane sets the value the app is reading, rather than the
+pane arriving with a value nothing consumes.
+
+The expanded card keeps the **capsule bar whatever the menu bar wears**. Its rows
+are a comparison — four readings down one column on one domain — which is the job
+position on a line does better than the other eleven, and it is the only mark that
+can take the width the card has to give it. The choice dresses the menu bar, where
+space is the constraint.
+
 ### Preferences becomes two panes
 
 - **General** — *Zones*: the dual-handle track, relabelled "Watch starts at" /
@@ -389,8 +402,7 @@ full colour standing for safe, watch and over, a point of gap either side of eac
 threshold, and a marker riding them at the reported percentage. The zones follow
 the user's own thresholds, so moving the slider moves the capsules. Drawn at
 **36pt** — the board draws 46 and says it wants 76, but both figures buy a 44pt
-wordmark beside the bar, and with one provider there is nothing to name. The flank
-pays 74 → 88 for it; the ring cost 17pt.
+wordmark beside the bar, and with one provider there is nothing to name.
 
 **The card is a list.** One row per provider on one scale: wordmark, bar,
 percentage, the week, its reset. It sizes to its content rather than to a number,
@@ -413,7 +425,26 @@ worth of politeness.
 
 **Still the ring**: the over card and the pinned panel's hero. The board wants
 every expanded state to lead with the same mark scaled up, which is phase 6's
-job, not a swap to make while eleven marks are still unwritten.
+job, not a swap to make while ten marks are still unwritten.
+
+### The flanks are a measurement (added with phase 6's second mark)
+
+`PillState.Wings` measures what the two wings hold — the mark's own width, the
+headline as it reads, the countdown as it reads, the badge when there is one — and
+the wider side sets both. The shell is centred on the notch, so unequal flanks
+would sit the hardware off-centre inside its own shell.
+
+One function measures and the view draws from it, so the rect that takes clicks is
+the rect that was drawn. The host keeps reserving the widest the wings can ever be:
+the window is resized by the controller and the shell by a spring inside it, and a
+shell that outgrew its window would be clipped mid-morph.
+
+Band on this machine: **390pt** with the capsule bar, **330** with the ring, against
+a flat 396 before. Two mistakes were paid for on the way, both now pinned by tests:
+widths were estimated at "0.6em a character" when that is only the cell the odometer
+gives a *digit* (letters are measured now, through the same rule the odometer draws
+by), and the row's own 12pt between a wing and the notch gap was left out of the
+formula, so the countdown drew through its own gutter.
 
 ## 1. Architecture
 
@@ -591,7 +622,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 3 | Warning auto-expand, pinned panel, context menu | ✅ done (old board) |
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done (old board) |
 | 5 | **Two wings** — the drop panel, the card as a list, the week on the bar (§0.6) | ✅ done |
-| 6 | **Marks** — the capsule bar is built and is the default; eleven to go, and the protocol with them | 🔨 1 of 12 |
+| 6 | **Marks** — `Mark` + `MarkView` are the seam; capsule bar and ring wings built, ten to go | 🔨 2 of 12 |
 | 7 | **Appearance** — the second prefs pane, twelve border effects, the live grids | ⬜ not started |
 | 8 | ~~**Copilot**~~ | ⛔ cut: nothing local states its quota (§0.5) |
 | 9 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
