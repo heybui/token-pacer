@@ -87,7 +87,7 @@ Codex needs none of this — its rollout logs already carry `rate_limits` with
 | Value | Source |
 |---|---|
 | 5-hour %, 7-day %, reset times | **Claude: the CLI's `/usage` panel, to the whole percent. Codex: rollout logs.** |
-| Copilot's monthly allowance | **The desktop app's own local daemon** (`~/.copilot/run/`), the same idea as the CLI panel — unproven, see §0 |
+| Copilot's monthly allowance | **Nowhere reachable.** Its daemon holds it and will not hand it over — spiked and failed, see §0.5 |
 | Monthly credit spend | the panel's `Usage credits` row — free, no Console admin key |
 | The sparkline — the shape of recent activity | Log token counts (no provider states a rate of change) |
 | Splits by model / project / surface | Log token counts (the API gives no attribution) |
@@ -124,7 +124,7 @@ three of them is three times wrong the week any of them changes.
 |---|---|---|
 | Claude | the CLI's `/usage` panel, over a pty | ~4s a run, whole percentages, a UI for a contract |
 | Codex | `rate_limits` in the rollout logs — `used_percent` to one decimal, `window_minutes` 300 and 10080, `resets_at` | nothing: it writes it down itself, so there is nothing to drive |
-| Copilot | the desktop app's own local daemon — `~/.copilot/run/ws.port` and `ws.token`, message kind `get_account_quota`, seen in its logs | unproven; there is no `copilot` binary to drive, so this is the pty's equivalent |
+| Copilot | nothing that can be read. The daemon that has it refuses a second client (§0.5) | no row |
 
 The rule that follows, and the reason there is no per-provider arithmetic here:
 **a provider whose own figure cannot be read has no row.** Not an estimate, not a
@@ -197,10 +197,9 @@ Codex a week, Copilot a month. Each row carries its own reset.
   changed to match (§0.3).
 
 Copilot's store is `~/.copilot`, and its quota is not in it: the desktop app asks
-its own local daemon, which asks the server. That daemon is reachable — port and
-token sit in `~/.copilot/run/` — so the figure is fetched the same way Claude's
-is, from the client that already holds the credential. Until that is proven,
-Copilot has no row (§0) until that is proven. The board keeps its vocabulary for an
+its own local daemon, which asks the server. The daemon was spiked and will not
+serve anyone but the app itself — §0.5. So
+Copilot has no row (§0.5). The board keeps its vocabulary for an
 estimated figure — the `~`, and the hollow marker on the ring — but **nothing in the
 app produces one today**: `CeilingEstimator` was the only estimator and it is
 deleted (§0.4). So the device is reserved, not in use, and the distinction it draws
@@ -328,6 +327,51 @@ not reported. Raw tokens read as a figure of the same kind — a big number wher
 small one usually sits, on a scale nothing else on screen shares — so "56.7M" beside
 a countdown looked like a reading rather than the absence of one. The count is left
 to `--probe` and the splits.
+
+## 0.5 The Copilot daemon says no (2026-09-18)
+
+Spiked, and it fails at the last step. Recorded in full because the next person to
+have this idea deserves the four hours back.
+
+**What works.** `~/.copilot/run/ws.port` holds the port on its first line and the
+app's pid on its second; `ws.token` holds a 48-character token. The token is read
+from the query string, and it is genuinely checked:
+
+```
+GET /?token=<wrong>  → HTTP/1.1 401 Unauthorized
+GET /?token=<right>  → connection closed, no reply at all
+```
+
+So the credential is right and the auth layer passes. `get_account_quota` is a
+real message kind on that socket — it sits in a list beside `get_session_state`
+and `list_session_models`, and the binary carries the handler symbol
+`github_app::handlers::misc::get_account_quota` with the failure strings "failed
+to fetch account quota" and "get_account_quota hit a Copilot auth failure". That
+last one confirms the shape of the thing: the daemon **fetches** the quota from
+GitHub on demand and caches nothing to disk, which is why no amount of reading
+`~/.copilot` will ever find it.
+
+**What does not.** After the token passes, the upgrade is refused without a
+response. Tried: no auth, bearer header, `X-Copilot-Token`, the token as a
+subprotocol, `/ws` as the path, and four plausible `Origin` values including
+`tauri://localhost`. Every one either 401s or is dropped in under a millisecond.
+The socket speaks only to the app it belongs to.
+
+**Why it stops here rather than going further.** What is left is reverse
+engineering a Tauri app's private IPC — and the prize is a protocol with no
+compatibility promise, on a port and token that rotate every time the app
+restarts. The CLI panel is already a UI as a contract (§0); this would be a
+private socket as a contract, which is the same bet with worse odds and no user
+visible to notice when it breaks.
+
+**Where that leaves Copilot.** Its spend is beautifully recorded — every request
+with tokens, model and timestamp in `assistant_usage_events` — and its allowance
+is unreachable. A numerator with no denominator, which by §0's rule is no row.
+The board still draws three providers; the app can draw two. Reopening it needs
+one of: GitHub shipping a `copilot` CLI that states usage, a documented endpoint,
+or a decision to let the *user* state their plan size in Preferences and count
+premium requests locally — which is a real option, but it brings back the
+request-multiplier and initiator arithmetic that was deliberately cut.
 
 ## 1. Architecture
 
@@ -507,7 +551,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 5 | **Two wings** — the flat bar row, the drop panel, the left wing yielding to app menus | ⬜ not started |
 | 6 | **Marks** — the `Mark` protocol, twelve of them, the capsule bar as default | ⬜ not started |
 | 7 | **Appearance** — the second prefs pane, twelve border effects, the live grids | ⬜ not started |
-| 8 | **Copilot** — its quota from the app's local daemon, `~/.copilot/session-store.db` for everything else | ⬜ spike the daemon first |
+| 8 | ~~**Copilot**~~ | ⛔ cut: nothing local states its quota (§0.5) |
 | 9 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
 
 Phases 2–4 shipped against the board as it stood; §0.2 is what the redraw asks
@@ -720,11 +764,9 @@ update path is — an installed copy will only accept an update signed the same 
 1. **Undocumented log formats.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. Mitigation: decode defensively, and never a confident `0%`. The promised `no data` pill state is now simply what the pill does: `--` wherever a percentage would go, for want of a reading rather than for want of usage.
 2. **A provider can go quiet.** Every percentage is now the provider's own, so when a reading cannot be taken — the CLI moved, the panel changed, the daemon is down — there is no number at all rather than a wrong one. The pill shows `--` and the countdown, and the risk is a user reading that as "no usage" rather than "not reported". The attention badge is what has to carry the difference. `TokenWeights` no longer touches anything on screen except the sparkline and the splits, where only the ordering matters.
 3. ~~**Bundle id**~~ — settled: `com.redevify.token-pacer`, renamed with the product before release.
-4. **Copilot's quota comes from a daemon nobody documents.** The port and token
-   in `~/.copilot/run/` belong to the desktop app and are rewritten when it
-   restarts; the message shape is known only from its own logs. Same class of risk
-   as the CLI panel, with less to go on — and the same answer: when it cannot be
-   read, Copilot has no row rather than an invented one.
+4. ~~**Copilot's quota comes from a daemon nobody documents.**~~ Settled by §0.5:
+   it cannot be read at all, so there is no risk to carry — only a provider the
+   board draws and the app cannot.
 5. **The Sparkle private key is a single point of failure.** It lives only in the login Keychain of
    this machine. No backup means no future update for anyone already installed — not a bug that can
    be fixed later, so back it up before the first release, not after.
