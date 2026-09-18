@@ -42,8 +42,8 @@ struct PillRootView: View {
     /// the same answer the model measures the wing with.
     private var badge: PillState.Badge? {
         if store.errors[store.activeSource] != nil { return .alert }
-        let waiting = store.waitingSessions
-        return waiting > 0 ? .waiting(waiting) : nil
+        let working = store.runningJobs
+        return working > 0 ? .working(working) : nil
     }
 
     var body: some View {
@@ -58,7 +58,7 @@ struct PillRootView: View {
             border: preferences.border,
             bordersOn: preferences.bordersOn,
             attention: store.errors[store.activeSource],
-            waiting: store.waitingSessions,
+            workingJobs: store.runningJobs,
             bySource: store.bySource,
             onTogglePinned: { model.togglePinned() },
             onClose: { model.setPinned(false) },

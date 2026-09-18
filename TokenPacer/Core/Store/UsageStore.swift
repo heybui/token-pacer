@@ -72,9 +72,10 @@ final class UsageStore {
     /// whichever tick comes next.
     private(set) var sessions: [AgentSession] = []
 
-    /// How many sessions are stopped, waiting for an answer. The one figure the
-    /// pill carries: the rest of the registry is only worth a panel.
-    var waitingSessions: Int { sessions.count(where: \.isWaiting) }
+    /// How many background jobs are working right now — the one figure the pill
+    /// carries. Background, because an interactive session is already on screen
+    /// in the terminal that started it; these have nowhere else to show.
+    var runningJobs: Int { sessions.count(where: \.isRunningJob) }
     private var pump: Task<Void, Never>?
 
     /// Does appending these break the order of what is already held?
@@ -197,7 +198,7 @@ final class UsageStore {
         sessions = fresh
         Log.ingest.debug("""
             registry: \(fresh.count, privacy: .public) sessions, \
-            \(fresh.count(where: \.isWaiting), privacy: .public) waiting
+            \(fresh.count(where: \.isRunningJob), privacy: .public) jobs working
             """)
     }
 

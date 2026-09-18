@@ -28,16 +28,16 @@ struct PillView: View {
     /// Non-nil when the last refresh failed. The figure stays; it is marked
     /// unverified rather than hidden.
     var attention: String?
-    /// Claude Code sessions stopped, waiting for an answer — anywhere on the
-    /// machine, not only in this project. The pill is the one thing on screen
-    /// that can say so without a window being open.
-    var waiting = 0
+    /// Claude Code background jobs working — anywhere on the machine, not only
+    /// in this project. They have no window of their own; the pill is the one
+    /// thing on screen that can say they are running at all.
+    var workingJobs = 0
 
     /// One slot, and a source that cannot be read takes it first: an unverified
-    /// figure is worse news than somebody waiting.
+    /// figure is worse news than a job running.
     private var badge: PillState.Badge? {
         if attention != nil { return .alert }
-        return waiting > 0 ? .waiting(waiting) : nil
+        return workingJobs > 0 ? .working(workingJobs) : nil
     }
     /// Cross-source split, drawn only by the pinned panel.
     var bySource: [UsageSplit] = []
@@ -268,8 +268,8 @@ struct PillView: View {
                 .foregroundStyle(.white.opacity(0.38))
             if let attention {
                 AttentionBadge(message: attention, size: 10)
-            } else if waiting > 0 {
-                WaitingBadge(count: waiting)
+            } else if workingJobs > 0 {
+                JobBadge(count: workingJobs)
             }
             notchGap
             Button(action: onClose) {
@@ -385,13 +385,13 @@ struct PillView: View {
         }
     }
 
-    /// The clock, and the badge: a refresh that failed, or sessions waiting.
+    /// The clock, and the badge: a refresh that failed, or jobs working.
     private var trailingWing: some View {
         HStack(spacing: PillState.markGap) {
             if let attention {
                 AttentionBadge(message: attention, size: 10)
-            } else if waiting > 0 {
-                WaitingBadge(count: waiting)
+            } else if workingJobs > 0 {
+                JobBadge(count: workingJobs)
             }
             if isGhost {
                 Text("week")

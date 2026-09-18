@@ -72,21 +72,21 @@ enum PillState: String, CaseIterable, Sendable {
     ///
     /// Two things compete for one slot, and the order is not a toss-up: a source
     /// that cannot be read makes every figure beside it unverified, so it wins.
-    /// A session waiting for an answer is the next most interruptible thing this
-    /// app knows, and it is a count rather than a dot because "two are waiting"
-    /// and "one is waiting" are different plans for the next ten minutes.
+    /// Jobs working out of sight are the next thing worth a corner of the notch,
+    /// and a count rather than a dot because three running and one running are
+    /// different answers to "can I close the lid".
     enum Badge: Equatable, Sendable {
         /// A source is complaining. The message lives on the store.
         case alert
-        /// How many Claude sessions are stopped, waiting to be answered.
-        case waiting(Int)
+        /// How many background jobs are working.
+        case working(Int)
 
         /// A digit is narrower than the triangle until it is two digits wide, so
         /// the figure is asked of the font rather than assumed.
         @MainActor var width: CGFloat {
             switch self {
             case .alert: PillState.badgeSize
-            case .waiting(let count):
+            case .working(let count):
                 max(PillState.badgeSize, Typography.monoWidth(count.formatted(.number), size: 11))
             }
         }
@@ -145,9 +145,9 @@ enum PillState: String, CaseIterable, Sendable {
         /// window never has to grow while the shell inside it does.
         @MainActor static let widest = Wings(
             mark: Mark.allCases.max { $0.width < $1.width } ?? .capsuleBar,
-            // The widest badge, not merely a badge: a two-digit count of waiting
-            // sessions is wider than the alert triangle it shares the slot with.
-            headline: "1.25M", tail: "12d 07h", badge: .waiting(99)
+            // The widest badge, not merely a badge: a two-digit count of jobs is
+            // wider than the alert triangle it shares the slot with.
+            headline: "1.25M", tail: "12d 07h", badge: .working(99)
         ).flank
     }
 

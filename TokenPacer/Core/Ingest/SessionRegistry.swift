@@ -14,7 +14,15 @@ struct AgentSession: Equatable, Sendable, Identifiable {
     /// `idle` both mean nothing is expected of the user.
     enum Status: String, Sendable { case busy, waiting, idle }
 
+    /// How the session was started. A background job runs with no window of its
+    /// own, which is the whole reason a notch has anything to say about it — an
+    /// interactive one is already on screen, in the terminal that started it.
+    /// Anything the CLI grows later (a cloud session, say) lands in `other` and
+    /// is counted as nothing.
+    enum Kind: String, Sendable { case bg, interactive, other }
+
     let pid: Int32
+    let kind: Kind
     /// What the session calls itself — the CLI's auto-generated name, or the
     /// title it took from the first prompt.
     let name: String
@@ -28,6 +36,8 @@ struct AgentSession: Equatable, Sendable, Identifiable {
 
     var id: Int32 { pid }
     var isWaiting: Bool { status == .waiting }
+    /// A background job with work in flight: nothing on screen says so.
+    var isRunningJob: Bool { kind == .bg && status == .busy }
 }
 
 /// Reads every session Claude Code has registered on this machine.
@@ -46,6 +56,7 @@ enum SessionRegistry {
     /// never opened.
     private struct Entry: Decodable {
         let pid: Int32
+        let kind: String?
         let name: String?
         let cwd: String?
         let status: String?
@@ -85,6 +96,7 @@ enum SessionRegistry {
 
                 return AgentSession(
                     pid: entry.pid,
+                    kind: entry.kind.flatMap(AgentSession.Kind.init(rawValue:)) ?? .other,
                     name: entry.name ?? "session \(entry.pid)",
                     directory: entry.cwd ?? "",
                     status: status,

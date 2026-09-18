@@ -310,7 +310,7 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
     let band = NotchBand(notchWidth: 200, height: 39)
     let host = PillState.hostSize(around: band).width
     for mark in Mark.allCases {
-        let wings = PillState.Wings(mark: mark, headline: "1.25M", tail: "12d 07h", badge: .waiting(99))
+        let wings = PillState.Wings(mark: mark, headline: "1.25M", tail: "12d 07h", badge: .working(99))
         #expect(host >= band.notchWidth + 2 * wings.flank)
     }
 }
@@ -320,7 +320,7 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 /// drew through its gutter and a seven-character one would have run off the end.
 @MainActor @Test func theFlankLeavesRoomForTheCountdownAndItsGutter() {
     for mark in Mark.allCases {
-        let wings = PillState.Wings(mark: mark, headline: "1.25M", tail: "12d 07h", badge: .waiting(99))
+        let wings = PillState.Wings(mark: mark, headline: "1.25M", tail: "12d 07h", badge: .working(99))
         let tail = Typography.monoWidth("12d 07h", size: 11.5)
         #expect(wings.flank >= tail + PillState.trailingGutter + PillState.notchClearance)
     }
