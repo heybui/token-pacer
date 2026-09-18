@@ -3,11 +3,15 @@ import Foundation
 /// Every string the UI shows a number in. One place, so the pill, the card and
 /// the panel can never disagree about what "2h 04m" looks like.
 enum Format {
-    /// "2h 04m" — the design always shows both units.
+    /// "2h 04m" — the design always shows both units. Past a day it switches to
+    /// "4d 11h": a weekly window has 150 hours in it, and nobody reads that as a
+    /// duration.
     static func countdown(to date: Date?, from now: Date = Date()) -> String {
         guard let date else { return "--" }
         let minutes = max(0, Int(date.timeIntervalSince(now) / 60))
-        return "\(minutes / 60)h \(String(format: "%02d", minutes % 60))m"
+        let hours = minutes / 60
+        if hours >= 24 { return "\(hours / 24)d \(hours % 24)h" }
+        return "\(hours)h \(String(format: "%02d", minutes % 60))m"
     }
 
     static func percent(_ value: Double?) -> String {

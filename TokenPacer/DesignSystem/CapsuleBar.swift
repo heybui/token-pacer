@@ -41,7 +41,14 @@ struct CapsuleBar: View {
         }
         // The marker overhangs the track top and bottom, so the row is as tall as
         // the marker and the capsules sit centred in it.
-        .frame(width: width, height: markerHeight)
+        //
+        // Leading, not the default centre. Every zone is placed with `.offset`,
+        // which draws without taking part in layout, so the stack's own width is
+        // its widest child — the safe zone, three quarters of the bar. Centred,
+        // that narrower stack sat an eighth of the bar to the right of where the
+        // offsets were measured from, and the over zone ran out past the end of
+        // the bar into the percentage beside it.
+        .frame(width: width, height: markerHeight, alignment: .leading)
         .onChange(of: isBurning, initial: true) { creeping = isBurning }
     }
 

@@ -3,6 +3,9 @@ import SwiftUI
 struct PillView: View {
     let state: PillState
     let snapshot: UsageSnapshot?
+    /// Every source the store has a reading for, in a stable order. The band
+    /// shows the active one; the hover card compares them all.
+    var providers: [UsageSnapshot] = []
     /// Non-nil when the last refresh failed. The figure stays; it is marked
     /// unverified rather than hidden.
     var attention: String?
@@ -358,59 +361,32 @@ struct PillView: View {
         "\(Format.countdown(to: snapshot?.resetsAt)) to reset · wrap up soon"
     }
 
+    /// One row per provider, on the same scale.
+    ///
+    /// The band above already carries the active source; this is where the others
+    /// become comparable — same capsules, same domain, each ending in its own
+    /// reset, because 81% of a five-hour window and 81% of a week are not the same
+    /// problem. A provider that reports nothing keeps its row and shows `--`:
+    /// absent is a state worth seeing, and it is not the same as zero.
     private var hoverCard: some View {
-        HStack(spacing: 15) {
-            // Off a notched screen the card carries its own ring and countdown.
-            // On one the band above already has both, and a second copy 15pt
-            // below the first is just the same number twice.
-            if !spansNotch {
-                UsageRing(
-                    percent: snapshot?.sessionPercent, tone: tone,
-                    size: 46, lineWidth: 6,
-                    label: isLoading ? nil : headline,
-                    isBurning: snapshot?.isBurning == true
-                )
+        VStack(alignment: .leading, spacing: 9) {
+            ForEach(providers, id: \.source) { provider in
+                ProviderRow(snapshot: provider, barWidth: providerBarWidth)
             }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(statusLine)
-                        .font(Typography.sans(13, .semibold))
-                        .foregroundStyle(.white)
-                    Spacer(minLength: 14)
-                    if !spansNotch {
-                        HStack(spacing: 4) {
-                            OdometerText(
-                                text: Format.countdown(to: snapshot?.resetsAt),
-                                size: 11.5, color: .white.opacity(0.5), weight: .regular
-                            )
-                            Text("left")
-                                .font(Typography.mono(11.5))
-                                .foregroundStyle(.white.opacity(0.5))
-                        }
-                    }
-                }
-
-                CapBar(
-                    percent: snapshot?.weeklyPercent,
-                    tone: toneScale(snapshot?.weeklyPercent),
-                    height: 4
-                )
-
-                HStack(spacing: 6) {
-                    if let attention {
-                        AttentionBadge(message: attention, size: 10)
-                    }
-                    Text(detailLine)
-                        .font(Typography.mono(10.5))
-                        .foregroundStyle(attention == nil ? .white.opacity(0.42) : Tokens.amber.opacity(0.9))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
+            if let attention {
+                AttentionBadge(message: attention, size: 10)
             }
+            Spacer(minLength: 0)
         }
         .padding(.top, bodyTop)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 14)
+    }
+
+    /// What is left for the bar once the row's fixed columns are paid for.
+    private var providerBarWidth: CGFloat {
+        let shell = spansNotch ? state.size(around: band).width : state.size.width
+        return max(60, shell - ProviderRow.fixedColumns - 36)
     }
 
     /// "reported" alone would imply the figure was just read. Between anchors it
@@ -434,5 +410,53 @@ struct PillView: View {
         var parts = ["Week \(Format.percent(snapshot.weeklyPercent))"]
         if snapshot.sessionPercent != nil { parts.append(reportedLabel(snapshot)) }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// One provider on the shared scale: who, where it is, and when it resets.
+///
+/// The columns are fixed and the bar takes what is left, so two rows line up
+/// down the card however wide the shell is — which is the whole point of putting
+/// them on one scale.
+private struct ProviderRow: View {
+    let snapshot: UsageSnapshot
+    let barWidth: CGFloat
+
+    static let wordmarkWidth: CGFloat = 54
+    static let percentWidth: CGFloat = 40
+    static let resetWidth: CGFloat = 52
+    static let spacing: CGFloat = 8
+    static var fixedColumns: CGFloat {
+        wordmarkWidth + percentWidth + resetWidth + spacing * 3
+    }
+
+    @Environment(\.tone) private var tone
+
+    var body: some View {
+        HStack(spacing: Self.spacing) {
+            Text(snapshot.source.wordmark)
+                .font(Typography.mono(9.5, .semibold))
+                .tracking(0.95)
+                .foregroundStyle(.white.opacity(0.62))
+                .frame(width: Self.wordmarkWidth, alignment: .leading)
+
+            CapsuleBar(
+                percent: snapshot.sessionPercent,
+                width: barWidth,
+                isBurning: snapshot.isBurning
+            )
+
+            OdometerText(
+                text: Format.percent(snapshot.sessionPercent),
+                size: 11,
+                color: tone(snapshot.sessionPercent)
+            )
+            .frame(width: Self.percentWidth, alignment: .leading)
+
+            Text(Format.countdown(to: snapshot.resetsAt))
+                .font(Typography.mono(9.5))
+                .foregroundStyle(.white.opacity(0.42))
+                .frame(width: Self.resetWidth, alignment: .trailing)
+        }
     }
 }
