@@ -268,11 +268,12 @@ space is the constraint.
   "Over starts at", and now the source of every zone colour in the app rather than
   only of alerts. *Alerts*: notify when over, sound when over. *App*: launch at
   login, hide when nothing is running, restore defaults.
-- **Appearance** — two grids of twelve tiles, drawn live at real size, plus a
-  Safe / Watch / Over preview switch that recolours all twenty-four at once, a
-  working-indicator switch, and a preview of both choices together. A popup menu
-  is ruled out by the board: "Eclipse" tells you nothing about what lands in your
-  menu bar.
+- **Appearance** — two grids of twelve tiles, drawn live at real size. A popup
+  menu is ruled out by the board: "Eclipse" tells you nothing about what lands in
+  your menu bar. The board's Safe / Watch / Over preview switch was replaced
+  before it was built: the grid is **walked** from 0 to 100% instead, six seconds
+  a lap, two of them in each zone, with the figure beside it (§0.7). The border
+  grid and the preview of both choices together are still unbuilt.
 
 Settled by the board and now built: **the over banner fires alongside the notch**,
 not only when the notch is hidden. The notch carries the state, the banner carries
@@ -445,6 +446,95 @@ widths were estimated at "0.6em a character" when that is only the cell the odom
 gives a *digit* (letters are measured now, through the same rule the odometer draws
 by), and the row's own 12pt between a wing and the notch gap was left out of the
 formula, so the countdown drew through its own gutter.
+
+
+## 0.7 The twelve marks, and what drawing twelve of them cost (2026-09-18)
+
+All twelve are drawn and pickable. `Mark` still names the choice and `MarkView` is
+still the one place a reading becomes a drawing; the ten new ones live in
+`Marks.swift` together, because each is a dozen lines of geometry and the set is
+only worth anything compared against itself.
+
+### The wing measures the mark, it does not declare it
+
+`Mark.width` used to be a number written next to each case. It is now the mark
+itself, laid out once and asked how wide it came out — `NSHostingView(rootView:
+MarkView(...)).fittingSize`, cached per mark, since a resting mark's size cannot
+change. A hand-kept figure drifts the first time a mark is nudged, and it drifts
+*silently*: the band would still be laid out to the old number while the new
+drawing ran over its own gutter.
+
+What they cost, with a 200pt notch, `100%` and `4h 59m`:
+
+| mark | drawn | flank | band |
+|---|---|---|---|
+| Thermometer | 8 | 73 | 346 |
+| Hourglass | 14 | 79 | 358 |
+| Token stack · Dot matrix | 15 | 80 | 360 |
+| Eclipse | 17 | 82 | 364 |
+| Ring wings | 18 | 83 | 366 |
+| Dotted arc | 19 | 84 | 368 |
+| Notch tank | 22 | 87 | 374 |
+| Signal strength | 25 | 90 | 380 |
+| Capsule bar · Half gauge | 36 | 101 | 402 |
+| Pips | 38 | 103 | 406 |
+
+The mark is paid for twice — both wings take the wider one — so the choice between
+the thermometer and the pips is 60pt of menu bar.
+
+### The wings lean towards the hardware
+
+They used to lean away from it. The flank is the wider wing's measurement, so the
+narrower wing has slack, and the slack pooled where the flexible space was: beside
+the notch. That left the mark pressed into the shell's own rounded corner with a
+hand's width of nothing next to the camera. Both wings now take half of what is
+left and align *inwards* — leading wing trailing-aligned, trailing wing
+leading-aligned, as the board draws them — so the slack lands at the outer edges.
+
+Two constants where there was one: `markGap` (12) is spacing between two figures,
+`notchClearance` (12) is clearance from a piece of hardware. Same number, free to
+disagree. The outer gutters went 11/13 → **15/15**: equal, because a row centred
+on the notch with two different gutters reads as a mistake.
+
+### Twelve live drawings cost more than the thing they draw
+
+The Appearance pane walks every tile from 0 to 100% and round again — six seconds,
+two in each zone, because at an even rate the over zone would be gone in half a
+second. Ten steps a second, not sixty: a mark is a drawing that changes when a
+figure changes.
+
+It still started at **21% of a core**. What it came down to, measured by ΔCPU-time
+over 20s:
+
+| | of a core |
+|---|---|
+| the lap, as first written | 21% |
+| the lap, after the three fixes below | **9%** |
+| the pane open, not lapping | 1.0% |
+| the band alone | 0.6% |
+
+Rasterising the resting tiles was the last of the three and the only one measured
+against itself under identical conditions: **14% → 9%**. The others were measured
+as they were made, and the figures in between are not comparable — a settings
+window that is not the frontmost one is redrawn less often, which was worth 5% on
+its own and made two of the readings flatter than they should have been.
+
+Three lessons, all of them the same lesson:
+
+- **An `.animation(_:value:)` inside a mark is a per-frame layout of the whole
+  window when something *steps* that value.** Four of the twelve ease towards a
+  new reading, which is right in the band — a figure lands every few seconds — and
+  wrong in a grid being walked. It is an environment value now (`markEasing`), and
+  the pane turns it off.
+- **A hosted `NSView` at rest is a shape.** `CreepingMarker` draws a plain
+  `RoundedRectangle` unless it is actually animating. Every mark's marker went
+  through AppKit before, on every layout pass, for the whole life of the app.
+- **A closed window is not a stopped window.** The pane's lap kept stepping twelve
+  marks ten times a second after the settings window was closed — 8% of a core,
+  for the rest of the run — because a SwiftUI view inside a window that merely
+  closed is never told it disappeared. The window is let go on close now and
+  rebuilt on open, and the lap is also gated on `controlActiveState` so that a
+  window hidden behind another app stops too. Pinned by a test.
 
 ## 1. Architecture
 
@@ -622,8 +712,8 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 3 | Warning auto-expand, pinned panel, context menu | ✅ done (old board) |
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done (old board) |
 | 5 | **Two wings** — the drop panel, the card as a list, the week on the bar (§0.6) | ✅ done |
-| 6 | **Marks** — `Mark` + `MarkView` are the seam; capsule bar and ring wings built, ten to go | 🔨 2 of 12 |
-| 7 | **Appearance** — the second prefs pane, twelve border effects, the live grids | ⬜ not started |
+| 6 | **Marks** — all twelve drawn, `Mark` + `MarkView` the seam, widths measured from the drawings (§0.7) | ✅ done |
+| 7 | **Appearance** — the mark grid, live, with the preview lap (§0.7). Twelve border effects still unbuilt | 🔨 half |
 | 8 | ~~**Copilot**~~ | ⛔ cut: nothing local states its quota (§0.5) |
 | 9 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
 
