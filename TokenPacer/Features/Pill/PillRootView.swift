@@ -43,6 +43,7 @@ struct PillRootView: View {
             state: model.state,
             snapshot: store.snapshot,
             providers: SourceID.allCases.compactMap { store.snapshots[$0] },
+            mark: preferences.mark,
             attention: store.errors[store.activeSource],
             bySource: store.bySource,
             onTogglePinned: { model.togglePinned() },

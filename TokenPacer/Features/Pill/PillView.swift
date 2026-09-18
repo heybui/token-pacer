@@ -6,6 +6,9 @@ struct PillView: View {
     /// Every source the store has a reading for, in a stable order. The band
     /// shows the active one; the hover card compares them all.
     var providers: [UsageSnapshot] = []
+    /// The mark the user chose. One value reaches the band and every card row, so
+    /// they cannot end up drawing progress two different ways.
+    var mark: Mark = .capsuleBar
     /// Non-nil when the last refresh failed. The figure stays; it is marked
     /// unverified rather than hidden.
     var attention: String?
@@ -309,13 +312,11 @@ struct PillView: View {
                     .font(Typography.mono(12))
                     .foregroundStyle(.white.opacity(0.4))
             } else {
-                // The board's default mark. The ring said how far along; this says
-                // that and where the boundaries are, which is the question the
-                // pill exists to answer at a glance.
-                // The window alone. A second marker in a 36pt bar with no room
-                // for its number is a dot nobody can read the meaning of, and the
-                // menu bar is the one place where less is the whole product.
-                CapsuleBar(
+                // The window alone. A second marker with no room for its number
+                // is a mark nobody can read the meaning of, and the menu bar is
+                // the one place where less is the whole product.
+                MarkView(
+                    mark: mark,
                     percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
                     isBurning: snapshot?.isBurning == true
                 )
@@ -507,6 +508,12 @@ private struct ScaleRow: View {
                 .foregroundStyle(.white.opacity(0.62))
                 .frame(width: Self.wordmarkWidth, alignment: .leading)
 
+            // The capsule bar whatever the menu bar is wearing. These rows are a
+            // comparison — four readings down a column, on one domain — and that
+            // is the job position on a line does better than any of the other
+            // eleven. It is also the only mark that can take the width the card
+            // has to give it. The choice in Preferences dresses the menu bar,
+            // where space is the constraint; here it is not.
             CapsuleBar(
                 percent: line.percent,
                 weekPercent: line.weekPercent,

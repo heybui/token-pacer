@@ -29,6 +29,13 @@ final class Preferences {
         didSet { store.set(hideWhenDormant, forKey: Key.hideWhenDormant) }
     }
 
+    /// Which mark the pill leads with. No UI yet — the Appearance pane is the
+    /// next phase — but stored rather than hard-coded, so the choice the pane
+    /// will make is already the one the app reads.
+    var mark: Mark {
+        didSet { store.set(mark.rawValue, forKey: Key.mark) }
+    }
+
     private let store: UserDefaults
 
     init(store: UserDefaults = .standard) {
@@ -41,6 +48,7 @@ final class Preferences {
             ?? Default.soundOnThreshold
         hideWhenDormant = store.object(forKey: Key.hideWhenDormant) as? Bool
             ?? Default.hideWhenDormant
+        mark = (store.string(forKey: Key.mark).flatMap(Mark.init(rawValue:))) ?? Default.mark
     }
 
     /// Back to the design board's own marks. Scoped to the scale it sits beside:
@@ -61,6 +69,7 @@ final class Preferences {
         static let criticalAt: Double = 90
         static let soundOnThreshold = true
         static let hideWhenDormant = true
+        static let mark = Mark.capsuleBar
     }
 
     /// Clamped on the way out, so a hand-edited plist cannot invert the scale.
@@ -73,5 +82,6 @@ final class Preferences {
         static let criticalAt = "pref.criticalAt"
         static let soundOnThreshold = "pref.soundOnThreshold"
         static let hideWhenDormant = "pref.hideWhenDormant"
+        static let mark = "pref.mark"
     }
 }
