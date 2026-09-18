@@ -506,7 +506,7 @@ struct PillView: View {
 
     /// The line under the rows when nothing is under the pointer: what this
     /// window can do, since neither gesture is one you would guess at.
-    private static let hint = "Double-click for the full report · right-click for settings"
+    private static let hint = "Double-click details · right-click settings"
 
     /// What the colours mean, in the user's own numbers.
     private var zoneRule: String {
