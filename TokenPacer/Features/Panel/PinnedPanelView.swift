@@ -6,6 +6,8 @@ struct PinnedPanelView: View {
     let snapshot: UsageSnapshot?
     /// Cross-source split — the only figure the per-source snapshot cannot hold.
     let bySource: [UsageSplit]
+    /// The mark the menu bar is wearing. Every expanded state leads with it.
+    var mark: Mark = .capsuleBar
     var attention: String?
     /// Where the panel's first row starts: under the band on a notched screen,
     /// under the notch itself on one without.
@@ -71,19 +73,20 @@ struct PinnedPanelView: View {
 
     private var summary: some View {
         HStack(alignment: .center, spacing: 24) {
-            VStack(spacing: 10) {
-                UsageRing(
-                    percent: snapshot?.sessionPercent, tone: tone, size: 118, lineWidth: 12,
-                    label: heroLabel, labelSize: 30,
-                    isBurning: snapshot?.isBurning == true
+            VStack(spacing: 12) {
+                // The same mark, three times the size, with the figure under it
+                // rather than inside it: only one of the twelve has a hole in the
+                // middle to put a number in.
+                MarkHero(
+                    mark: mark, percent: snapshot?.sessionPercent,
+                    isBurning: snapshot?.isBurning == true, scale: 3
                 )
-                .overlay(alignment: .bottom) {
-                    Text("5-HOUR")
-                        .font(Typography.sans(8.5))
-                        .tracking(0.34)
-                        .foregroundStyle(.white.opacity(0.36))
-                        .offset(y: -32)
-                }
+                .frame(height: 60)
+                OdometerText(text: Format.percent(snapshot?.sessionPercent), size: 30, color: tone)
+                Text("5-HOUR")
+                    .font(Typography.sans(8.5))
+                    .tracking(0.34)
+                    .foregroundStyle(.white.opacity(0.36))
                 Text("Resets in \(Format.countdown(to: snapshot?.resetsAt))")
                     .font(Typography.sans(11.5))
                     .foregroundStyle(.white.opacity(0.6))
@@ -105,12 +108,6 @@ struct PinnedPanelView: View {
                 }
             }
         }
-    }
-
-    /// The ring carries the provider's percentage, and `--` when there is none.
-    private var heroLabel: String? {
-        guard let snapshot else { return nil }
-        return Format.percent(snapshot.sessionPercent)
     }
 
     private var weeklyCaption: String {

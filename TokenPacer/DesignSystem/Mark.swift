@@ -70,17 +70,42 @@ enum Mark: String, CaseIterable, Sendable {
     /// Cached: it is asked for on every layout pass, and a mark's resting size
     /// cannot change — nothing in it depends on the reading.
     @MainActor
-    var width: CGFloat {
+    var width: CGFloat { size.width }
+
+    /// The whole drawing's size. The wings only ever ask for the width; an
+    /// expanded state scaling the mark up needs both.
+    @MainActor
+    var size: CGSize {
         if let known = Self.measured[self] { return known }
         // A resting mark: at rest nothing in the set hosts an `NSView`, so this
         // is a plain SwiftUI layout with nothing to start or tear down.
         let view = NSHostingView(rootView: MarkView(mark: self, percent: 100))
-        let width = ceil(view.fittingSize.width)
-        Self.measured[self] = width
-        return width
+        let size = CGSize(
+            width: ceil(view.fittingSize.width), height: ceil(view.fittingSize.height)
+        )
+        Self.measured[self] = size
+        return size
     }
 
-    @MainActor private static var measured: [Mark: CGFloat] = [:]
+    @MainActor private static var measured: [Mark: CGSize] = [:]
+}
+
+/// The chosen mark, scaled up to lead an expanded state.
+///
+/// The board's rule for every state that opens: the same mark the menu bar wears,
+/// larger — not a different drawing. Scaled rather than redrawn, because a mark
+/// is a proportion and the proportion is the reading.
+struct MarkHero: View {
+    let mark: Mark
+    let percent: Double?
+    var isBurning = false
+    var scale: CGFloat
+
+    var body: some View {
+        MarkView(mark: mark, percent: percent, isBurning: isBurning)
+            .scaleEffect(scale)
+            .frame(width: mark.size.width * scale, height: mark.size.height * scale)
+    }
 }
 
 /// The mark, whichever one is chosen. Every caller passes the same facts and the

@@ -229,7 +229,7 @@ struct PillView: View {
         case .hover: hoverCard
         case .pinned:
             PinnedPanelView(
-                snapshot: snapshot, bySource: bySource, attention: attention,
+                snapshot: snapshot, bySource: bySource, mark: mark, attention: attention,
                 topInset: bodyTop, showsHeader: !spansNotch, onClose: onClose
             )
         default: collapsed
@@ -391,9 +391,12 @@ struct PillView: View {
     /// re-fires for this window.
     private var warningCard: some View {
         HStack(spacing: 16) {
-            UsageRing(
-                percent: snapshot?.sessionPercent, tone: Tokens.red, size: 48, lineWidth: 6,
-                isBurning: snapshot?.isBurning == true
+            // The mark the menu bar wears, twice the size. The card is the same
+            // reading opened up, and a different drawing here would make it a
+            // second opinion.
+            MarkHero(
+                mark: mark, percent: snapshot?.sessionPercent,
+                isBurning: snapshot?.isBurning == true, scale: 2
             )
             VStack(alignment: .leading, spacing: 4) {
                 OdometerText(text: headline, size: 26, color: Tokens.red)
