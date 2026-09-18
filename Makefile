@@ -43,7 +43,7 @@ SPARKLE_BIN := .build/artifacts/sparkle/Sparkle/bin
 ## Release signing adds these; a debug build gets neither.
 SIGNFLAGS ?=
 
-.PHONY: run build app test xcbuild xctest clean release-app dmg notarize cask appcast check-devid release
+.PHONY: icon run build app test xcbuild xctest clean release-app dmg notarize cask appcast check-devid release
 
 ## SPM links Sparkle but leaves no usable rpath in the bare binary, so an
 ## in-place run has to be told where the framework is. The bundle does not need
@@ -56,6 +56,20 @@ test:
 
 build:
 	swift build -c release
+
+## Rebuild the bundle icon from the design export. The ladder ships as
+## `icon_512x512_2x.png`; `iconutil` only recognises `@2x`, and silently drops
+## every file it does not recognise — a rename away from an icns that stops at
+## 512 and looks blurred on a Retina Finder.
+ICONSET := design/project/icons/iconset/transparent
+icon:   ## regenerate TokenPacer.icns from design/project/icons
+	@rm -rf build/$(APP).iconset && mkdir -p build/$(APP).iconset
+	@for f in $(ICONSET)/icon_*.png; do \
+	  cp "$$f" "build/$(APP).iconset/$$(basename $$f | sed 's/_2x\.png/@2x.png/')"; \
+	done
+	iconutil -c icns build/$(APP).iconset -o TokenPacer/Resources/$(APP).icns
+	@rm -rf build/$(APP).iconset
+	@echo "→ TokenPacer/Resources/$(APP).icns"
 
 ## Assemble a real .app bundle. Xcode is not needed until Sparkle lands in phase 6.
 app: build
