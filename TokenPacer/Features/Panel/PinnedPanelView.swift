@@ -10,6 +10,9 @@ struct PinnedPanelView: View {
     /// Where the panel's first row starts: under the band on a notched screen,
     /// under the notch itself on one without.
     var topInset: CGFloat = PillState.boardBodyTop
+    /// False on a notched screen, where the band carries the label and the close
+    /// button. There is no band off one, so the panel keeps its own row.
+    var showsHeader = true
     let onClose: () -> Void
 
     @Environment(\.tone) private var toneScale
@@ -19,7 +22,7 @@ struct PinnedPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            header
+            if showsHeader { header }
             summary
             divider
             splits
@@ -62,10 +65,7 @@ struct PinnedPanelView: View {
         .frame(height: 20)
     }
 
-    private var headerLabel: String {
-        guard let snapshot else { return "READING LOGS · PINNED" }
-        return snapshot.isActive ? "SESSION ACTIVE · PINNED" : "WINDOW EMPTY · PINNED"
-    }
+    private var headerLabel: String { PillView.pinnedLabel(for: snapshot) }
 
     // MARK: - ring, weekly cap, sparkline
 

@@ -169,6 +169,7 @@ struct PillView: View {
             switch state {
             case .paused: pausedPill
             case .exhausted: exhaustedPill
+            case .pinned: pinnedBand
             default: collapsed
             }
         }
@@ -200,10 +201,46 @@ struct PillView: View {
         case .pinned:
             PinnedPanelView(
                 snapshot: snapshot, bySource: bySource, attention: attention,
-                topInset: bodyTop, onClose: onClose
+                topInset: bodyTop, showsHeader: !spansNotch, onClose: onClose
             )
         default: collapsed
         }
+    }
+
+    /// The panel's own header, moved up into the band.
+    ///
+    /// The flanks carried the ring, the percentage and the countdown, and the
+    /// panel's first row repeats all three at four times the size 20pt below —
+    /// the same figures twice, with the label and the close button pushed down a
+    /// row for it. The band holds the label and the button instead, and the panel
+    /// starts at its ring.
+    private var pinnedBand: some View {
+        HStack(spacing: 7) {
+            Text(Self.pinnedLabel(for: snapshot))
+                .font(Typography.mono(9.5))
+                .tracking(1.4)
+                .foregroundStyle(.white.opacity(0.38))
+            if let attention {
+                AttentionBadge(message: attention, size: 10)
+            }
+            notchGap
+            Button(action: onClose) {
+                Text("✕")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.42))
+                    .padding(.horizontal, 4)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, 11)
+        .padding(.trailing, 13)
+    }
+
+    /// Shared with the panel, which still draws this row off a notched screen.
+    static func pinnedLabel(for snapshot: UsageSnapshot?) -> String {
+        guard let snapshot else { return "READING LOGS · PINNED" }
+        return snapshot.isActive ? "SESSION ACTIVE · PINNED" : "WINDOW EMPTY · PINNED"
     }
 
     /// Grey, no numbers: tracking is off, which is not the same as idle.
