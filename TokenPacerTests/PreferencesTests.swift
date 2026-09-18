@@ -282,3 +282,22 @@ private actor TallyingSource: UsageSource {
     let column = (BorderEffect.grid.firstIndex(of: .breatheGlow) ?? 0) % 4
     #expect(column != 0 && column != 3)
 }
+
+/// A provider that arrives in an update has never been offered to an install
+/// that already has a saved list, so its absence there is a gap rather than a
+/// decision. Copilot is the case that found this.
+@MainActor @Test func aNewProviderIsTrackedByDefaultAndAnOffOneStaysOff() {
+    let store = UserDefaults(suiteName: "tokenpacer.tests.newprovider")!
+    store.removePersistentDomain(forName: "tokenpacer.tests.newprovider")
+
+    // An install that predates the new provider: it stored two, knows of two.
+    store.set(["claude", "codex"], forKey: "pref.trackedSources")
+    #expect(Preferences(store: store).trackedSources.contains(.copilot))
+
+    // Having now been offered all three, turning one off has to stick.
+    let second = Preferences(store: store)
+    second.set(tracking: false, for: .copilot)
+    #expect(Preferences(store: store).trackedSources.contains(.copilot) == false)
+
+    store.removePersistentDomain(forName: "tokenpacer.tests.newprovider")
+}

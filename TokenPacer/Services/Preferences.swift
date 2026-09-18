@@ -95,7 +95,25 @@ final class Preferences {
         bordersOn = store.object(forKey: Key.bordersOn) as? Bool ?? Default.bordersOn
         let names = store.stringArray(forKey: Key.trackedSources) ?? []
         let restored = Set(names.compactMap(SourceID.init(rawValue:)))
-        trackedSources = restored.isEmpty ? Default.trackedSources : restored
+        // A provider added by an update was never offered to this install, so its
+        // absence from the stored set is not a decision — it is a gap. Tracking
+        // what has been *offered* is what tells the two apart: Copilot arrived
+        // after people already had a saved list, and without this it would have
+        // been silently off for every one of them.
+        // An install from before this key was kept has been offered exactly what
+        // it stored, so a provider outside that list is one it has never seen.
+        let offered = store.stringArray(forKey: Key.knownSources)
+            .map { Set($0.compactMap(SourceID.init(rawValue:))) } ?? restored
+        let arrived = Set(SourceID.allCases).subtracting(offered)
+        trackedSources = restored.isEmpty
+            ? Default.trackedSources
+            : restored.union(arrived)
+        // Written here rather than left to `didSet`, which an initialiser does
+        // not run: without it the union lives only in memory, `knownSources`
+        // records the provider as offered, and the *next* launch reads the old
+        // list back and turns it off again.
+        store.set(trackedSources.map(\.rawValue).sorted(), forKey: Key.trackedSources)
+        store.set(SourceID.allCases.map(\.rawValue).sorted(), forKey: Key.knownSources)
     }
 
     /// Back to the design board's own marks. Scoped to the scale it sits beside:
@@ -138,5 +156,7 @@ final class Preferences {
         static let border = "pref.border"
         static let bordersOn = "pref.bordersOn"
         static let trackedSources = "pref.trackedSources"
+        /// Every provider this install has ever shown a switch for.
+        static let knownSources = "pref.knownSources"
     }
 }
