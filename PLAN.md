@@ -170,10 +170,13 @@ geometry (`NotchBand`, `PillState.flank`) survives; what it is filled with does 
 - Notch measured on the board: **190 × 37**, 12.6% of the menu bar.
 - A capsule-bar wing readout is ~160pt (44 wordmark + 76 bar + number + 7 gaps);
   a ring wing is ~70pt, which is the argument for the ring.
-- **The left wing yields.** When the frontmost app's menus reach it, it drops and
-  the right wing carries the highest provider alone. New behaviour, no code.
-- Off a notch, or once the left wing has yielded: **right wing alone, 226 × 34,
-  radius 12** — mark, bar, percentage, countdown in one row.
+- ~~**The left wing yields.**~~ Cut. The board had it drop when the frontmost app's
+  menus reached it, which means knowing how wide those menus are — and nothing
+  short of the Accessibility permission says. One system prompt, for one app's
+  worth of politeness, is the wrong trade. Both wings are always drawn; an app with
+  a very long menu bar will overlap the left one.
+- Off a notch: **right wing alone, 226 × 34, radius 12** — mark, bar, percentage,
+  countdown in one row.
 
 ### Three providers, not two
 
@@ -548,7 +551,7 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 2 | Design system + the remaining pill states + spring morph | ✅ done (old board) |
 | 3 | Warning auto-expand, pinned panel, context menu | ✅ done (old board) |
 | 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done (old board) |
-| 5 | **Two wings** — the flat bar row, the drop panel, the left wing yielding to app menus | ⬜ not started |
+| 5 | **Two wings** — the flat bar row and the drop panel below it | 🔨 in progress |
 | 6 | **Marks** — the `Mark` protocol, twelve of them, the capsule bar as default | ⬜ not started |
 | 7 | **Appearance** — the second prefs pane, twelve border effects, the live grids | ⬜ not started |
 | 8 | ~~**Copilot**~~ | ⛔ cut: nothing local states its quota (§0.5) |
