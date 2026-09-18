@@ -228,29 +228,46 @@ private actor TallyingSource: UsageSource {
 /// way to find out is to look at all twelve.
 @Test func everyBorderIsMadeOfSomething() {
     for effect in BorderEffect.allCases {
-        let pieces = effect.pieces(
-            tone: Tokens.green, light: Tokens.lightGreen,
-            zones: (Tokens.green, Tokens.amber, Tokens.red), lineWidth: 1.5
-        )
-        #expect(!pieces.isEmpty)
         #expect(!effect.displayName.isEmpty)
         #expect(!effect.axis.isEmpty)
 
-        for piece in pieces {
-            #expect(piece.opacity > 0)
-            #expect(piece.width > 0)
-            switch piece.motion {
-            case .sweep:
-                // A piece that travels has to have somewhere to go, a length to
-                // be seen at, and either a pace or a time to do it in.
-                #expect(piece.speed > 0 || piece.period > 0)
-                #expect(piece.length > 0)
-            case .pulse:
-                #expect(piece.period > 0)
-            case .dash:
-                #expect(piece.dash.reduce(0, +) > 0)
-                #expect(piece.speed > 0)
+        switch effect.paint {
+        case .angular(let ramps):
+            #expect(!ramps.isEmpty)
+            for ramp in ramps {
+                #expect(ramp.duration > 0)
+                // A ramp needs somewhere to start and somewhere to end, and its
+                // stops have to run round the whole turn in order.
+                #expect(ramp.stops.count >= 2)
+                #expect(ramp.stops.first?.angle == 0)
+                #expect(ramp.stops.last?.angle == 360)
+                #expect(zip(ramp.stops, ramp.stops.dropFirst()).allSatisfy { $0.angle <= $1.angle })
+                // And something in it has to be lit.
+                #expect(ramp.stops.contains { $0.alpha > 0 })
             }
+        case .bands(let bands):
+            #expect(!bands.isEmpty)
+            for band in bands {
+                #expect(band.duration > 0)
+                #expect(band.begin >= 0)
+                #expect(band.lengthFraction > 0 && band.lengthFraction < 1)
+            }
+        case .solid(let solid):
+            #expect(solid.duration > 0)
+            #expect(solid.alpha > 0)
+            #expect(solid.pulse != nil || solid.glow)
         }
     }
+}
+
+/// The dash train is snapped to a whole number of dashes. At the board's own
+/// 15.12° there are 23.8 in a lap, and the seam rotates past once a lap.
+@Test func theDashTrainClosesOnItself() {
+    guard case .angular(let ramps) = BorderEffect.marchingDashes.paint,
+          let stops = ramps.first?.stops
+    else { return #expect(Bool(false), "the dash train is an angular ramp") }
+
+    let lit = stops.filter { $0.alpha > 0 }
+    #expect(lit.count == 48)               // two stops per dash
+    #expect(stops.last?.angle == 360)
 }

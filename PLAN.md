@@ -516,47 +516,49 @@ than leaving a hole where the figure was. It sits in Appearance beside the mark
 grid, not in General: the mark and the figure are the two halves of the row and
 they cost about the same 30pt each.
 
-### The border is twelve too, and the engine is the same shape
+### The border is twelve too, and it turns rather than travels
 
-`BorderEffect` describes a light as *pieces* — a length, a trail, a speed, a
-segment of the outline — and `BorderLight` installs them as `CAShapeLayer`s with
-`strokeStart`/`strokeEnd` animations. One vocabulary covers a comet's twenty-two
-layers, a dash train's one and a glow's two, and it keeps the whole set where the
-comet already was: on the render server, with nothing per frame on the main
-thread. **Twelve of them running in the Appearance grid cost 0.1–0.2% of a core.**
+The board shipped a rendering spec for this one — `design/project/Token Pacer
+Running Border.dc.html`, "Rendering spec · Core Animation" — and it names the
+mistake the first port made before anyone could make it twice:
 
-The figures are the board's own, taken off its gradients: 26% of the outline lit
-for the comet and a 2.4s lap, 14% per head for the dual, 52% for the pulse wave's
-swell, 46% for an edge runner's band. Two corrections came out of drawing them
-side by side with the board:
+> CSS spins a conic gradient at constant ANGULAR speed, so on a 3.07:1 rect the
+> head sprints across the 56pt ends and crawls along the 172pt edges. A
+> CAShapeLayer with animated strokeStart/strokeEnd moves at constant PATH-LENGTH
+> speed — visually even, and noticeably calmer.
 
-- **The tail keeps its width.** It used to thin to a third towards its end, on top
-  of fading, which read as a bright bead with a hair behind it. The board's
-  gradient runs through a constant-width ring: only the light goes.
-- **An edge runner is timed, not paced.** Three runners hand off at the corners
-  only if a 36pt side and a 390pt bottom take the same 2.2s, which no single
-  points-per-second can do.
+Which is exactly what the first port did, and exactly why it read as a different
+animation. It is built the spec's way now:
 
-Three more things the set forced out, each of them a bug the single comet had
-hidden:
+- **One masked container.** `CAShapeLayer` stroking `ShellTrack` at 1.5pt is the
+  mask — a band on three sides and nothing along the top. Every variant paints
+  inside it. Not `layer.borderWidth`, which cannot be partial and draws the top
+  edge, and that quiet top edge is the whole point.
+- **Seven are angular**: a ramp drawn once into a `CGImage` from the spec's own
+  stop tables — absolute angles, clockwise from twelve o'clock, alphas
+  premultiplied as CSS interpolates them — set as a square host's `contents` and
+  turned with `transform.rotation.z`. `CAGradientLayer.conic` is not good enough:
+  it ignores the mid-stop precision these tables need.
+- **Three are bands**: axial gradients 52% of the height or 46% of the width,
+  travelling −130% → 230% of their own length on one shared timeline with the
+  spec's begin offsets and `fillMode = .backwards`.
+- **Two stand still**: the hairline breathing 0.22 → 1, and the glow, which is a
+  shadow on the layer itself with `shadowPath` set — the only light that paints
+  outside the mask.
+- **The dash train is snapped to 24 dashes.** At the board's own 15.12° there are
+  23.8 in a lap and the seam rotates past once every turn.
 
-- **A layer built at zero bounds stays black.** `apply` runs before AppKit has
-  given the view any size, and the rebuild guard returned early; in the pill the
-  next state change healed it, and in a settings tile that change never comes, so
-  all twelve sat black. `layout()` now builds on the first real size.
-- **A piece confined to one edge measures itself against that edge.** A third of
-  the outline is most of a 34pt side and a quarter of the bottom, so the side
-  runners were longer than the sides they ran on and read as a lit outline.
-- **Every piece on a segment shares one lap length.** They travel at the same
-  speed, but each was restarting when it alone reached the end, so the zone
-  sweep's three colours drifted apart and opened gaps.
+Twelve of them turning at once in the Appearance grid: **0.40% of a core**, less
+than the twenty-two stroke layers the single comet used to cost.
 
-And one crash worth writing down: `layer.lineDashPattern = dash.map(NSNumber.init)`
-compiles, picks an overload CoreAnimation cannot read back, and dies inside
-`-[CAShapeLayer _copyRenderLayer:]` — a trap with no mention of the line that set
-it. `map { NSNumber(value: Double($0)) }`.
+One consequence to keep in view: an angular sweep hides whatever is over the top
+edge, and the top edge's share of the turn grows with how flat the shell is. On
+the 3:1 panel the spec was drawn for it is about 40% of the lap; on the collapsed
+band, which is 11:1, it is about 53%. That is the construction doing what it does
+rather than a defect — the alternative is a host scaled to the shell's own aspect,
+which evens the travel out and is no longer what the board drew.
 
-### Every expanded state leads with the mark
+### Every expanded state leads with the mark### Every expanded state leads with the mark
 
 The over card led with a red ring and the pinned panel with a 118pt one, which
 made them a second opinion on the reading the band had just given. `MarkHero`
