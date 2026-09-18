@@ -179,11 +179,11 @@ Claude, Codex and **Copilot**. Every provider gets the same bar — 0–100% of 
 own quota — and differs only in the clock behind it: Claude a rolling 5 hours,
 Codex a week, Copilot a month. Each row carries its own reset.
 
-- **Measured left, estimated right.** The left wing takes the highest *measured*
-  provider, the right the highest *estimated* one; position carries attribution
-  once the wordmark no longer fits.
-- **Estimated is drawn, not just stated**: a hollow marker that overhangs the bar
-  by 4pt top and bottom, plus a `~` on the number.
+- **Closest to its limit on the left, the next on the right.** Position carries
+  attribution once the wordmark no longer fits. This replaces the board's original
+  rule — measured left, estimated right — which lost its basis when estimates did
+  (§0.4). Whichever provider is nearest its limit owns the collapsed pill, whatever
+  its clock.
 - **Stacked, 226 × 34** below the notch when two need showing: bars halve to
   2.5pt, each row keeps its own countdown.
 - **Hover card, 404 × 98**: one row per provider, same capsules, same domain, each
@@ -195,10 +195,11 @@ Copilot's store is `~/.copilot`, and its quota is not in it: the desktop app ask
 its own local daemon, which asks the server. That daemon is reachable — port and
 token sit in `~/.copilot/run/` — so the figure is fetched the same way Claude's
 is, from the client that already holds the credential. Until that is proven,
-Copilot has no row (§0). Which leaves the board's hollow marker with nothing to
-mark: after §0.4 no figure in this app is an estimate. Either it goes from the
-board, or it is held for Copilot in case the daemon turns out to report something
-softer than a percentage. Undecided.
+Copilot has no row (§0). The board's hollow marker — an outlined marker plus a `~`
+on the number, meaning "estimated" — is gone with the same change: after §0.4 no
+figure in this app is an estimate, so a device for marking one marks nothing. Every
+marker is solid now, and a provider that reports nothing has no row rather than a
+softer-looking one.
 
 ### The mark is a choice of twelve
 
@@ -270,6 +271,10 @@ Changed in `design/project/`:
 - **The build notes**: macOS 15+, `com.redevify.token-pacer`, the CLI's `/usage`
   panel over a pty instead of "rate-limit fields", and no Console API key.
 - **The landing page** now says macOS 15+.
+- **The hollow marker and the `~` are gone** from all four places they were drawn —
+  the menu-bar pair, the ring wings, the stacked rows and the hover card — along
+  with the three rules that explained them and the left/right attribution built on
+  them.
 
 **The icon was re-exported** with the corrected amber and the real zone
 boundaries (the old export had watch at 70% and over at 95%), and
@@ -311,9 +316,12 @@ gone rather than shortened. A countdown to a reset is a fact; minutes of
 headroom was three guesses stacked — a rate, a conversion, and the assumption
 that the next hour looks like the last half one.
 
-`sessionTokens` stays, because a token count is a measurement: it is what the
-pinned panel's hero shows before the first reading lands, and what `1.25M` in the
-flank width is sized for.
+`sessionTokens` stays as a measurement, but it is no longer a headline: the pill
+and the panel show **a percentage in every case**, and `--` where a provider has
+not reported. Raw tokens read as a figure of the same kind — a big number where a
+small one usually sits, on a scale nothing else on screen shares — so "56.7M" beside
+a countdown looked like a reading rather than the absence of one. The count is left
+to `--probe` and the splits.
 
 ## 1. Architecture
 
@@ -703,8 +711,8 @@ update path is — an installed copy will only accept an update signed the same 
 
 ## 5. Standing risks
 
-1. **Undocumented log formats.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. Mitigation: decode defensively, and when a source yields no parseable usage record in a window where the CLI *is* running, show an explicit `no data` pill state — never a confident `0%`.
-2. **A provider can go quiet.** Every percentage is now the provider's own, so when a reading cannot be taken — the CLI moved, the panel changed, the daemon is down — there is no number at all rather than a wrong one. The pill shows the window's token count and the countdown; the risk is a user reading "no figure" as "no usage". `TokenWeights` no longer touches anything on screen except the sparkline and the splits, where only the ordering matters.
+1. **Undocumented log formats.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. Mitigation: decode defensively, and never a confident `0%`. The promised `no data` pill state is now simply what the pill does: `--` wherever a percentage would go, for want of a reading rather than for want of usage.
+2. **A provider can go quiet.** Every percentage is now the provider's own, so when a reading cannot be taken — the CLI moved, the panel changed, the daemon is down — there is no number at all rather than a wrong one. The pill shows `--` and the countdown, and the risk is a user reading that as "no usage" rather than "not reported". The attention badge is what has to carry the difference. `TokenWeights` no longer touches anything on screen except the sparkline and the splits, where only the ordering matters.
 3. ~~**Bundle id**~~ — settled: `com.redevify.token-pacer`, renamed with the product before release.
 4. **Copilot's quota comes from a daemon nobody documents.** The port and token
    in `~/.copilot/run/` belong to the desktop app and are rewritten when it
