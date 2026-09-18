@@ -1,6 +1,6 @@
 # Token Pacer — implementation plan
 
-macOS notch usage tracker. Design source: `design/Token Pacer.dc.html`.
+macOS notch usage tracker. Design source: `design/project/Token Pacer.dc.html`.
 
 ## 0. Ground truth (corrected 2026-09-16)
 
@@ -87,6 +87,7 @@ Codex needs none of this — its rollout logs already carry `rate_limits` with
 | Value | Source |
 |---|---|
 | 5-hour %, 7-day %, reset times | **Claude: the CLI's `/usage` panel, to the whole percent. Codex: rollout logs.** |
+| Copilot's monthly request allowance | **Unsolved.** The board draws it estimated (hollow marker, `~`); no local source is known yet — see §0.2 |
 | Monthly credit spend | the panel's `Usage credits` row — free, no Console admin key |
 | Burn rate, sparkline, headroom | Log token counts (the API gives no rate of change) |
 | Splits by model / project / surface | Log token counts (the API gives no attribution) |
@@ -97,14 +98,32 @@ So log parsing stays — it answers everything the panel cannot — but it stops
 
 ### Log formats (verified on this machine)
 
-| | Claude Code | Codex |
-|---|---|---|
-| Logs | `~/.claude/projects/<slug>/<uuid>.jsonl` | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` |
-| Usage record | `type:"assistant"` → `message.usage` | `type:"token_usage_record"` → `payload.usage` |
-| Fields | `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` | `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` |
-| Dedupe key | `message.id` + `requestId` | `response_id` |
-| Context | `cwd`, `sessionId`, `message.model`, `timestamp` | `session_meta.payload.cwd`, `turn_context.cwd` |
-| Nesting trap | cache counts are **separate from** `input_tokens` | `cached_input_tokens` is **inside** `input_tokens`; `reasoning_output_tokens` is inside `output_tokens` |
+| | Claude Code | Codex | Copilot |
+|---|---|---|---|
+| Store | `~/.claude/projects/<slug>/<uuid>.jsonl` | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | `~/.copilot/session-store.db` — SQLite, WAL |
+| Usage record | `type:"assistant"` → `message.usage` | `type:"token_usage_record"` → `payload.usage` | a row in `assistant_usage_events` |
+| Fields | `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` | `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens` | `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, plus `request_multiplier`, `total_nano_aiu` |
+| Dedupe key | `message.id` + `requestId` | `response_id` | `id`, the row's own autoincrement |
+| Context | `cwd`, `sessionId`, `message.model`, `timestamp` | `session_meta.payload.cwd`, `turn_context.cwd` | `sessions.cwd`, `sessions.repository`, `model`, `created_at` (ISO-8601 UTC) |
+| Nesting trap | cache counts are **separate from** `input_tokens` | `cached_input_tokens` is **inside** `input_tokens`; `reasoning_output_tokens` is inside `output_tokens` | none — every count is its own column; `initiator` is what splits `user` from `agent` and `sub-agent` |
+
+Three things about `~/.copilot` worth writing down, measured on this machine
+(218 events, 4 initiators):
+
+- **`token_details_json` publishes the weights.** Each row carries a cost per
+  million tokens by type: input ×1, cache read ×0.1, cache write ×1.25, output ×5.
+  Those are exactly the ratios `TokenWeights` guesses at for the other two, stated
+  by a vendor rather than inferred — a free check on §1.2's calibration knob.
+- **A premium request is `request_multiplier`, not a row.** It varies by model
+  (1.0 for most, 7.5 on one), and `initiator` says whether a user asked or an agent
+  did. Which initiators count against the monthly allowance is the open question;
+  the row count is certainly not it.
+- **Read it with `mode=ro`, never `immutable=1`.** The database runs in WAL mode
+  with a multi-megabyte `-wal` beside it, and `immutable` skips that file — the
+  newest turns would simply be invisible. Reading means `import SQLite3` in
+  `Core/Ingest`: a C library from the SDK, infrastructure in the same sense as
+  `os.Logger`, not a break in the Foundation-only rule. Never open it for writing;
+  it belongs to another app.
 
 Toolchain: Xcode 27, Swift 6.4. **Deployment target macOS 15+**.
 
@@ -116,6 +135,136 @@ Toolchain: Xcode 27, Swift 6.4. **Deployment target macOS 15+**.
   of the CLI's own panel carries monthly credit spend for free, currency symbol and all. Drawn only
   when the account has extra usage enabled.
 - **Instrument Sans bundled** (OFL) + SF Mono for numerics, matching the design's metrics exactly.
+
+## 0.2 The board was redrawn (2026-09-18)
+
+The design changed shape, not detail. Five things moved; each is a real delta
+against what is built, and they are listed here rather than folded silently into
+the sections below, because most of phase 2–4 was built against the old board.
+
+### The pill is gone from the menu bar row
+
+The collapsed state is no longer a shell. It is a **bar row**: flat, no
+background of its own, straddling the notch. The mark and the exact percentage
+sit in the **left wing**, the time left in the **right wing**, the hardware
+between them, and *nothing is ever drawn where the hardware is*. Only the
+expanded states — hover, over, pinned — are a shell, and that shell is the
+**drop panel**: it grows downward out of the notch, corners `0 0 R R`, and spans
+past the notch on both sides.
+
+What this contradicts: the app currently fills the whole band, notch width
+included, with the shell's own black so the pill reads as grown out of the
+hardware. The board now says that black is only for the drop panel. The band
+geometry (`NotchBand`, `PillState.flank`) survives; what it is filled with does not.
+
+- Notch measured on the board: **190 × 37**, 12.6% of the menu bar.
+- A capsule-bar wing readout is ~160pt (44 wordmark + 76 bar + number + 7 gaps);
+  a ring wing is ~70pt, which is the argument for the ring.
+- **The left wing yields.** When the frontmost app's menus reach it, it drops and
+  the right wing carries the highest provider alone. New behaviour, no code.
+- Off a notch, or once the left wing has yielded: **right wing alone, 226 × 34,
+  radius 12** — mark, bar, percentage, countdown in one row.
+
+### Three providers, not two
+
+Claude, Codex and **Copilot**. Every provider gets the same bar — 0–100% of its
+own quota — and differs only in the clock behind it: Claude a rolling 5 hours,
+Codex a week, Copilot a month. Each row carries its own reset.
+
+- **Measured left, estimated right.** The left wing takes the highest *measured*
+  provider, the right the highest *estimated* one; position carries attribution
+  once the wordmark no longer fits.
+- **Estimated is drawn, not just stated**: a hollow marker that overhangs the bar
+  by 4pt top and bottom, plus a `~` on the number.
+- **Stacked, 226 × 34** below the notch when two need showing: bars halve to
+  2.5pt, each row keeps its own countdown.
+- **Hover card, 404 × 98**: one row per provider, same capsules, same domain, each
+  ending in its own reset — because 81% of a week and 81% of a month are not the
+  same problem. The board drew it at 116; the shipped 98 stands and the board was
+  changed to match (§0.3).
+
+Copilot's store is `~/.copilot` and it is richer than either log tree — see the
+log-format table in §0. What it does **not** hold is the denominator: the CLI asks
+the server for it (`get_account_quota`, visible in `~/.copilot/logs`) and keeps no
+copy on disk. So Copilot's percentage is estimated by construction, not by
+oversight, and the board's hollow marker is the honest way to draw it.
+
+### The mark is a choice of twelve
+
+The lead figure is no longer the ring. It is a **mark**, chosen in Preferences
+from twelve drawn at menu-bar size, default **Capsule bar**:
+
+| | | |
+|---|---|---|
+| Capsule bar · position on a zone track | Ring wings · angle on a zone track | Notch tank · liquid remaining |
+| Pips · count of 8 | Half gauge · needle angle | Eclipse · disc occluded |
+| Token stack · discs remaining | Hourglass · sand transferred | Dotted arc · count of 12 |
+| Dot matrix · count of 9 | Signal strength · bars remaining | Thermometer · column height |
+
+Two rules run through all twelve:
+
+- **The track is the scale, the marker is the reading.** The bar is not a fill —
+  it is three static capsules (0–74 green, 76–89 amber, 91–100 red, 2% gaps) with
+  a marker riding at the provider's position. Zone colour comes from where the
+  marker is, so the mark, the border and the banner can never disagree.
+- **The mark carries "working".** Each animates on its own mechanism while a model
+  is answering — the next increment charges, a meniscus bobs, a grain falls, a
+  shadow creeps — never one shared blink. This replaces `PulsingDot` as the
+  activity signal; the signal itself (`LogWatcher`, the turn heuristic) is unchanged.
+
+Marker light tints, distinct from the zone tints: `#a5f0cd` safe, `#fbcda2` watch,
+`#f4ab9e` over. **Amber stays `#e8b33c`** — the board had moved it to `#f0913a`;
+that was decided against and the board was changed back (§0.3). `Tokens.swift` is
+unchanged.
+
+### The running border is a choice of twelve too
+
+Comet (the current one, and still the default), Dual comet, Zone sweep, Marching
+dashes, Pulse wave, Quarter trace, Counter pair, Breathe, Breathe glow, Edge
+runners, Side drip, Bottom sweep. All take their colour from the zone the panel is
+in; all leave the top edge dark, which `ShellTrack` already does. One switch gates
+the whole group. `ChasingBorder` is one of the twelve, not the only one.
+
+### Preferences becomes two panes
+
+- **General** — *Zones*: the dual-handle track, relabelled "Watch starts at" /
+  "Over starts at", and now the source of every zone colour in the app rather than
+  only of alerts. *Alerts*: notify when over, sound when over. *App*: launch at
+  login, hide when nothing is running, restore defaults.
+- **Appearance** — two grids of twelve tiles, drawn live at real size, plus a
+  Safe / Watch / Over preview switch that recolours all twenty-four at once, a
+  working-indicator switch, and a preview of both choices together. A popup menu
+  is ruled out by the board: "Eclipse" tells you nothing about what lands in your
+  menu bar.
+
+Settled by the board, against what is built: **the over banner fires alongside the
+notch**, not only when the notch is hidden. The notch carries the state, the banner
+carries the moment it changed. Watch stays silent and visual.
+
+## 0.3 Reflected back into the board (2026-09-18)
+
+Where the board and the shipped app disagreed on something already settled, the
+app was right and the board was corrected — the design files are a source of
+truth, so a prototype carrying a cut feature reads as an unbuilt one forever.
+Changed in `design/project/`:
+
+- **Amber back to `#e8b33c`** — 29 occurrences across the board, the landing page
+  and the app-icon sheet, glows included.
+- **Hover card 116 → 98**, label and mocks, radius 22 → 26, matching `PillState`.
+- **The context menu as built**: Preferences, Pause tracking, Check for updates,
+  Send feedback, Quit. Copy usage summary and About are gone; feedback is in.
+- **⌘⇧B struck from the pinned-panel card** — the global hotkey was cut (§3).
+- **The build notes**: macOS 15+, `com.redevify.token-pacer`, the CLI's `/usage`
+  panel over a pty instead of "rate-limit fields", and no Console API key.
+- **The landing page** now says macOS 15+.
+
+**The icon was re-exported** with the corrected amber and the real zone
+boundaries (the old export had watch at 70% and over at 95%), and
+`TokenPacer.icns` rebuilt from it — all ten sizes, no `#f0913a` left at any of
+them. That rebuild is now `make icon` rather than folklore: the export names the
+Retina rungs `icon_512x512_2x.png`, `iconutil` only recognises `@2x`, and it
+drops what it does not recognise without a word — which yields an icns that
+stops at 512 and looks soft in a Retina Finder.
 
 ## 1. Architecture
 
@@ -156,12 +305,15 @@ Notch geometry: notch present when `screen.safeAreaInsets.top > 0`; notch width 
 
 ```swift
 protocol UsageSource: Actor {
-    var id: SourceID { get }                      // .claude | .codex
+    var id: SourceID { get }                      // .claude | .codex | .copilot
     func poll() async throws -> SourceSnapshot    // events since last cursor + optional authoritative limits
 }
 ```
 
-Two conformances, one aggregator. No registry, no DI container.
+Two conformances today, three on the redrawn board, one aggregator. No registry,
+no DI container. Copilot's is a SQLite read rather than a JSONL tail, which is
+what the cursor abstraction has to stretch to cover: `(path, inode, offset)`
+becomes `(path, last row id)` for that one source.
 
 **Incremental reading is mandatory.** Re-parsing every JSONL every 5s would read hundreds of MB. `JSONLCursor` keeps `(path, inode, offset)`; each poll stats mtime, seeks to offset, decodes only new lines, and drops a cursor whose inode changed (log rotation).
 
@@ -190,25 +342,41 @@ Weighted tokens: one `TokenWeights` struct (output ×5, cache-write ×1.25, cach
 
 ### 1.3 UI: one view tree, state enum drives size
 
-`PillState` enum mirrors the design exactly: `dormant, ghost, collapsed, hover, warning, exhausted, paused, pinned`. Derived from `(snapshot, pointerInside, isPinned, warnAcknowledged, trackingPaused)` in one function — no scattered booleans.
+`PillState` enum mirrors the design exactly: `dormant, ghost, collapsed, hover, warning, exhausted, paused, pinned` — the redrawn board renames them (hidden, ghost, collapsed·resting, hover card, over, over·at the cap, paused, pinned panel) but keeps all eight. Derived from `(snapshot, pointerInside, isPinned, warnAcknowledged, trackingPaused)` in one function — no scattered booleans.
 
-Shell sizes and radii lifted verbatim from the design:
+**Two surfaces, not one shell.** Four states live in the flat bar row either side
+of the notch and draw no background at all; four are the drop panel, a shell with
+bottom-only corners growing down out of the notch:
 
-| State | W × H | radius |
-|---|---|---|
-| dormant | 226 × 3 | 6 |
-| ghost / collapsed / exhausted / paused | 226 × 36 | 13 |
-| hover / warning | 404 × 98 | 26 |
-| pinned | 752 × 540 | 26 |
+| State | Surface | W × H | radius |
+|---|---|---|---|
+| hidden | bar row | both wings empty — the menu bar reads as stock hardware | — |
+| ghost | bar row | both wings at 45%, showing the weekly cap | — |
+| collapsed | bar row | mark + exact % left, time left right | — |
+| exhausted | bar row | split across both wings, mark full, % and countdown red | — |
+| paused | bar row | pause glyph left, the word "paused" right | — |
+| right wing alone | bar row | 226 × 34 — no notch, or the left wing has yielded | 12 |
+| stacked | drop panel | 226 × 34, two provider rows, bars at 2.5pt | 12 |
+| hover | drop panel | 404 × 98, one row per provider | 26 |
+| over | drop panel | big percentage, headroom, one coach line | 22 |
+| pinned | drop panel | 752 × 540 | 26 |
+
+The board's old 226 × 3 dormant hairline is gone with the shell: hidden now means
+both wings are simply empty.
 
 Animation: `.interpolatingSpring(stiffness: 220, damping: 24)`, per build note. Reduce Motion deliberately ignored for the shell morph (design decision — but keep it honoured for the pulsing dot, which is a real accessibility nuisance, not the product).
 
 Components worth owning (everything else is stock SwiftUI):
 - `OdometerText` — digit strips translated by `-d em`, spring transition + brief blur. Used at 5 sizes (11/11.5/12/26/30px).
-- `UsageRing` — `Circle().trim(to: pct).stroke(tone, lineWidth:)` rotated −90°, not an AngularGradient. Crisper, cheaper.
+- **`Mark`** — one protocol, twelve conformances, each drawing a zone track and a
+  marker and owning its own working animation (§0.2). `UsageRing` becomes *Ring
+  wings*, one of the twelve; the capsule bar is the default and the only one that
+  shows position and all three boundaries at once.
+- **`BorderEffect`** — twelve edge treatments over the existing `ShellTrack`.
+  `ChasingBorder` becomes *Comet*, the default.
 - `CapBar`, `Sparkline`, `SplitRow`, `HistoryRow` (monospace `█`/`░` blocks, as designed).
 
-Tokens (`DesignSystem/Tokens.swift`): `green #3ec98a`, `amber #e8b33c`, `red #e2543f`, `blue #5aa9d6`, shell `#000`, thresholds 75 / 90. One `tone(for:)` function — the design applies the same rule to session, weekly and API bars; it must exist in exactly one place.
+Tokens (`DesignSystem/Tokens.swift`): `green #3ec98a`, `amber #e8b33c`, `red #e2543f`, `blue #5aa9d6`, shell `#000`, thresholds 75 / 90 but user-set. Marker lights are a second scale: `#a5f0cd` / `#fbcda2` / `#f4ab9e`. One `tone(for:)` function — the design applies the same rule to session, weekly, every mark and every border; it must exist in exactly one place.
 
 Font: design uses Instrument Sans (OFL). Bundle it to match pixel-for-pixel; SF Mono for all numerics.
 
@@ -217,7 +385,7 @@ Font: design uses Instrument Sans (OFL). Bundle it to match pixel-for-pixel; SF 
 **One Xcode target, folders only.** No SPM multi-module split until build times actually hurt — the layering below is enforced by import discipline and tests, not by module boundaries.
 
 Two build systems over one set of folders:
-- `TokenPacer.xcodeproj` — the shipping path (Info.plist, entitlements, hardened runtime, signing, Sparkle in phase 6). Uses Xcode 16+ **synchronized folder groups**, so `TokenPacer/` and `Tests/` are picked up wholesale and new files never need registering.
+- `TokenPacer.xcodeproj` — the shipping path (Info.plist, entitlements, hardened runtime, signing, Sparkle in phase 9). Uses Xcode 16+ **synchronized folder groups**, so `TokenPacer/` and `Tests/` are picked up wholesale and new files never need registering.
 - `Package.swift` — fast terminal loop (`swift build` ≈ 1.5s, `swift test`).
 
 Neither carries a file list, so they cannot drift.
@@ -275,11 +443,19 @@ Rule that keeps it honest: `Core/` imports Foundation only — no SwiftUI, no Ap
 | 0 | Notch panel: borderless `NSPanel`, `LSUIElement`, click passthrough, re-anchoring | ✅ done |
 | 1 | `JSONLReader` + both sources + window/ceiling/burn engine, `--probe` | ✅ done |
 | 1.5 | **Live limits** — the CLI's `/usage` panel over a pty, 5-min activity-gated polling, attention badge, single-instance guard | ✅ done (unplanned; see §0) |
-| 2 | Design system + the remaining pill states + spring morph | ✅ done |
-| 3 | Warning auto-expand, pinned panel, context menu | ✅ done |
-| 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done |
-| 5 | Source switcher in the pill + prefs (Claude / Codex / combined) | ⬜ not started |
-| 6 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
+| 2 | Design system + the remaining pill states + spring morph | ✅ done (old board) |
+| 3 | Warning auto-expand, pinned panel, context menu | ✅ done (old board) |
+| 4 | Preferences, notifications, launch at login, pause-survives-relaunch | ✅ done (old board) |
+| 5 | **Two wings** — the flat bar row, the drop panel, the left wing yielding to app menus | ⬜ not started |
+| 6 | **Marks** — the `Mark` protocol, twelve of them, the capsule bar as default | ⬜ not started |
+| 7 | **Appearance** — the second prefs pane, twelve border effects, the live grids | ⬜ not started |
+| 8 | **Copilot** — `CopilotSource` over `~/.copilot/session-store.db`, estimated allowance | ⬜ not started |
+| 9 | Notarized DMG, Sparkle feed, Homebrew cask | 🔨 pipeline built; blocked on a Developer ID certificate |
+
+Phases 2–4 shipped against the board as it stood; §0.2 is what the redraw asks
+back. Nothing in `Core/` is affected — the redraw is entirely above the snapshot.
+The old phase 5, a source switcher between Claude and Codex, is cut: the board
+puts every provider on screen at once instead of choosing between them.
 
 Phase 1.5 was not in the original plan. It exists because the limits source was wrong: the first
 version inferred a ceiling from log volume. It was then rebuilt twice — first onto the OAuth usage
@@ -315,7 +491,9 @@ the same figures without asking for a credential at all. It absorbed most of the
   launch at login (`SMAppService.mainApp`), and hide-when-dormant. Alerts fire
   through `AlertPolicy` → `UNUserNotificationCenter`, and only when the notch is
   hidden — a full-screen app or another space — because a pill already showing
-  93% does not need to be told.
+  93% does not need to be told. **The redrawn board overrules this**: the banner
+  fires alongside the notch, once per window, because the notch carries the state
+  and the banner carries the moment it changed (§0.2).
 - **The Windows group — cut.** The design's reset hour and time zone. Neither is
   ours to set: the window opens on first use and the CLI states when it resets,
   so a picker here would either be ignored or disagree with the countdown beside
@@ -333,20 +511,43 @@ the same figures without asking for a credential at all. It absorbed most of the
 - **The app icon is bundled** and the Xcode target carries it explicitly, as
   synchronized folder groups do not pick up a Resources phase entry.
 
-### Phase 6 — cutting a release
+### Phase 9 — cutting a release
 
 ```
-make dmg        # build, sign for distribution, stage a drag-to-Applications image
-make notarize   # submit to Apple, staple the ticket, assess it
-make appcast    # sign the update with the EdDSA key, write build/appcast.xml
-make cask       # print the tap formula with the image's real checksum
+make release VERSION=0.1.0
 ```
 
-Then upload `TokenPacer-<version>.dmg` **and `appcast.xml`** to a GitHub release
-tagged `v<version>`, and put the cask in a tap.
+That is `notarize` → `appcast` → `cask`, then the publish. The order is
+sequenced by hand in the recipe because it is load bearing: stapling rewrites
+the disk image, so the feed has to be signed after it or it signs bytes nobody
+downloads. The individual targets still stand alone for a dry run.
+
+**Where it publishes, and why it is not this repo.** The source is private, and a
+private repo's release assets have no unauthenticated URL at all — there is no
+setting to flip. Sparkle cannot authenticate, and neither can `brew`. So two
+public repos carry the distribution surface, both checked out beside this one:
+
+| Repo | Holds | Reached by |
+|---|---|---|
+| `heybui/tokenpacer.com` | the landing page, `appcast.xml`, and the DMG as a release asset | Sparkle, at `https://tokenpacer.com/appcast.xml` |
+| `redevify/homebrew-tap` | `Casks/token-pacer.rb` | `brew tap redevify/tap` |
+
+The feed is served from the domain rather than from the release it ships with,
+because a build polls the URL it was compiled with for ever. Everything else —
+the DMG's URL, the cask's checksum — is rewritten every release and can move
+freely. `SITE_REPO`, `SITE_DIR`, `TAP_REPO` and `TAP_DIR` in the Makefile are the
+only knobs.
+
+**Deliberately not in CI.** Automating this would mean putting the Developer ID
+`.p12`, the notary password and the Sparkle signing key into repository secrets —
+three irrecoverable credentials leaving the Mac to save one `make` on a solo
+release cadence.
 
 One-time setup, in order:
 
+0. **The two public repos and the domain.** `tokenpacer.com` pointed at
+   `heybui/tokenpacer.com` Pages with a `CNAME`, and `redevify/homebrew-tap`
+   created empty. `gh` has to be authenticated as the account that owns them.
 1. **A Developer ID Application certificate.** The paid Developer Program; this
    machine has only an Apple Development certificate, which cannot be notarized
    and which Gatekeeper refuses on any other Mac. `make check-devid` says so.
@@ -458,6 +659,11 @@ update path is — an installed copy will only accept an update signed the same 
 1. **Undocumented log formats.** Both `~/.claude` and `~/.codex` schemas are private and unversioned; a CLI update can rename a field and the tracker silently reads zero. Mitigation: decode defensively, and when a source yields no parseable usage record in a window where the CLI *is* running, show an explicit `no data` pill state — never a confident `0%`.
 2. **Claude's percentage is an estimate.** Until a full 5-hour window is observed the ceiling is unknown; the UI shows raw tokens (`1.24M`), not a percentage, and only switches to `%` once confident. Codex's authoritative number is the calibration reference — if the two diverge wildly on similar usage, the weights in `TokenWeights` are wrong, not the engine.
 3. ~~**Bundle id**~~ — settled: `com.redevify.token-pacer`, renamed with the product before release.
-4. **The Sparkle private key is a single point of failure.** It lives only in the login Keychain of
+4. **Copilot's denominator is not local.** Its spend is recorded in detail
+   (§0); its monthly allowance is fetched from the server and never written to
+   disk, so the third row is an estimate against an assumed plan size and will
+   stay one. The hollow marker and the `~` are what keep that honest. A wrong plan
+   size is a silently wrong percentage — worth stating in the UI, not just here.
+5. **The Sparkle private key is a single point of failure.** It lives only in the login Keychain of
    this machine. No backup means no future update for anyone already installed — not a bug that can
    be fixed later, so back it up before the first release, not after.
