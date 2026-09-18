@@ -306,10 +306,32 @@ struct PillView: View {
     }
 
     private var collapsed: some View {
+        // Two wings, each taking half of what is left over, each leaning towards
+        // the hardware. The slack lands on the outside — the flank is measured
+        // from the wider wing, so the narrower one has room to spare, and pooled
+        // beside the notch it left the mark pressed against the shell's own
+        // rounded corner with a hand's width of nothing next to the camera.
+        HStack(spacing: 0) {
+            leadingWing
+                .padding(.leading, PillState.leadingGutter)
+                .padding(.trailing, PillState.notchClearance)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+
+            notchGap
+
+            trailingWing
+                .padding(.leading, PillState.notchClearance)
+                .padding(.trailing, PillState.trailingGutter)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// The mark and its figure.
+    private var leadingWing: some View {
         // 12, not the row's usual 8: the bar ends in a capsule whose rounded cap
         // already eats two of those points, so at 8 the over zone sat against the
         // first digit of the percentage.
-        HStack(spacing: 12) {
+        HStack(spacing: PillState.markGap) {
             // The ring waits for a figure to mirror. Drawn while the logs are
             // still being read it is an empty track next to the word "reading",
             // and the pair does not fit a flank that holds one or the other.
@@ -328,9 +350,12 @@ struct PillView: View {
                 )
                 OdometerText(text: wings.headline, size: 12, color: tone)
             }
+        }
+    }
 
-            notchGap
-
+    /// The clock, and the badge when a refresh has failed.
+    private var trailingWing: some View {
+        HStack(spacing: PillState.markGap) {
             if let attention {
                 AttentionBadge(message: attention, size: 10)
             }
@@ -345,8 +370,6 @@ struct PillView: View {
                 )
             }
         }
-        .padding(.leading, 11)
-        .padding(.trailing, 13)
     }
 
     /// Fires once when the window crosses critical: the figure big enough to read
