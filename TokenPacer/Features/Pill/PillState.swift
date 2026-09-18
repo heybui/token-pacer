@@ -81,13 +81,25 @@ enum PillState: String, CaseIterable, Sendable {
         /// How many background jobs are working.
         case working(Int)
 
-        /// A digit is narrower than the triangle until it is two digits wide, so
-        /// the figure is asked of the font rather than assumed.
-        @MainActor var width: CGFloat {
+        /// The board's own figures: a circle for one digit, widened to a pill for
+        /// two. Counted rather than measured, because the shape is specified as a
+        /// multiple of its own diameter and not as whatever the font came out to.
+        var width: CGFloat {
             switch self {
             case .alert: PillState.badgeSize
             case .working(let count):
-                max(PillState.badgeSize, Typography.monoWidth(count.formatted(.number), size: 11))
+                PillState.badgeDiameter
+                    + PillState.badgeDigitWidth * CGFloat(max(0, String(count).count - 1))
+            }
+        }
+
+        /// What separates it from the thing beside it. The alert badge keeps the
+        /// row's own spacing; the count is drawn tight against the countdown it
+        /// qualifies, as the board asks.
+        var gap: CGFloat {
+            switch self {
+            case .alert: PillState.markGap
+            case .working: PillState.badgeGap
             }
         }
     }
@@ -114,7 +126,7 @@ enum PillState: String, CaseIterable, Sendable {
             let figure = showsPercentage ? markGap + Self.mono(headline, 12) : 0
             let left = leadingGutter + mark.width + figure + notchClearance
             let right = notchClearance + Self.mono(tail, 11.5)
-                + (badge.map { $0.width + markGap } ?? 0)
+                + (badge.map { $0.width + $0.gap } ?? 0)
                 + trailingGutter
             return ceil(max(left, right))
         }
@@ -171,6 +183,20 @@ enum PillState: String, CaseIterable, Sendable {
     /// between two figures.
     static let notchClearance: CGFloat = 12
     static let badgeSize: CGFloat = 10
+
+    /// The count badge, from the board: a 16.5pt circle whose corner radius is
+    /// its own half, so one digit is a circle and nothing has to switch shape.
+    static let badgeDiameter: CGFloat = 16.5
+    /// What a second digit adds — 23.4pt for two, which is 1.42 × the circle.
+    static let badgeDigitWidth: CGFloat = 6.9
+    static let badgeCorner: CGFloat = 8.25
+    /// Tight to the countdown: the count qualifies the figure it sits beside,
+    /// rather than standing as its own item in the row.
+    static let badgeGap: CGFloat = 4
+    /// The panels redraw it with their header type. The board scales the layer
+    /// rather than re-typesetting, so these are multipliers, not sizes.
+    static let badgeHoverScale: CGFloat = 1.25
+    static let badgePinnedScale: CGFloat = 1.15
 
     /// Where an expanded body starts, under the band.
     ///

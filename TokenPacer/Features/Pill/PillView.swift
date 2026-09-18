@@ -269,7 +269,7 @@ struct PillView: View {
             if let attention {
                 AttentionBadge(message: attention, size: 10)
             } else if workingJobs > 0 {
-                JobBadge(count: workingJobs)
+                JobBadge(count: workingJobs, scale: PillState.badgePinnedScale)
             }
             notchGap
             Button(action: onClose) {
@@ -387,7 +387,7 @@ struct PillView: View {
 
     /// The clock, and the badge: a refresh that failed, or jobs working.
     private var trailingWing: some View {
-        HStack(spacing: PillState.markGap) {
+        HStack(spacing: badge?.gap ?? PillState.markGap) {
             if let attention {
                 AttentionBadge(message: attention, size: 10)
             } else if workingJobs > 0 {
@@ -460,6 +460,12 @@ struct PillView: View {
                 Text(statusLine)
                     .font(Typography.sans(13, .semibold))
                     .foregroundStyle(.white)
+                // Beside the sentence, not out at the edge: what is running
+                // qualifies "plenty of room", and the reported time keeps the
+                // far corner it already had.
+                if workingJobs > 0 {
+                    JobBadge(count: workingJobs, scale: PillState.badgeHoverScale)
+                }
                 Spacer(minLength: 8)
                 if let attention {
                     AttentionBadge(message: attention, size: 10)

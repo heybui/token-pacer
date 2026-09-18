@@ -355,3 +355,32 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
             >= PillState.leadingGutter + mark.width + PillState.notchClearance)
     }
 }
+
+/// The board's own figures: one digit is a 16.5pt circle, two widen it to 23.4
+/// at the same corner radius, and the count sits 4pt from the countdown rather
+/// than a row gap away.
+@MainActor @Test func theCountBadgeTakesTheBoardsWidth() {
+    #expect(PillState.Badge.working(3).width == 16.5)
+    #expect(PillState.Badge.working(12).width == 23.4)
+    #expect(PillState.Badge.working(3).gap == 4)
+    #expect(PillState.Badge.alert.gap == PillState.markGap)
+}
+
+/// "The left wing is untouched: the countdown absorbs the width instead."
+///
+/// With the figure shown the left wing is the wider of the two, so the badge
+/// costs the shell nothing at all. Drop the figure and the right wing decides,
+/// and then it pays for the badge and its gap.
+@MainActor @Test func theCountBadgeNeverPushesTheFigureOut() {
+    func wings(figure: Bool, badge: PillState.Badge?) -> PillState.Wings {
+        PillState.Wings(
+            mark: .capsuleBar, headline: "27%", showsPercentage: figure,
+            tail: "12d 07h", badge: badge
+        )
+    }
+    #expect(wings(figure: true, badge: .working(3)).flank == wings(figure: true, badge: nil).flank)
+
+    let grown = wings(figure: false, badge: .working(3)).flank - wings(figure: false, badge: nil).flank
+    #expect(grown >= PillState.badgeDiameter + PillState.badgeGap - 1)
+    #expect(grown <= PillState.badgeDiameter + PillState.badgeGap + 1)
+}

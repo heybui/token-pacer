@@ -29,6 +29,10 @@ enum Tokens {
     /// lands on a white sheet.
     static let menuSurface = Color(hex: 0x1e1e22).opacity(0.97)
 
+    /// The count badge's own fill. Deliberately outside the tone scale: the
+    /// number says how much is running, never how much is left.
+    static let badgeFill = Color(hex: 0x4a4b53)
+
     static let shellRingIdle = Color.white.opacity(0.06)
     static let shellRingOpen = Color.white.opacity(0.13)
 
