@@ -841,7 +841,7 @@ class Component extends DCLogic {
     if (pct !== null && pct !== undefined) left.push(React.createElement('span', { key: 'p', style: {
       fontFamily: MONO, fontSize: 10.5, color: this.pTint(pct), whiteSpace: 'nowrap', flex: '0 0 auto' } }, pct + '%'));
 
-    const WING = 96, NOTCH = 40;
+    const NOTCH = 40, WING = 96;   // 232 again, matching the panel
     const wing = (k, align, kids) => React.createElement('div', { key: k, style: {
       boxSizing: 'border-box', width: WING, flex: '0 0 auto', display: 'flex',
       alignItems: 'center', justifyContent: align, gap: 4, padding: '0 8px', opacity,
@@ -1192,7 +1192,10 @@ class Component extends DCLogic {
     const v = Math.max(3, Math.round(p * 100));
     const remain = Math.max(0, Math.round(300 * (1 - p)));
     const clock = Math.floor(remain / 60) + 'h ' + String(remain % 60).padStart(2, '0') + 'm';
-    const NOTCH = 48, WING = 104;
+    // 92 + 48 + 92 = 232, the panel's own width. The band and the panel are one
+    // shell in the app — clipped to a single shape — so any difference here draws
+    // a black shelf either side of the panel and breaks the silhouette.
+    const NOTCH = 48, WING = 92;
 
     const wing = (k, kids, align) => React.createElement('div', { key: k, style: {
       width: WING, height: 26, display: 'flex', alignItems: 'center', gap: 6, background: '#000',
