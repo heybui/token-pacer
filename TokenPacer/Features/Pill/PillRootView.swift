@@ -38,6 +38,14 @@ struct PillRootView: View {
         store.setPaused(paused)
     }
 
+    /// What the right wing's badge slot holds, if anything. The view draws from
+    /// the same answer the model measures the wing with.
+    private var badge: PillState.Badge? {
+        if store.errors[store.activeSource] != nil { return .alert }
+        let waiting = store.waitingSessions
+        return waiting > 0 ? .waiting(waiting) : nil
+    }
+
     var body: some View {
         PillView(
             state: model.state,
@@ -50,6 +58,7 @@ struct PillRootView: View {
             border: preferences.border,
             bordersOn: preferences.bordersOn,
             attention: store.errors[store.activeSource],
+            waiting: store.waitingSessions,
             bySource: store.bySource,
             onTogglePinned: { model.togglePinned() },
             onClose: { model.setPinned(false) },
@@ -78,8 +87,10 @@ struct PillRootView: View {
                 store.tracked = tracked
                 model.update(snapshot: store.snapshot)
             }
-            .onChange(of: store.errors[store.activeSource] != nil, initial: true) { _, has in
-                model.inputs.hasAttention = has
+            // Both feed one slot in the right wing, and either appearing changes
+            // how wide that wing has to be.
+            .onChange(of: badge, initial: true) { _, badge in
+                model.inputs.badge = badge
                 model.update(snapshot: store.snapshot)
             }
             // The tone rule reaches every bar, ring and square from one place.

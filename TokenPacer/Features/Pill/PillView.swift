@@ -22,12 +22,23 @@ struct PillView: View {
     private var wings: PillState.Wings {
         .of(
             state: state, snapshot: snapshot, mark: mark,
-            hasBadge: attention != nil, showsPercentage: showsPercentage
+            badge: badge, showsPercentage: showsPercentage
         )
     }
     /// Non-nil when the last refresh failed. The figure stays; it is marked
     /// unverified rather than hidden.
     var attention: String?
+    /// Claude Code sessions stopped, waiting for an answer — anywhere on the
+    /// machine, not only in this project. The pill is the one thing on screen
+    /// that can say so without a window being open.
+    var waiting = 0
+
+    /// One slot, and a source that cannot be read takes it first: an unverified
+    /// figure is worse news than somebody waiting.
+    private var badge: PillState.Badge? {
+        if attention != nil { return .alert }
+        return waiting > 0 ? .waiting(waiting) : nil
+    }
     /// Cross-source split, drawn only by the pinned panel.
     var bySource: [UsageSplit] = []
     var onTogglePinned: () -> Void = {}
@@ -257,6 +268,8 @@ struct PillView: View {
                 .foregroundStyle(.white.opacity(0.38))
             if let attention {
                 AttentionBadge(message: attention, size: 10)
+            } else if waiting > 0 {
+                WaitingBadge(count: waiting)
             }
             notchGap
             Button(action: onClose) {
@@ -372,11 +385,13 @@ struct PillView: View {
         }
     }
 
-    /// The clock, and the badge when a refresh has failed.
+    /// The clock, and the badge: a refresh that failed, or sessions waiting.
     private var trailingWing: some View {
         HStack(spacing: PillState.markGap) {
             if let attention {
                 AttentionBadge(message: attention, size: 10)
+            } else if waiting > 0 {
+                WaitingBadge(count: waiting)
             }
             if isGhost {
                 Text("week")

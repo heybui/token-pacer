@@ -271,7 +271,14 @@ final class BorderLight: NSView {
             // a soft edge instead of a glow on the desktop behind.
             glowMask.frame = bounds
             let outside = CGMutablePath()
-            outside.addRect(bounds.insetBy(dx: -Self.glowReach, dy: -Self.glowReach))
+            // Down and out from the top edge, never above it. The top edge meets
+            // the notch, and a halo cast up there is a halo on the hardware —
+            // the same rule that keeps every other light off that edge.
+            outside.addRect(CGRect(
+                x: -Self.glowReach, y: 0,
+                width: bounds.width + 2 * Self.glowReach,
+                height: bounds.height + Self.glowReach
+            ))
             outside.addPath(silhouette)
             glowMask.path = outside
         }

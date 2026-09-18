@@ -63,6 +63,18 @@ final class UsageStore {
     /// splits live on the snapshot; this one is the only figure that needs all
     /// of them at once.
     private(set) var bySource: [UsageSplit] = []
+
+    /// Every Claude Code session registered on this machine, newest change first.
+    ///
+    /// Outside the poll on purpose. The registry is watched, and this is
+    /// rewritten from the watcher's own callback — a session that stops to ask
+    /// something reaches the notch a third of a second later, rather than on
+    /// whichever tick comes next.
+    private(set) var sessions: [AgentSession] = []
+
+    /// How many sessions are stopped, waiting for an answer. The one figure the
+    /// pill carries: the rest of the registry is only worth a panel.
+    var waitingSessions: Int { sessions.count(where: \.isWaiting) }
     private var pump: Task<Void, Never>?
 
     /// Does appending these break the order of what is already held?
@@ -175,9 +187,18 @@ final class UsageStore {
         await persistEvents(force: true)
     }
 
+    /// Re-reads the registry whole — eleven small files, no cursor. Called from
+    /// the watcher, so the cost is paid when a session actually changed state.
+    func refreshSessions() {
+        // Paused means nothing is read. A stale count would outlive the pause
+        // and claim someone is waiting long after they stopped.
+        sessions = isPaused ? [] : SessionRegistry.read()
+    }
+
     func setPaused(_ paused: Bool) {
         guard paused != isPaused else { return }
         isPaused = paused
+        refreshSessions()
         paused ? stop() : start()
         persist()
     }
@@ -188,6 +209,7 @@ final class UsageStore {
 
     func start() {
         guard pump == nil else { return }
+        refreshSessions()   // the watcher only fires on a change; this is the first reading
         let launchedAt = Date()
         pump = Task { [weak self] in
             await self?.restoreEvents()

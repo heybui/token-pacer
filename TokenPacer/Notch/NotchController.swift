@@ -7,7 +7,7 @@ final class NotchController {
     private let model = PillModel()
     /// Retained: releasing the watcher stops its stream, and its gate would then
     /// say "nothing changed" for the rest of the run.
-    private let watchers: [LogWatcher]
+    private var watchers: [LogWatcher]
     private let store: UsageStore
     private let preferences = Preferences()
     private let notifier = Notifier()
@@ -54,6 +54,15 @@ final class NotchController {
         host.onHoverChange = { [weak model] inside in model?.setPointerInside(inside) }
 
         store.onSnapshot = { [weak self] snapshot in self?.considerAlert(for: snapshot) }
+
+        // The registry pushes rather than being polled: the callback is the whole
+        // update, and it hops to the main actor because that is where the store
+        // lives, not because the reading needs it.
+        if let registry = LogWatcher.registry(onChange: { [weak store] in
+            Task { @MainActor in store?.refreshSessions() }
+        }) {
+            watchers.append(registry)
+        }
 
         observe()
         reanchor()

@@ -68,13 +68,37 @@ enum PillState: String, CaseIterable, Sendable {
     /// **One figure for both wings.** The shell is centred on the notch, so
     /// unequal flanks would sit the hardware off-centre inside its own shell.
     /// Whichever side is wider sets both, and the other carries the slack.
+    /// What sits at the end of the right wing, when anything does.
+    ///
+    /// Two things compete for one slot, and the order is not a toss-up: a source
+    /// that cannot be read makes every figure beside it unverified, so it wins.
+    /// A session waiting for an answer is the next most interruptible thing this
+    /// app knows, and it is a count rather than a dot because "two are waiting"
+    /// and "one is waiting" are different plans for the next ten minutes.
+    enum Badge: Equatable, Sendable {
+        /// A source is complaining. The message lives on the store.
+        case alert
+        /// How many Claude sessions are stopped, waiting to be answered.
+        case waiting(Int)
+
+        /// A digit is narrower than the triangle until it is two digits wide, so
+        /// the figure is asked of the font rather than assumed.
+        @MainActor var width: CGFloat {
+            switch self {
+            case .alert: PillState.badgeSize
+            case .waiting(let count):
+                max(PillState.badgeSize, Typography.monoWidth(count.formatted(.number), size: 11))
+            }
+        }
+    }
+
     struct Wings: Equatable, Sendable {
         var mark: Mark = .capsuleBar
         var headline = "100%"
         /// Off drops the figure from the row and its width from the wing.
         var showsPercentage = true
         var tail = "12d 07h"
-        var hasBadge = false
+        var badge: Badge?
 
         /// Asked of the font, through the same rule the odometer draws by.
         private static func mono(_ text: String, _ size: CGFloat) -> CGFloat {
@@ -90,7 +114,7 @@ enum PillState: String, CaseIterable, Sendable {
             let figure = showsPercentage ? markGap + Self.mono(headline, 12) : 0
             let left = leadingGutter + mark.width + figure + notchClearance
             let right = notchClearance + Self.mono(tail, 11.5)
-                + (hasBadge ? badgeSize + markGap : 0)
+                + (badge.map { $0.width + markGap } ?? 0)
                 + trailingGutter
             return ceil(max(left, right))
         }
@@ -100,7 +124,7 @@ enum PillState: String, CaseIterable, Sendable {
         /// can never disagree about how much room a figure needs.
         static func of(
             state: PillState, snapshot: UsageSnapshot?, mark: Mark,
-            hasBadge: Bool, showsPercentage: Bool = true
+            badge: Badge?, showsPercentage: Bool = true
         ) -> Wings {
             let headline = switch state {
             case .ghost: Format.percent(snapshot?.weeklyPercent)
@@ -113,7 +137,7 @@ enum PillState: String, CaseIterable, Sendable {
             }
             return Wings(
                 mark: mark, headline: headline, showsPercentage: showsPercentage,
-                tail: tail, hasBadge: hasBadge
+                tail: tail, badge: badge
             )
         }
 
@@ -121,7 +145,9 @@ enum PillState: String, CaseIterable, Sendable {
         /// window never has to grow while the shell inside it does.
         @MainActor static let widest = Wings(
             mark: Mark.allCases.max { $0.width < $1.width } ?? .capsuleBar,
-            headline: "1.25M", tail: "12d 07h", hasBadge: true
+            // The widest badge, not merely a badge: a two-digit count of waiting
+            // sessions is wider than the alert triangle it shares the slot with.
+            headline: "1.25M", tail: "12d 07h", badge: .waiting(99)
         ).flank
     }
 

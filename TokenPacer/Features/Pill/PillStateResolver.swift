@@ -16,9 +16,10 @@ struct PillInputs: Equatable, Sendable {
     /// Off keeps the collapsed pill on screen through a quiet spell rather than
     /// withdrawing to the 3pt sliver.
     var hideWhenDormant = true
-    /// A source is complaining, so the badge is in the right wing and the flank
-    /// has to be wide enough for it. Geometry only; the message lives on the store.
-    var hasAttention = false
+    /// What the right wing carries at its end, when anything does — a source
+    /// complaining, or a count of sessions waiting for an answer. Geometry only;
+    /// what either one says lives on the store.
+    var badge: PillState.Badge?
     /// Which mark the wings carry, which is most of how wide they are.
     var mark: Mark = .capsuleBar
     /// Whether the figure is carried beside it. Geometry as much as taste: the

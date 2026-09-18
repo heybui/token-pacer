@@ -20,7 +20,7 @@ final class PillModel {
     var wings: PillState.Wings {
         .of(
             state: state, snapshot: inputs.snapshot, mark: inputs.mark,
-            hasBadge: inputs.hasAttention, showsPercentage: inputs.showsPercentage
+            badge: inputs.badge, showsPercentage: inputs.showsPercentage
         )
     }
 
