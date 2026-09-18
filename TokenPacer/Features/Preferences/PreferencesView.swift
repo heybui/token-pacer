@@ -35,8 +35,10 @@ struct PreferencesView: View {
             }
             // One height for both. The window is sized once, from whichever pane
             // is showing when it is built, and it is not resizable — so a pane
-            // that asks for more than the first one got is simply cut off.
-            .frame(height: 330, alignment: .top)
+            // that asks for more than the first one got is simply cut off. This
+            // is what General needs; Appearance holds two grids of twelve and
+            // scrolls.
+            .frame(height: 380, alignment: .top)
         }
         .padding(26)
         .frame(width: 420)

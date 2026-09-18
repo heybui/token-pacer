@@ -36,6 +36,17 @@ final class Preferences {
         didSet { store.set(mark.rawValue, forKey: Key.mark) }
     }
 
+    /// Which light runs the shell's outline while a model is answering.
+    var border: BorderEffect {
+        didSet { store.set(border.rawValue, forKey: Key.border) }
+    }
+
+    /// One switch for the whole group. Off is a shell with a plain hairline —
+    /// still the app's outline, just nothing moving above your eyeline.
+    var bordersOn: Bool {
+        didSet { store.set(bordersOn, forKey: Key.bordersOn) }
+    }
+
     /// Whether the menu bar carries the figure as well as the mark.
     ///
     /// Off leaves the mark alone out there — which is the whole reading for
@@ -79,6 +90,9 @@ final class Preferences {
         mark = (store.string(forKey: Key.mark).flatMap(Mark.init(rawValue:))) ?? Default.mark
         showsPercentage = store.object(forKey: Key.showsPercentage) as? Bool
             ?? Default.showsPercentage
+        border = (store.string(forKey: Key.border).flatMap(BorderEffect.init(rawValue:)))
+            ?? Default.border
+        bordersOn = store.object(forKey: Key.bordersOn) as? Bool ?? Default.bordersOn
         let names = store.stringArray(forKey: Key.trackedSources) ?? []
         let restored = Set(names.compactMap(SourceID.init(rawValue:)))
         trackedSources = restored.isEmpty ? Default.trackedSources : restored
@@ -104,6 +118,8 @@ final class Preferences {
         static let hideWhenDormant = true
         static let mark = Mark.capsuleBar
         static let showsPercentage = true
+        static let border = BorderEffect.comet
+        static let bordersOn = true
         static let trackedSources = Set(SourceID.allCases)
     }
 
@@ -119,6 +135,8 @@ final class Preferences {
         static let hideWhenDormant = "pref.hideWhenDormant"
         static let mark = "pref.mark"
         static let showsPercentage = "pref.showsPercentage"
+        static let border = "pref.border"
+        static let bordersOn = "pref.bordersOn"
         static let trackedSources = "pref.trackedSources"
     }
 }

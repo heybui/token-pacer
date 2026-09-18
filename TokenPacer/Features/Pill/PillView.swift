@@ -12,6 +12,10 @@ struct PillView: View {
     /// Whether the figure rides beside the mark out here. The card spells every
     /// figure out either way.
     var showsPercentage = true
+    /// Which light runs the outline while a model is answering, and whether any
+    /// does. One switch gates the whole group, as the board asks.
+    var border: BorderEffect = .comet
+    var bordersOn = true
 
     /// How wide the wings have to be for what is in them — the same measurement
     /// the model makes for the rect that takes clicks.
@@ -145,6 +149,8 @@ struct PillView: View {
                 if chasesBorder {
                     ChasingBorder(
                         cornerRadius: state.cornerRadius, tone: tone,
+                        light: toneScale.light(snapshot?.sessionPercent),
+                        effect: border,
                         isRunning: snapshot?.isBurning == true
                     )
                 }
@@ -305,7 +311,8 @@ struct PillView: View {
     /// Collapsed and expanded, never pinned — and never while the notch is
     /// pretending to be stock hardware.
     private var chasesBorder: Bool {
-        switch state {
+        guard bordersOn else { return false }
+        return switch state {
         case .pinned, .dormant, .ghost, .paused: false
         case .collapsed, .hover, .warning, .exhausted: true
         }

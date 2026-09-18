@@ -211,3 +211,46 @@ private actor TallyingSource: UsageSource {
     func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {}
     func cursors() -> [String: JSONLReader.Cursor] { [:] }
 }
+
+// MARK: - the running border
+
+/// Stored by raw value, like the mark: a rename would hand every user back the
+/// comet without saying so.
+@Test func everyBorderKeepsTheNameItIsStoredUnder() {
+    #expect(BorderEffect.allCases.map(\.rawValue) == [
+        "comet", "dualComet", "zoneSweep", "marchingDashes", "pulseWave",
+        "quarterTrace", "counterPair", "breathe", "breatheGlow", "edgeRunners",
+        "sideDrip", "bottomSweep",
+    ])
+}
+
+/// An effect that describes no light is a tile that draws nothing, and the only
+/// way to find out is to look at all twelve.
+@Test func everyBorderIsMadeOfSomething() {
+    for effect in BorderEffect.allCases {
+        let pieces = effect.pieces(
+            tone: Tokens.green, light: Tokens.lightGreen,
+            zones: (Tokens.green, Tokens.amber, Tokens.red), lineWidth: 1.5
+        )
+        #expect(!pieces.isEmpty)
+        #expect(!effect.displayName.isEmpty)
+        #expect(!effect.axis.isEmpty)
+
+        for piece in pieces {
+            #expect(piece.opacity > 0)
+            #expect(piece.width > 0)
+            switch piece.motion {
+            case .sweep:
+                // A piece that travels has to have somewhere to go and a length
+                // to be seen at.
+                #expect(piece.speed > 0)
+                #expect(piece.length > 0)
+            case .pulse:
+                #expect(piece.period > 0)
+            case .dash:
+                #expect(piece.dash.reduce(0, +) > 0)
+                #expect(piece.speed > 0)
+            }
+        }
+    }
+}

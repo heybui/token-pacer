@@ -47,6 +47,8 @@ struct PillRootView: View {
                 .compactMap { store.snapshots[$0] },
             mark: preferences.mark,
             showsPercentage: preferences.showsPercentage,
+            border: preferences.border,
+            bordersOn: preferences.bordersOn,
             attention: store.errors[store.activeSource],
             bySource: store.bySource,
             onTogglePinned: { model.togglePinned() },

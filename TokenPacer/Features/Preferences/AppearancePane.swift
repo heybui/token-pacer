@@ -36,59 +36,107 @@ struct AppearancePane: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 16) {
-                Text("Progress mark")
-                    .font(Typography.mono(9.5))
-                    .tracking(1.4)
-                    .textCase(.uppercase)
-                    .foregroundStyle(.white.opacity(0.38))
-                Spacer(minLength: 0)
-                // The figure the grid is drawing, in the zone's own colour.
-                // Without it the tiles are twelve animations of nothing in
-                // particular.
-                LapReadout(lap: lap, scale: preferences.thresholds)
-            }
+        // Two grids and two switches do not fit a settings window that also has
+        // to leave the General pane looking full. The window keeps one height and
+        // the second grid is a scroll away.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 16) {
+                    Text("Progress mark")
+                        .font(Typography.mono(9.5))
+                        .tracking(1.4)
+                        .textCase(.uppercase)
+                        .foregroundStyle(.white.opacity(0.38))
+                    Spacer(minLength: 0)
+                    // The figure the grid is drawing, in the zone's own colour.
+                    // Without it the tiles are twelve animations of nothing in
+                    // particular.
+                    LapReadout(lap: lap, scale: preferences.thresholds)
+                }
 
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(Mark.allCases, id: \.self) { mark in
-                    MarkTile(
-                        mark: mark, lap: lap,
-                        isSelected: mark == preferences.mark
-                    ) {
-                        preferences.mark = mark
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(Mark.allCases, id: \.self) { mark in
+                        MarkTile(
+                            mark: mark, lap: lap,
+                            isSelected: mark == preferences.mark
+                        ) {
+                            preferences.mark = mark
+                        }
                     }
                 }
-            }
 
-            // What the chosen mark encodes, which is the board's own argument for
-            // having twelve of them rather than one.
-            Text("\(preferences.mark.displayName) · \(preferences.mark.axis)")
-                .font(Typography.sans(11))
-                .foregroundStyle(.white.opacity(0.4))
-
-            Divider().overlay(.white.opacity(0.08))
-
-            // The figure is the other half of the row, and it costs about as much
-            // menu bar as the mark does — so it belongs next to the choice that
-            // sets the rest of the width, not in General with the thresholds.
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Percentage beside the mark")
-                        .font(Typography.sans(12.5))
-                        .foregroundStyle(.white.opacity(0.85))
-                    Text(
-                        "Off leaves the mark on its own and gives the menu bar "
-                            + "back about 30pt. Every figure is still in the card."
-                    )
+                // What the chosen mark encodes, which is the board's own argument for
+                // having twelve of them rather than one.
+                Text("\(preferences.mark.displayName) · \(preferences.mark.axis)")
                     .font(Typography.sans(11))
-                    .foregroundStyle(.white.opacity(0.28))
-                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.white.opacity(0.4))
+
+                Divider().overlay(.white.opacity(0.08))
+
+                // The figure is the other half of the row, and it costs about as much
+                // menu bar as the mark does — so it belongs next to the choice that
+                // sets the rest of the width, not in General with the thresholds.
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Percentage beside the mark")
+                            .font(Typography.sans(12.5))
+                            .foregroundStyle(.white.opacity(0.85))
+                        Text(
+                            "Off leaves the mark on its own and gives the menu bar "
+                                + "back about 30pt. Every figure is still in the card."
+                        )
+                        .font(Typography.sans(11))
+                        .foregroundStyle(.white.opacity(0.28))
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Toggle("", isOn: $preferences.showsPercentage).labelsHidden()
                 }
-                Spacer(minLength: 0)
-                Toggle("", isOn: $preferences.showsPercentage).labelsHidden()
-            }
+
+                Divider().overlay(.white.opacity(0.08))
+
+                HStack(spacing: 16) {
+                    Text("Running border")
+                        .font(Typography.mono(9.5))
+                        .tracking(1.4)
+                        .textCase(.uppercase)
+                        .foregroundStyle(.white.opacity(0.38))
+                    Spacer(minLength: 0)
+                    // One switch gates the whole group. Off dims the grid rather than
+                    // hiding it, so the twelve stay discoverable and the selection
+                    // survives being turned off and on again.
+                    Toggle("", isOn: $preferences.bordersOn).labelsHidden()
+                }
+
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(BorderEffect.allCases, id: \.self) { effect in
+                        BorderTile(
+                            effect: effect,
+                            isSelected: effect == preferences.border,
+                            isRunning: preferences.bordersOn
+                        ) {
+                            preferences.border = effect
+                        }
+                    }
+                }
+                .opacity(preferences.bordersOn ? 1 : 0.35)
+
+                Text("\(preferences.border.displayName) · \(preferences.border.axis)")
+                    .font(Typography.sans(11))
+                    .foregroundStyle(.white.opacity(0.4))
+
+                Text(
+                    "The light runs the shell's outline while a model is answering, "
+                        + "and takes its colour from the zone you are in. It never "
+                        + "runs along the top edge: that one lies against the notch."
+                )
+                .font(Typography.sans(11))
+                .foregroundStyle(.white.opacity(0.28))
+                .fixedSize(horizontal: false, vertical: true)
+                }
+            .padding(.bottom, 4)
         }
+        .scrollIndicators(.never)
         // The user's own thresholds, so the tiles are coloured by the rule the
         // pill will apply rather than by the default one.
         .environment(\.tone, preferences.thresholds)
@@ -181,6 +229,58 @@ private struct MarkTile: View {
         }
         .buttonStyle(.plain)
         .help(mark.axis)
+    }
+}
+
+/// One border, running on a shell of its own.
+///
+/// Green, not the lap's colour: a border takes its tone from the zone, and
+/// following the preview would rebuild every layer of all twelve lights ten times
+/// a second. The zone is not what is being chosen here — the motion is.
+private struct BorderTile: View {
+    let effect: BorderEffect
+    let isSelected: Bool
+    let isRunning: Bool
+    let onSelect: () -> Void
+
+    private let radius: CGFloat = 9
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(spacing: 6) {
+                // A shell hanging from the top of the tile, as the board draws
+                // it: the border is an outline, so it needs something to outline.
+                UnevenRoundedRectangle(
+                    bottomLeadingRadius: radius, bottomTrailingRadius: radius
+                )
+                .fill(.black)
+                .overlay {
+                    ChasingBorder(
+                        cornerRadius: radius, tone: Tokens.green,
+                        light: Tokens.lightGreen, effect: effect, isRunning: isRunning
+                    )
+                }
+                .overlay {
+                    UnevenRoundedRectangle(
+                        bottomLeadingRadius: radius, bottomTrailingRadius: radius
+                    )
+                    .strokeBorder(
+                        isSelected ? Tokens.amber : .white.opacity(0.08),
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+                }
+                .frame(height: 34)
+                .padding(.top, 4)
+
+                Text(effect.displayName)
+                    .font(Typography.sans(10))
+                    .foregroundStyle(.white.opacity(isSelected ? 0.9 : 0.45))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .buttonStyle(.plain)
+        .help(effect.axis)
     }
 }
 

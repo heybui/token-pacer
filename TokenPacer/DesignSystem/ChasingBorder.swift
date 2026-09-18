@@ -52,23 +52,24 @@ struct ShellTrack: Shape {
 /// rebuilding a display list for the whole pill: measured at ~18% of a core,
 /// continuously, for a decoration. `strokeStart`/`strokeEnd` animations run on
 /// the render server instead — set up once, then nothing per frame.
+///
+/// Which light it is comes from `BorderEffect`; this only knows how to install
+/// the pieces one is made of.
 struct ChasingBorder: NSViewRepresentable {
     var cornerRadius: CGFloat
     var tone: Color
+    /// The head's own colour, a step brighter than the zone it runs in.
+    var light: Color
+    var effect: BorderEffect = .comet
     var isRunning: Bool
     var lineWidth: CGFloat = 1.5
-    /// Length of the lit arc, in points.
-    var tail: Double = 104
-    /// Points per second. 2.6s round the collapsed pill — the ring's breath,
-    /// which is where the pairing was set.
-    var speed: Double = 200
 
     func makeNSView(context: Context) -> BorderLight { BorderLight() }
 
     func updateNSView(_ view: BorderLight, context: Context) {
         view.apply(.init(
-            cornerRadius: cornerRadius, tone: tone, lineWidth: lineWidth,
-            tail: tail, speed: speed, isRunning: isRunning
+            cornerRadius: cornerRadius, tone: tone, light: light,
+            effect: effect, lineWidth: lineWidth, isRunning: isRunning
         ))
     }
 }
@@ -82,9 +83,9 @@ final class BorderLight: NSView {
         /// here made `sameShape` false on every update — and the light tore down
         /// and restarted all fifty of its animations several times a second.
         var tone: Color
+        var light: Color
+        var effect: BorderEffect
         var lineWidth: CGFloat
-        var tail: Double
-        var speed: Double
         var isRunning: Bool
 
         /// Everything the layers are built from. `isRunning` only starts and stops
@@ -92,19 +93,20 @@ final class BorderLight: NSView {
         /// light at the left edge.
         func sameShape(as other: Look) -> Bool {
             cornerRadius == other.cornerRadius && tone == other.tone
-                && lineWidth == other.lineWidth && tail == other.tail && speed == other.speed
+                && light == other.light && effect == other.effect
+                && lineWidth == other.lineWidth
+        }
+
+        var pieces: [BorderPiece] {
+            effect.pieces(
+                tone: tone, light: light,
+                zones: (Tokens.green, Tokens.amber, Tokens.red), lineWidth: lineWidth
+            )
         }
     }
 
-    /// The tail is drawn as this many arcs of falling opacity and width.
-    ///
-    /// A gradient *stroke* cannot do it: a gradient fades by position in the view,
-    /// so the head vanished down the left and right edges and the light appeared
-    /// to run along the top and bottom only. Opacity has to follow the path, and
-    /// the path is the only thing that knows where it goes.
-    private static let segments = 24
-
     private var strokes: [CAShapeLayer] = []
+    private var pieces: [BorderPiece] = []
     /// Pending reinstall, coalesced. See `layout()`.
     private var settle: Task<Void, Never>?
     private var look: Look?
@@ -137,13 +139,18 @@ final class BorderLight: NSView {
         // cycle while a layer animates, and a rebuild that re-enters layout would
         // then rebuild for ever.
         built = bounds.size
+        // The first real size. `apply` runs before AppKit has given this view any
+        // bounds, and a rebuild at zero draws nothing and builds nothing — in the
+        // pill that healed itself on the next state change, and in a settings tile
+        // that never comes, so all twelve sat black.
+        guard !strokes.isEmpty else { return rebuild() }
         retrack()
         guard look?.isRunning == true else { return }
 
         // The shell morphs on a spring, so during a collapse or an expand the
-        // bounds arrive changed on every single frame. The sweep's duration is
+        // bounds arrive changed on every single frame. A sweep's duration is
         // derived from the track's length, so reinstalling on each one restarted
-        // all fifty animations mid-sweep and the light read as chaos.
+        // every animation mid-sweep and the light read as chaos.
         //
         // The path still follows every frame — that is `retrack`, and it is free.
         // Only the timing waits for the size to stop moving, which costs the
@@ -158,8 +165,6 @@ final class BorderLight: NSView {
 
     /// Longer than the shell's spring, so one reinstall lands after it, not during.
     private static let settleDelay: TimeInterval = 0.45
-
-    private func track(for size: CGSize) -> CGFloat { max(1, size.width + 2 * size.height) }
 
     /// The path only. Cheap enough to run on any layout pass, and it leaves the
     /// running animations alone.
@@ -192,6 +197,7 @@ final class BorderLight: NSView {
     private func rebuild() {
         guard let look, bounds.width > 0, bounds.height > 0 else { return }
         built = bounds.size
+        pieces = look.pieces
 
         // No implicit animations: every one of these is set outright, and CA would
         // otherwise cross-fade each colour and path change over a quarter second.
@@ -202,89 +208,164 @@ final class BorderLight: NSView {
         let path = ShellTrack(cornerRadius: look.cornerRadius, inset: look.lineWidth / 2)
             .path(in: CGRect(origin: .zero, size: bounds.size)).cgPath
 
-        if strokes.count != Self.segments + 2 {
+        if strokes.count != pieces.count {
             strokes.forEach { $0.removeFromSuperlayer() }
-            strokes = (0..<(Self.segments + 2)).map { _ in
+            strokes = pieces.map { _ in
                 let layer = CAShapeLayer()
                 layer.fillColor = nil
                 layer.lineCap = .round
-                // Nothing drawn until an animation moves them apart, so a paused
-                // light is not a full outline sitting on the shell.
-                layer.strokeStart = 0
-                layer.strokeEnd = 0
                 self.layer?.addSublayer(layer)
                 return layer
             }
         }
 
-        for (index, stroke) in strokes.enumerated() {
+        for (piece, stroke) in zip(pieces, strokes) {
             stroke.path = path
             stroke.frame = bounds
-            let (opacity, width) = ramp(at: index, look: look)
-            stroke.strokeColor = NSColor(look.tone).withAlphaComponent(opacity).cgColor
-            stroke.lineWidth = width
+            stroke.strokeColor = NSColor(piece.color)
+                .withAlphaComponent(piece.opacity).cgColor
+            stroke.lineWidth = piece.width
+            // Spelled out rather than `map(NSNumber.init)`: that picked an
+            // overload CoreAnimation could not read back, and the crash landed
+            // inside the render-layer copy with no mention of this line.
+            stroke.lineDashPattern = piece.dash.isEmpty
+                ? nil
+                : piece.dash.map { NSNumber(value: Double($0)) }
+            switch piece.motion {
+            case .sweep:
+                // Nothing drawn until an animation moves them apart, so a paused
+                // light is not a full outline sitting on the shell.
+                stroke.strokeStart = 0
+                stroke.strokeEnd = 0
+            case .pulse, .dash:
+                stroke.strokeStart = 0
+                stroke.strokeEnd = 1
+            }
         }
         if look.isRunning { animate() }
     }
 
-    /// Opacity and width along the tail. The last two layers are the head: a crisp
-    /// stroke and a wider, fainter one under it, which is the glow. It used to be
-    /// a Gaussian blur, and a blur is an offscreen pass every frame for a halo on
-    /// a 1.5pt line.
-    private func ramp(at index: Int, look: Look) -> (opacity: CGFloat, width: CGFloat) {
-        switch index {
-        case Self.segments: (0.25, look.lineWidth * 3)       // halo
-        case Self.segments + 1: (0.9, look.lineWidth)        // head
-        default:
-            // 0 at the end of the tail, 1 at the head. Cubed, not linear: the tail
-            // has to dissolve into the ring rather than end on a step, and the eye
-            // finds a linear ramp's shoulder every time.
-            {
-                let t = Double(index) / Double(Self.segments - 1)
-                return (CGFloat(t * t * t), look.lineWidth * (0.35 + 0.65 * t))
-            }()
+    /// Where each segment of the outline begins and ends, as fractions of the
+    /// track. The traversal is left edge, bottom, right edge — so the ranges are
+    /// the edges' own lengths in order.
+    private func range(of segment: BorderPiece.Segment) -> ClosedRange<Double> {
+        let height = Double(bounds.height), width = Double(bounds.width)
+        let track = max(1, width + 2 * height)
+        return switch segment {
+        case .whole: 0...1
+        case .left: 0...(height / track)
+        case .bottom: (height / track)...((height + width) / track)
+        case .right: ((height + width) / track)...1
         }
     }
 
     private func animate() {
-        guard let look else { return }
-        let track = max(1, bounds.width + 2 * bounds.height)
-        let length = min(0.5, look.tail / track)
-        // The head runs from the start to one tail past the end, so the light
-        // drains off the right rather than being cut mid-glow and restarting.
-        // `strokeStart`/`strokeEnd` clamp to 0...1 on their own, which is exactly
-        // the clipping the old hand-rolled version did at both ends.
-        let sweep = 1 + length
-        let duration = track * sweep / look.speed
-        let step = length / Double(Self.segments)
+        guard look != nil else { return }
+        let track = max(1, Double(bounds.width) + 2 * Double(bounds.height))
+        // Every piece travelling the same part of the outline has to finish its
+        // lap at the same moment as the rest, or the zone sweep's three colours
+        // drift apart and open gaps: they move at one speed but each restarts
+        // when it alone reaches the end. One margin per segment, the longest
+        // piece's, makes the lap the same length for all of them.
+        let margins = Dictionary(grouping: pieces, by: \.segment)
+            .mapValues { $0.map(\.length).max() ?? 0 }
 
-        for (index, stroke) in strokes.enumerated() {
-            // How far this layer trails the head, as a fraction of the path.
-            let trail = index >= Self.segments
-                ? step
-                : length * (1 - Double(index) / Double(Self.segments - 1))
-            // Overlapped: exact joins leave hairline gaps that strobe as the
-            // light moves.
-            let span = index >= Self.segments ? step : step * 1.8
-
+        for (piece, stroke) in zip(pieces, strokes) {
             stroke.removeAllAnimations()
-            stroke.add(sweepAnimation("strokeStart", from: -trail,
-                                      sweep: sweep, duration: duration), forKey: "start")
-            stroke.add(sweepAnimation("strokeEnd", from: -trail + span,
-                                      sweep: sweep, duration: duration), forKey: "end")
+            switch piece.motion {
+            case .sweep:
+                install(
+                    sweep: piece, on: stroke, track: track,
+                    margin: margins[piece.segment] ?? piece.length
+                )
+            case .pulse: install(pulse: piece, on: stroke)
+            case .dash: install(dash: piece, on: stroke, track: track)
+            }
         }
     }
 
+    /// The band runs from just before its own segment to just past the end of it,
+    /// so it enters and leaves rather than being cut on at the boundary.
+    /// `strokeStart`/`strokeEnd` clamp to 0...1 on their own, which is exactly the
+    /// clipping this needs at both ends.
+    ///
+    /// A piece confined to one edge measures itself against *that edge*: a third
+    /// of the outline is most of a 34pt side and a quarter of the bottom, and a
+    /// side runner longer than its own side is a runner nobody can see move.
+    private func install(
+        sweep piece: BorderPiece, on stroke: CAShapeLayer, track: Double, margin: Double
+    ) {
+        let span = range(of: piece.segment)
+        let width = span.upperBound - span.lowerBound
+        let scale = piece.segment == .whole ? 1 : width
+        let length = piece.length * scale
+        let trail = piece.trail * scale
+        let distance = width + margin * scale
+        let duration = max(0.05, distance * track / piece.speed)
+
+        // The head of the whole effect, which this piece follows at its own
+        // distance behind.
+        let base = piece.reversed
+            ? span.upperBound + trail
+            : span.lowerBound - margin * scale - trail
+        let end = piece.reversed ? base - distance : base + distance
+
+        stroke.add(
+            sweepAnimation("strokeStart", from: base, to: end, duration: duration, piece: piece),
+            forKey: "start"
+        )
+        stroke.add(
+            sweepAnimation(
+                "strokeEnd", from: base + length, to: end + length,
+                duration: duration, piece: piece
+            ),
+            forKey: "end"
+        )
+    }
+
+    private func install(pulse piece: BorderPiece, on stroke: CAShapeLayer) {
+        let breath = CABasicAnimation(keyPath: "opacity")
+        breath.fromValue = 0.22
+        breath.toValue = 1
+        breath.duration = piece.period / 2
+        breath.autoreverses = true
+        breath.repeatCount = .infinity
+        breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        breath.beginTime = epoch
+        breath.isRemovedOnCompletion = false
+        breath.fillMode = .both
+        stroke.add(breath, forKey: "pulse")
+    }
+
+    /// One dash pattern's worth of travel, repeated. The train never restarts,
+    /// because moving by exactly one period leaves the outline looking identical.
+    private func install(dash piece: BorderPiece, on stroke: CAShapeLayer, track: Double) {
+        let period = piece.dash.reduce(0, +)
+        guard period > 0 else { return }
+        let creep = CABasicAnimation(keyPath: "lineDashPhase")
+        creep.fromValue = 0
+        creep.toValue = -period
+        creep.duration = Double(period) / piece.speed
+        creep.repeatCount = .infinity
+        creep.timingFunction = CAMediaTimingFunction(name: .linear)
+        creep.beginTime = epoch
+        creep.isRemovedOnCompletion = false
+        creep.fillMode = .both
+        stroke.add(creep, forKey: "dash")
+    }
+
     private func sweepAnimation(
-        _ keyPath: String, from: Double, sweep: Double, duration: Double
+        _ keyPath: String, from: Double, to: Double, duration: Double, piece: BorderPiece
     ) -> CABasicAnimation {
         let animation = CABasicAnimation(keyPath: keyPath)
         animation.fromValue = from
-        animation.toValue = from + sweep
+        animation.toValue = to
         animation.duration = duration
         animation.repeatCount = .infinity
         animation.timingFunction = CAMediaTimingFunction(name: .linear)
-        animation.beginTime = epoch
+        // Anchored to the one epoch, less this piece's own head start: two heads
+        // half a lap apart are one animation started half a lap ago.
+        animation.beginTime = epoch - piece.phase * duration
         animation.isRemovedOnCompletion = false
         animation.fillMode = .both
         return animation
