@@ -545,6 +545,10 @@ animation. It is built the spec's way now:
 - **Two stand still**: the hairline breathing 0.22 → 1, and the glow, which is a
   shadow on the layer itself with `shadowPath` set — the only light that paints
   outside the mask.
+- **Four of them run left to right**, against the board's clockwise spin: the
+  comet, the dual comet, the dash train and the quarter trace. Reversing the turn
+  alone would put a comet's tail in front of its head, so the stop table is
+  mirrored with it — every angle to its reflection, read backwards.
 - **The dash train is snapped to 24 dashes.** At the board's own 15.12° there are
   23.8 in a lap and the seam rotates past once every turn.
 

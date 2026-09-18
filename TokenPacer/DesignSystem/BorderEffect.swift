@@ -64,16 +64,16 @@ enum BorderEffect: String, CaseIterable, Sendable {
     var paint: BorderPaint {
         switch self {
         case .comet:
-            .angular([ConicRamp(
+            .angular([Self.leftToRight(ConicRamp(
                 stops: [
                     .init(0, .clear), .init(266.4, .clear),
                     .init(324, .zone, 0.33), .init(360, .head, 1),
                 ],
                 duration: 2.4
-            )])
+            ))])
 
         case .dualComet:
-            .angular([ConicRamp(
+            .angular([Self.leftToRight(ConicRamp(
                 stops: [
                     .init(0, .clear), .init(129.6, .clear),
                     .init(169.2, .zone, 0.33), .init(180, .head, 1),
@@ -81,7 +81,7 @@ enum BorderEffect: String, CaseIterable, Sendable {
                     .init(349.2, .zone, 0.33), .init(360, .head, 1),
                 ],
                 duration: 3
-            )])
+            ))])
 
         case .zoneSweep:
             .angular([ConicRamp(
@@ -95,7 +95,9 @@ enum BorderEffect: String, CaseIterable, Sendable {
         case .marchingDashes:
             // Snapped to 24 dashes — 15° period, 5.36° lit. The board's own
             // 15.12° leaves 23.8 dashes in a lap, and the seam rotates past.
-            .angular([ConicRamp(stops: Self.dashes(count: 24, lit: 5.36), duration: 9)])
+            .angular([Self.leftToRight(
+                ConicRamp(stops: Self.dashes(count: 24, lit: 5.36), duration: 9)
+            )])
 
         case .pulseWave:
             .angular([ConicRamp(
@@ -109,13 +111,13 @@ enum BorderEffect: String, CaseIterable, Sendable {
 
         case .quarterTrace:
             // A hard cut, no ramp: two stops at the same angle.
-            .angular([ConicRamp(
+            .angular([Self.leftToRight(ConicRamp(
                 stops: [
                     .init(0, .zone, 0.9), .init(93.6, .zone, 0.9),
                     .init(93.6, .clear), .init(360, .clear),
                 ],
                 duration: 1.9
-            )])
+            ))])
 
         case .counterPair:
             .angular([
@@ -159,6 +161,19 @@ enum BorderEffect: String, CaseIterable, Sendable {
         case .bottomSweep:
             .bands([EdgeBand(edge: .bottom, tint: .head, duration: 2.4, begin: 0)])
         }
+    }
+
+    /// The same light, running the other way round.
+    ///
+    /// A turn of the plane carries the ramp with it, so reversing the turn alone
+    /// would put a comet's tail in front of its head. The stops are mirrored as
+    /// well — every angle to its reflection, and the table read backwards — so
+    /// the head still leads and only the direction changes.
+    private static func leftToRight(_ ramp: ConicRamp) -> ConicRamp {
+        ConicRamp(
+            stops: ramp.stops.reversed().map { ConicStop(360 - $0.angle, $0.tint, $0.alpha) },
+            duration: ramp.duration, reversed: !ramp.reversed
+        )
     }
 
     /// A dash train as a stop table: lit, then a hard cut to clear, repeated.
