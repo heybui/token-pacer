@@ -39,18 +39,18 @@ enum PillState: String, CaseIterable, Sendable {
 
     /// Smallest strip either side of the notch the figures fit in, and no wider.
     ///
-    /// The widest each side has to hold: on the left an 11pt gutter, the 76pt
+    /// The widest each side has to hold: on the left an 11pt gutter, the 36pt
     /// capsule bar, 12pt of spacing and a four-character headline ("100%"); on the
     /// right a six-character countdown and a 13pt gutter. Mono at 12pt runs about
-    /// 7.2pt a character, so the left side asks for 128 and the right for 57.
+    /// 7.2pt a character, so the left side asks for 88 and the right for 57.
     ///
     /// One figure, not two: the flanks are symmetric because the shell is centred
     /// on the notch, and an asymmetric one would put the hardware off-centre in
     /// its own shell. The right side carries the slack.
     ///
-    /// This is the capsule bar's price, and the board names it: the mark "wants
-    /// 76px, which is what makes it expensive in a wing". The ring cost 17.
-    static let flank: CGFloat = 128
+    /// Still the capsule bar's price — the ring cost 17 — but at 36pt rather than
+    /// the board's 46 glyph or the 76 it asks for when a wordmark shares the wing.
+    static let flank: CGFloat = 88
 
     /// Where an expanded body starts, under the band.
     ///

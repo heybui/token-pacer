@@ -301,7 +301,8 @@ struct PillView: View {
                 // that and where the boundaries are, which is the question the
                 // pill exists to answer at a glance.
                 CapsuleBar(
-                    percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent
+                    percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
+                    isBurning: snapshot?.isBurning == true
                 )
                 OdometerText(text: headline, size: 12, color: tone)
             }

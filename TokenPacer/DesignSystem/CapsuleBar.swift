@@ -12,9 +12,18 @@ struct CapsuleBar: View {
     /// Nil draws the track with no marker on it: the zones are a scale whether or
     /// not anything has been reported against them.
     let percent: Double?
-    var width: CGFloat = 76
+    /// The board's own glyph width. 76 is what it calls the mark's appetite —
+    /// "it wants 76px, which is what makes it expensive in a wing" — but that
+    /// figure buys a 44pt wordmark beside it, and with one provider there is no
+    /// wordmark to name. 46 is what the board actually draws.
+    var width: CGFloat = 36
     var height: CGFloat = 4
     var markerHeight: CGFloat = 11
+    /// Creeps the marker while a model is answering. The mark's own way of saying
+    /// "working", which is what the board asks every mark to carry.
+    var isBurning: Bool = false
+
+    @State private var creeping = false
 
     @Environment(\.tone) private var tone
 
@@ -33,6 +42,7 @@ struct CapsuleBar: View {
         // The marker overhangs the track top and bottom, so the row is as tall as
         // the marker and the capsules sit centred in it.
         .frame(width: width, height: markerHeight)
+        .onChange(of: isBurning, initial: true) { creeping = isBurning }
     }
 
     private func zone(from start: Double, to end: Double, _ color: Color) -> some View {
@@ -42,20 +52,26 @@ struct CapsuleBar: View {
             .offset(x: width * start / 100)
     }
 
-    /// The reading itself.
+    /// The reading itself, creeping while a model is answering.
     ///
-    /// Two things the board asks for are deliberately not here, both measured
-    /// rather than argued: the marker's drop shadow and its creep while a model
-    /// is answering. Together they took the app from 1.5% of a core to 10.5% —
-    /// a blur is an offscreen pass, `repeatForever` drives it at the display's
-    /// refresh rate, and this view is on screen for hours at a time. The border
-    /// already says "working", and it runs on a clock built for the job.
+    /// What the board asks for and this does not have is the marker's drop
+    /// shadow, measured rather than argued: a blur is an offscreen pass, and with
+    /// the creep driving it at the display's refresh rate on a view that is on
+    /// screen for hours, the pair took the app from 1.5% of a core to 10.5%. The
+    /// creep on its own is a transform on a 2pt capsule and costs nothing like
+    /// that; the shadow is what could not stay.
     private func marker(at percent: Double) -> some View {
         let clamped = min(100, max(0, percent))
         return Capsule()
             .fill(tone.light(clamped))
             .frame(width: 2, height: markerHeight)
-            .offset(x: width * clamped / 100 - 1)
+            .offset(x: width * clamped / 100 - 1 + (creeping ? 3 : 0))
+            .animation(
+                creeping
+                    ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
+                    : .easeOut(duration: 0.2),
+                value: creeping
+            )
             .animation(.easeOut(duration: 0.6), value: percent)
     }
 }
