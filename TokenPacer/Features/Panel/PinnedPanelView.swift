@@ -55,7 +55,7 @@ struct PinnedPanelView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.42))
                     .padding(.horizontal, 4)
-                    .contentShape(Rectangle())
+                    .contentShape(.rect)
             }
             .buttonStyle(.plain)
         }

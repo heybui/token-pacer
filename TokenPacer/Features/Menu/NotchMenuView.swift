@@ -58,7 +58,7 @@ private struct MenuRow: View {
             RoundedRectangle(cornerRadius: 5)
                 .fill(.white.opacity(isHovering && item.isEnabled ? 0.12 : 0))
         )
-        .contentShape(Rectangle())
+        .contentShape(.rect)
         .onHover { isHovering = $0 }
         .onTapGesture {
             guard item.isEnabled else { return }

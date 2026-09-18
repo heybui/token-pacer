@@ -124,13 +124,13 @@ private struct ThresholdScale: View {
                         Tokens.red
                     }
                     .frame(height: track)
-                    .clipShape(Capsule())
+                    .clipShape(.capsule)
 
                     handle(at: warn, in: width)
                     handle(at: critical, in: width)
                 }
                 .frame(height: knob, alignment: .center)
-                .contentShape(Rectangle())
+                .contentShape(.rect)
                 .gesture(drag(in: width))
             }
             .frame(height: knob)
