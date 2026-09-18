@@ -128,7 +128,9 @@ three of them is three times wrong the week any of them changes.
 
 The rule that follows, and the reason there is no per-provider arithmetic here:
 **a provider whose own figure cannot be read has no row.** Not an estimate, not a
-row built from token counts against an assumed plan size. Local token counts keep
+row built from token counts against a plan size the app assumed for itself. A plan
+size the *user states* is a different thing — a stated premise rather than an
+inference — and is the one door left open, for Copilot (§0.2). Local token counts keep
 answering what no quota endpoint ever will — rate of change, attribution, history
 — and never the headline. Nothing infers a percentage any more: `CeilingEstimator`
 is deleted, §0.4.
