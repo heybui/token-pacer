@@ -26,10 +26,12 @@ jobs:
     ## produces one architecture, and an Intel runner would quietly publish a
     ## disk image no machine with a notch can run.
     runs-on: macos-26
-    ## Default is six hours. On a 10x-billed runner that is 3600 minutes of
-    ## quota spent on a step that will never finish — SwiftPM's artifact fetch
-    ## and Apple's notary queue can both sit still without failing.
-    timeout-minutes: 45
+    ## Default is six hours. On a 10x-billed runner that is most of a month's
+    ## quota spent on something already stuck, so this is set from what a run
+    ## actually costs rather than from caution: a cold build and a notary round
+    ## trip come to well under ten minutes together. Failing a slow release is
+    ## cheap — press the button again — and a hung one is not.
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -166,7 +168,7 @@ jobs:
       - name: Release
         ## Builds, signs, notarizes, staples, writes the feed and publishes.
         ## Everything slow lives here; the notary wait has its own bound below.
-        timeout-minutes: 35
+        timeout-minutes: 20
         env:
           GH_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
           SITE_REPO: ${{ vars.SITE_REPO || 'heybui/tokenpacer.com' }}
@@ -189,7 +191,7 @@ jobs:
 
           make release \
             SITE_DIR="$RUNNER_TEMP/site" \
-            NOTARY_ARGS="--keychain-profile token-pacer --keychain $KEYCHAIN --timeout 20m" \
+            NOTARY_ARGS="--keychain-profile token-pacer --keychain $KEYCHAIN --timeout 12m" \
             APPCAST_ARGS="--ed-key-file $RUNNER_TEMP/sparkle.key"
 
       - name: Keep the notarized image
