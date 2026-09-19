@@ -100,45 +100,6 @@ jobs:
             exit 1
           fi
 
-      - name: Cache the Sparkle artifact
-        ## SwiftPM fetches Sparkle's XCFramework as a binary artifact on every
-        ## clean checkout: ten megabytes with no progress output, no timeout and
-        ## no retry, so a slow minute on GitHub's release CDN is indistinguishable
-        ## from a hang. Keyed on the resolved versions, and SwiftPM checks the
-        ## artifact's checksum regardless of where it came from.
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/Library/Caches/org.swift.swiftpm
-            ~/.swiftpm/cache
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
-          restore-keys: spm-${{ runner.os }}-
-
-      - name: Prefetch the Sparkle artifact
-        ## SwiftPM fetches this once, with no retry, no timeout and no progress
-        ## output, so a slow minute on GitHub's release CDN is indistinguishable
-        ## from a hung step — and it is ten megabytes. curl does all three, and
-        ## SwiftPM takes the file out of its own cache without asking where it
-        ## came from; it verifies the checksum either way. The version is read
-        ## from Package.resolved, so this cannot name something the build does
-        ## not resolve to.
-        run: |
-          set -euo pipefail
-          DEST=~/Library/Caches/org.swift.swiftpm/artifacts
-          VERSION=$(python3 -c "import json; pins = json.load(open('Package.resolved'))['pins']; print(next(p['state']['version'] for p in pins if p['identity'] == 'sparkle'))")
-          URL="https://github.com/sparkle-project/Sparkle/releases/download/$VERSION/Sparkle-for-Swift-Package-Manager.zip"
-          # SwiftPM names a cached artifact after its URL, every character that
-          # is not a letter or a digit replaced by an underscore.
-          NAME=$(printf '%s' "$URL" | tr -c 'A-Za-z0-9' '_')
-          mkdir -p "$DEST"
-          if [ -s "$DEST/$NAME" ]; then
-            echo "Sparkle $VERSION already cached"
-          else
-            curl -fL --retry 5 --retry-all-errors --connect-timeout 10 --max-time 180 \
-              -o "$DEST/$NAME" "$URL"
-            echo "Sparkle $VERSION fetched, $(du -h "$DEST/$NAME" | cut -f1)"
-          fi
-
       - name: Import the Developer ID certificate
         env:
           DEVID_P12_BASE64: ${{ secrets.DEVID_P12_BASE64 }}
