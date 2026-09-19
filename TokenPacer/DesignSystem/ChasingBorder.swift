@@ -243,23 +243,30 @@ final class BorderLight: NSView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
-        container.frame = bounds
-        frameMask.frame = bounds
+        let area = lightArea(look)
+
+        container.frame = area
+        frameMask.frame = CGRect(origin: .zero, size: area.size)
         frameMask.lineWidth = look.lineWidth
-        frameMask.path = ShellTrack(cornerRadius: look.cornerRadius, inset: Self.track(look))
-            .path(in: CGRect(origin: .zero, size: bounds.size)).cgPath
+        frameMask.path = ShellTrack(
+            // An outset band is a wider curve, not the same curve moved out: the
+            // corner has to stay parallel to the shell's own.
+            cornerRadius: look.cornerRadius - Self.track(look), inset: Self.centre(look)
+        ).path(in: CGRect(origin: .zero, size: area.size)).cgPath
 
         // Square, and big enough that no angle of rotation exposes a corner.
-        let side = ceil(hypot(bounds.width, bounds.height)) + 2
+        let side = ceil(hypot(area.width, area.height)) + 2
         for (host, _) in turns {
             host.bounds = CGRect(x: 0, y: 0, width: side, height: side)
-            host.position = CGPoint(x: bounds.midX, y: bounds.midY)
+            host.position = CGPoint(x: area.width / 2, y: area.height / 2)
         }
 
         for (runner, band) in runners { frame(runner, band, in: look) }
 
         // The still lights fill the whole frame; the mask is what shapes them.
-        if case .solid = look.effect.paint { container.sublayers?.first?.frame = bounds }
+        if case .solid = look.effect.paint {
+            container.sublayers?.first?.frame = CGRect(origin: .zero, size: area.size)
+        }
 
         if glow != nil {
             let silhouette = UnevenRoundedRectangle(
@@ -292,35 +299,55 @@ final class BorderLight: NSView {
         if look.isRunning, !runners.isEmpty { animate() }
     }
 
-    /// How far in from the shell's edge the light runs.
+    /// How far the light sits *outside* the shell's edge.
     ///
-    /// Half a line is what puts it on the static ring, which is where the board
-    /// draws it. The point on top of that is for the edge it shares with the menu
-    /// bar: a shell that fits the band is exactly the row tall, so its bottom edge
-    /// *is* the end of the menu bar, and a light flush against it has nothing
-    /// below to read against — the moving segment looks like a loose green bar
-    /// under the pill rather than an outline tracing it. One point in puts the
-    /// shell's own edge back around the light, and is invisible everywhere else.
-    private static let edgeInset: CGFloat = 1
+    /// The band lies beyond the silhouette, never inside it. Inside, it read as a
+    /// second border drawn in the black — the shell already has its own ring —
+    /// and the bottom of it had nowhere to be seen: a flanking state is exactly
+    /// the band tall, so its bottom edge is the end of the menu bar row and a
+    /// light held a point inside that edge sits against the hardware. Half a line
+    /// out puts the whole band on the desktop, hard against the shell.
+    private static func track(_ look: Look) -> CGFloat { -look.lineWidth / 2 }
 
-    private static func track(_ look: Look) -> CGFloat { look.lineWidth / 2 + edgeInset }
+    /// How much room outside the view the band needs, and therefore how far the
+    /// container and its mask grow: a mask no bigger than the view is a mask that
+    /// cuts the outset band off.
+    private static func bleed(_ look: Look) -> CGFloat {
+        max(0, look.lineWidth / 2 - track(look))
+    }
+
+    /// The field the light is drawn in: the view grown by the bleed on the three
+    /// edges it runs along. Never at the top — that edge meets the notch, and a
+    /// band above it is a band on the hardware.
+    private func lightArea(_ look: Look) -> CGRect {
+        let bleed = Self.bleed(look)
+        return CGRect(
+            x: -bleed, y: 0,
+            width: bounds.width + 2 * bleed, height: bounds.height + bleed
+        )
+    }
+
+    /// Where the band's centre line falls inside that field.
+    private static func centre(_ look: Look) -> CGFloat { bleed(look) + track(look) }
 
     /// A vertical band is 52% of the height and one line wide; a horizontal one
     /// 46% of the width. Both sit *on* their edge, and the mask trims them.
     private func frame(_ runner: CAGradientLayer, _ band: EdgeBand, in look: Look) {
-        let width = bounds.width, height = bounds.height
+        // Lengths are the shell's — the board's fractions are of the pill, not of
+        // the field it is drawn in. Only the positions are in field coordinates.
+        let area = lightArea(look), centre = Self.centre(look)
         switch band.edge {
         case .left, .right:
-            let length = height * band.lengthFraction
+            let length = bounds.height * band.lengthFraction
             runner.bounds = CGRect(x: 0, y: 0, width: look.lineWidth, height: length)
             runner.position = CGPoint(
-                x: band.edge == .left ? Self.track(look) : width - Self.track(look),
+                x: band.edge == .left ? centre : area.width - centre,
                 y: -length
             )
         case .bottom:
-            let length = width * band.lengthFraction
+            let length = bounds.width * band.lengthFraction
             runner.bounds = CGRect(x: 0, y: 0, width: length, height: look.lineWidth)
-            runner.position = CGPoint(x: -length, y: height - Self.track(look))
+            runner.position = CGPoint(x: -length, y: area.height - centre)
         }
     }
 

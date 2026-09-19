@@ -624,8 +624,12 @@ animation. It is built the spec's way now:
 
 - **One masked container.** `CAShapeLayer` stroking `ShellTrack` at 1.5pt is the
   mask — a band on three sides and nothing along the top. Every variant paints
-  inside it. Not `layer.borderWidth`, which cannot be partial and draws the top
-  edge, and that quiet top edge is the whole point.
+  inside that band, and the band lies *outside* the shell: the stroke is centred
+  half a line beyond the silhouette, so the light is on the desktop rather than
+  in the black the shell already fills. The spec masked with an even-odd pair of
+  subpaths, which has no offset to choose; a stroked path does, and this is it.
+  Not `layer.borderWidth`, which cannot be partial and draws the top edge, and
+  that quiet top edge is the whole point.
 - **Seven are angular**: a ramp drawn once into a `CGImage` from the spec's own
   stop tables — absolute angles, clockwise from twelve o'clock, alphas
   premultiplied as CSS interpolates them — set as a square host's `contents` and
@@ -1128,11 +1132,21 @@ update path is — an installed copy will only accept an update signed the same 
   collapsed 350 × 114 → hover 528 × 196 the instant the pointer lands → pinned 876 × 638 on a
   double-click → back to 350 × 114 within a second of Esc. The pinned card was captured whole at
   its new size, shadow and all, so nothing is clipped by the smaller frame.
-- ✅ **The running light was flush with the menu-bar boundary.** A collapsed shell is exactly the
-  band tall, so its bottom edge *is* the end of the menu bar, and a light drawn at `lineWidth / 2`
-  had nothing below it to read against — on an external display it looked like a loose green bar
-  under the pill. Measured in pixels off a screenshot: light on rows 57–59 against a shell ending
-  at 59, now rows 54–57. One point of `edgeInset`, on the mask and the runner bands alike.
+- ✅ ~~**The running light was flush with the menu-bar boundary.**~~ Reversed 2026-09-19, below. A
+  collapsed shell is exactly the band tall, so its bottom edge *is* the end of the menu bar, and a
+  light drawn at `lineWidth / 2` had nothing below it to read against — on an external display it
+  looked like a loose green bar under the pill. Measured in pixels off a screenshot: light on rows
+  57–59 against a shell ending at 59, then rows 54–57. One point of `edgeInset`, on the mask and
+  the runner bands alike.
+- ✅ **The light runs outside the shell, on all twelve** (2026-09-19). `edgeInset` answered the
+  external display and broke the built-in: on a notched Mac a flanking state ends at the hardware,
+  so a band a point inside that edge spends its life against the notch — and the glow's static
+  hairline read as a second border drawn in the black, inside the shell's own ring. The band is
+  centred half a line *beyond* the silhouette now: `track` is negative, and the container and its
+  mask grow by a `bleed` on the three edges the light runs along — never at the top, which is the
+  notch. Verified on the built-in against screenshots: breathe glow, bottom sweep and comet all on
+  the desktop side of the edge, nothing inside the black. **Open:** d204c30's own complaint, the
+  loose green bar on an external display, has not been re-checked since the reversal.
 - Single instance enforced, including a raw binary launched past LaunchServices.
 - Shadow follows the clipped shape.
 - Collapsed pill and hover card, on screen, against live figures.
