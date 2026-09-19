@@ -28,7 +28,10 @@ struct PreferencesView: View {
             Group {
                 switch pane {
                 case .general:
-                    GeneralPane(preferences: preferences, launchAtLogin: launchAtLogin)
+                    GeneralPane(
+                        preferences: preferences, launchAtLogin: launchAtLogin,
+                        updater: updater
+                    )
                 case .appearance:
                     AppearancePane(preferences: preferences)
                 }
@@ -103,8 +106,10 @@ private extension PreferencesView {
 private struct GeneralPane: View {
     @Bindable var preferences: Preferences
     var launchAtLogin: LaunchAtLogin
+    var updater: Updater?
 
     @State private var launchEnabled = false
+    @State private var checksAutomatically = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -162,6 +167,16 @@ private struct GeneralPane: View {
                     Toggle("Hide when nothing is running", isOn: $preferences.hideWhenNothingRuns)
                         .labelsHidden()
                 }
+                row("Check for updates automatically", note: "Daily, in the background") {
+                    Toggle("Check for updates automatically", isOn: $checksAutomatically)
+                        .labelsHidden()
+                        .onChange(of: checksAutomatically) { _, on in
+                            updater?.checksAutomatically = on
+                        }
+                        // Nil in tests and in a `swift run` build: no Sparkle, so
+                        // nothing behind the switch to set.
+                        .disabled(updater == nil)
+                }
                 row("Restore defaults") {
                     Button("Reset", action: preferences.restoreDefaults)
                         .buttonStyle(.plain)
@@ -175,7 +190,10 @@ private struct GeneralPane: View {
                 }
             }
         }
-        .onAppear { launchEnabled = launchAtLogin.isEnabled }
+        .onAppear {
+            launchEnabled = launchAtLogin.isEnabled
+            checksAutomatically = updater?.checksAutomatically ?? true
+        }
     }
 
     private var divider: some View {

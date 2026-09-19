@@ -29,6 +29,15 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
     /// than queueing a second one.
     var canCheck: Bool { controller?.updater.canCheckForUpdates ?? false }
 
+    /// Sparkle owns the storage — `SUEnableAutomaticChecks` in Info.plist is the
+    /// default until the switch is touched, and the user default it writes wins
+    /// afterwards. Nothing in `Preferences` mirrors it, so "Restore defaults"
+    /// leaves it alone.
+    var checksAutomatically: Bool {
+        get { controller?.updater.automaticallyChecksForUpdates ?? true }
+        set { controller?.updater.automaticallyChecksForUpdates = newValue }
+    }
+
     func checkForUpdates() {
         NSApp.activate()
         controller?.updater.checkForUpdates()
