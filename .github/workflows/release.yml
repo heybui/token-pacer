@@ -21,8 +21,11 @@ permissions:
 
 jobs:
   release:
-    ## codesign, notarytool and Sparkle's tools are all Apple-only.
-    runs-on: macos-15
+    ## codesign, notarytool and Sparkle's tools are all Apple-only. This label is
+    ## an arm64 runner, which is also what the shipped binary is: `swift build`
+    ## produces one architecture, and an Intel runner would quietly publish a
+    ## disk image no machine with a notch can run.
+    runs-on: macos-26
 
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +34,19 @@ jobs:
           ## to the last tag. A shallow clone would renumber every build to 1,
           ## which Sparkle sees as a downgrade.
           fetch-depth: 0
+
+      - name: Select the toolchain
+        ## Newest the image carries, not its default. This is written against
+        ## Xcode 27, no runner image ships that yet, and every failure from an
+        ## older one reads as a bug in the source rather than a version gap:
+        ## SwiftUI's `.plain` comes back main-actor isolated, `Data.split` turns
+        ## ambiguous, and Aggregator's `map` times out the type checker. Taking
+        ## the newest closes that gap on its own the week the image catches up.
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          sudo xcode-select -s "${XCODE:-/Applications/Xcode.app}"
+          xcodebuild -version
+          swift --version
 
       - name: Read the version
         id: version
