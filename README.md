@@ -1,89 +1,77 @@
 # Token Pacer
 
-Claude Code and Codex usage, live in the notch.
+Claude Code, Codex and Copilot usage, live in the notch.
 
-## Prerequisites
+The figures already exist — each CLI draws them on `/usage` or `/status` — but
+you have to stop and ask. Token Pacer keeps them in front of you: a mark, the
+percentage and the time to your next reset, in the menu bar, all day. It asks for
+no account, no API key and no system permission; it spawns the CLI you already
+trust and reads the screen it already draws.
 
-### To run the app
+- **What it is and why it's built this way** — [docs/PRD.md](docs/PRD.md)
+- **How it's built** — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Every file it reads off your disk** — [docs/ACCESS.md](docs/ACCESS.md)
 
-| | |
-|---|---|
-| macOS | 15 (Sequoia) or later — `LSMinimumSystemVersion` 15.0 |
-| Mac | Any. A notched Mac hides the shell behind the hardware; on an external display or a pre‑2021 Mac the pill just docks top‑centre in the menu bar row |
-| Permissions | **None.** Not sandboxed, no Accessibility, no Screen Recording, no Automation. Full‑screen is detected from the menu bar, not by enumerating windows |
-| Notifications | Optional. Asked for on the first time you cross a threshold, never at launch. Denied just means no banner |
-| Disk | `~/Library/Application Support/TokenPacer/` for the archive and the instance lock; `~/Library/Preferences/com.redevify.token-pacer.plist` for settings |
-
-### To have anything to show
-
-At least one provider's logs must exist. Nothing is installed, nothing is asked
-for — the app only reads files that are already there:
-
-- **Claude Code** — `~/.claude/projects/<slug>/<uuid>.jsonl`. Gives volume,
-  models and projects.
-- **Codex** — `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. Gives volume *and*
-  its own rate limits, which it states verbatim.
-
-A provider whose directory does not exist contributes nothing — no error, no
-prompt. Either one can also be switched off in Preferences → General, which
-stops it being polled at all.
-
-### For the percentage figures
-
-Claude Code publishes no rate‑limit state in its logs, so its percentage comes
-from the CLI's own `/usage` panel. Codex does publish its own — but only while it
-is working in the terminal, so its `/status` panel is what keeps the figure true
-when the spending happened in the desktop app, on the web, or in a cloud task.
-Copilot publishes nothing readable at all: its `/usage` panel is the only source
-of its plan budget, and it is a monthly budget with no session window under it.
-
-All three need the same two things:
-
-1. **The binary on disk.** A GUI app inherits launchd's bare `PATH`, so each is
-   looked up by full path: `~/.local/bin`, `~/.claude/local` /
-   `~/.codex/packages/standalone/current/bin`, `/opt/homebrew/bin`,
-   `/usr/local/bin`, `~/.bun/bin`, `~/.volta/bin`. Elsewhere → set
-   `TOKENPACER_CLAUDE_BIN`, `TOKENPACER_CODEX_BIN` or `TOKENPACER_COPILOT_BIN`.
-2. **One trusted project directory**, for Claude and Codex —
-   `hasTrustDialogAccepted: true` in `~/.claude.json`, or `trust_level =
-   "trusted"` in `~/.codex/config.toml`. Neither will start anywhere else; it
-   draws the trust prompt instead of the panel. Run it once in any project and
-   answer it. Copilot needs none: it asks per tool, and nothing here runs one.
-
-Each store can be moved with `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or
-`COPILOT_HOME`, and this app follows whichever is set.
-
-Without these, everything else still works; only that provider's percentage is
-missing. `ACCESS.md` lists every file and command either one touches.
-
-### To build
+## Running it
 
 | | |
 |---|---|
-| Xcode | 16 or later (Swift 6 toolchain, `swift-tools-version: 6.0`) |
-| Network | First build resolves **Sparkle** 2.6+ from SPM. The only dependency |
-| Xcode.app | Only for `make xcbuild` / `xctest`. `swift build` and `make app` need the command‑line tools alone |
+| macOS | 15 (Sequoia) or later |
+| Mac | any. A notched Mac hides the shell behind the hardware; elsewhere the pill docks top-centre in the menu bar row |
+| Permissions | **none.** Not sandboxed, no Accessibility, no Screen Recording, no Automation |
+| Notifications | optional, asked the first time you cross a threshold. Denied just means no banner |
+
+To see anything, at least one provider's logs must exist —
+`~/.claude/projects/…jsonl` or `~/.codex/sessions/…jsonl`. To see its
+**percentage**, that provider's CLI must be on disk in a known location (or named
+by `TOKENPACER_CLAUDE_BIN` / `TOKENPACER_CODEX_BIN` / `TOKENPACER_COPILOT_BIN`),
+and Claude and Codex each need one directory you have already answered their
+trust prompt for. Without that, everything else still works — only that row's
+percentage is missing.
+
+## Development setup
+
+Xcode 16 or later. The first build resolves **Sparkle** 2.6+ from SPM; it is the
+only dependency.
 
 ```sh
-make run     # debug, runs in place (sets DYLD_FRAMEWORK_PATH for Sparkle)
+git clone <this repo> && cd token-pacer
+make run     # debug build, runs in place (sets DYLD_FRAMEWORK_PATH for Sparkle)
 make test    # swift test
-make app     # assembles build/TokenPacer.app, signed with the first codesigning
-             # identity found, or ad-hoc if there is none
+make app     # assembles build/TokenPacer.app, signed with the first identity found
 ```
 
-Running in place (`swift run`) is not a bundle, and two things degrade:
-**notifications** are skipped entirely (`UNUserNotificationCenter` traps outside
-a bundle) and **launch at login** reports disabled (`SMAppService` needs a signed
-bundle). Use `make app` when either one matters.
+Two build systems over one set of folders, so they cannot drift:
 
-### To cut a release
+- `swift build` / `swift test` — the fast terminal loop.
+- `xcodebuild -scheme TokenPacer build|test` — the shipping path (signing,
+  entitlements, hardened runtime). Uses synchronized folder groups, so **adding a
+  file needs no project edit**.
 
-Only needed for `make release` — see the Makefile:
+Running in place is not a bundle and two things degrade: **notifications** are
+skipped (`UNUserNotificationCenter` traps outside a bundle) and **launch at
+login** reports disabled (`SMAppService` needs a signed bundle). Use `make app`
+when either matters.
 
-- A paid Apple Developer Program membership and a **Developer ID Application**
-  certificate in the Keychain (an Apple Development one cannot be notarized).
-- `xcrun notarytool store-credentials token-pacer`, once.
-- The Sparkle EdDSA private key in the login Keychain as *"Private key for
-  signing Sparkle updates"*. It is not in this repo and cannot be recovered.
-- `gh` authenticated, plus `../tokenpacer.com` and `../homebrew-tap` checked out
-  beside this repo.
+Useful while working:
+
+```sh
+TP_OPEN_PREFS=1 build/TokenPacer.app/Contents/MacOS/TokenPacer   # straight to Preferences
+TOKENPACER_PANEL_DUMP=/tmp/panels make run                       # dump every CLI screen read
+swift run TokenPacer --probe                                     # parse the logs, print, exit
+```
+
+Conventions for anything committed here are in [CLAUDE.md](CLAUDE.md) — commit
+format, the Swift and SwiftUI rules, and the one that matters most: `Core/`
+imports Foundation and `os` only.
+
+## Releasing
+
+`make release VERSION=x.y.z` — notarize, sign the appcast, update the cask.
+Requires a Developer ID Application certificate, stored notary credentials and
+the Sparkle signing key. See §7 of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Licence
+
+Proprietary — see [LICENSE](LICENSE). Bundled third-party components keep their
+own terms: Sparkle (MIT) and Instrument Sans (SIL OFL 1.1).

@@ -1,6 +1,7 @@
 # Token Pacer — agent rules
 
-macOS notch usage tracker. See `PLAN.md` for architecture and phases.
+macOS notch usage tracker. `docs/PRD.md` is the product, `docs/ARCHITECTURE.md`
+the technical spec, `docs/ACCESS.md` what it reads off disk.
 
 ## Commits
 

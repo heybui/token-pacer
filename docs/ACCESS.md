@@ -268,7 +268,7 @@ contributes no sparkline, no splits and no history, and the card shows those
 sections empty rather than filled from somewhere else. The desktop app's local
 daemon (`~/.copilot/run/ws.port`, `ws.token`) is not spoken to at all: it serves
 only the app it belongs to, and reaching into it would mean reverse engineering a
-private socket whose port and token rotate (PLAN.md §0.5).
+private socket whose port and token rotate (ARCHITECTURE.md §1.1).
 
 ---
 
