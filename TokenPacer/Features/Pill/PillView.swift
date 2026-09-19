@@ -28,8 +28,10 @@ struct PillView: View {
     /// Non-nil when the last refresh failed. The figure stays; it is marked
     /// unverified rather than hidden.
     var attention: String?
-    /// Claude Code sessions with work in flight — anywhere on the machine, not
-    /// only in this project. Their own windows are behind something; the pill is
+    /// The same, per provider, for the card's rows.
+    var errors: [SourceID: String] = [:]
+    /// Sessions with work in flight — anywhere on the machine, not only in this
+    /// project, and across every tracked provider. Their own windows are behind something; the pill is
     /// the one thing always in sight that can say they are running at all.
     var workingSessions = 0
 
@@ -43,6 +45,11 @@ struct PillView: View {
     var bySource: [UsageSplit] = []
     var onTogglePinned: () -> Void = {}
     var onClose: () -> Void = {}
+    /// How tall the content drew. The card sizes to its rows, so only the view
+    /// knows the figure the hover rect has to match.
+    var onContentHeight: (CGFloat) -> Void = { _ in }
+    /// Same menu the right-click opens; the hover card has a button for it.
+    var onOpenMenu: () -> Void = {}
     var isMenuOpen = false
     var menuItems: [NotchMenuItem] = []
     var onCloseMenu: () -> Void = {}
@@ -129,6 +136,7 @@ struct PillView: View {
                 // the overhang, and that slack belongs below the band, not split
                 // either side of it.
                 .frame(width: shellSize.width, height: fixedHeight, alignment: .top)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onContentHeight($0) }
                 .transition(.identity)
         }
             .frame(width: shellSize.width, height: fixedHeight, alignment: .bottom)
@@ -224,7 +232,6 @@ struct PillView: View {
     private var notchBand: some View {
         Group {
             switch state {
-            case .paused: pausedPill
             case .exhausted: exhaustedPill
             case .pinned: pinnedBand
             default: collapsed
@@ -251,7 +258,6 @@ struct PillView: View {
     private var stateBody: some View {
         switch state {
         case .hidden: Color.clear
-        case .paused: pausedPill
         case .exhausted: exhaustedPill
         case .warning:
             WarningCard(
@@ -260,7 +266,8 @@ struct PillView: View {
         case .hover:
             HoverCard(
                 snapshot: snapshot, providers: providers,
-                attention: attention, barWidth: providerBarWidth
+                attention: attention, errors: errors, barWidth: providerBarWidth,
+                onExpand: onTogglePinned, onOpenMenu: onOpenMenu
             )
         case .pinned:
             PinnedPanelView(
@@ -310,22 +317,6 @@ struct PillView: View {
         return snapshot.isActive ? "SESSION ACTIVE · PINNED" : "WINDOW EMPTY · PINNED"
     }
 
-    /// Grey, no numbers: tracking is off, which is not the same as idle.
-    private var pausedPill: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 3) {
-                ForEach(0..<2, id: \.self) { _ in
-                    Capsule().fill(.white.opacity(0.45)).frame(width: 3, height: 11)
-                }
-            }
-            Text("paused")
-                .font(Typography.mono(11.5))
-                .foregroundStyle(.white.opacity(0.45))
-            notchGap
-        }
-        .padding(.horizontal, 11)
-    }
-
     /// At 100% there is nothing to report but the wait.
     private var exhaustedPill: some View {
         HStack(spacing: 10) {
@@ -345,7 +336,7 @@ struct PillView: View {
     private var chasesBorder: Bool {
         guard bordersOn else { return false }
         return switch state {
-        case .pinned, .hidden, .ghost, .paused: false
+        case .pinned, .hidden, .ghost: false
         case .collapsed, .hover, .warning, .exhausted: true
         }
     }

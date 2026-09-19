@@ -30,6 +30,25 @@ enum TerminalCLI {
         /// Hard ceiling on a run. Copilot needs the larger one: ~12s to boot and
         /// the plan row only lands once it has asked GitHub for the budget.
         var budget: TimeInterval = 30
+        /// Text that proves the composer exists, when the CLI prints one.
+        ///
+        /// Boot is otherwise judged by the screen going quiet, and that is a
+        /// guess: on a machine that has just woken, with three CLIs spawning at
+        /// once, Codex paused for over a second *mid-paint* and the command was
+        /// typed into a TUI that had no composer yet. The fragments that left
+        /// behind were eventually submitted as a prompt — a real model turn, in
+        /// the user's own quota, from a background usage read. Positive proof
+        /// instead of a pause.
+        var ready: String?
+        /// Typed after the command and before the newline, to get the
+        /// completion popup out of the way.
+        ///
+        /// Codex 0.155.1 treats Enter with the popup open as *accept the
+        /// completion*: `/status` came back as `/statusstatus` and the CLI
+        /// answered "Unrecognized command" for every run this app ever made. A
+        /// space ends the token, so the popup closes and the newline submits
+        /// what was typed.
+        var dismissCompletion: String?
         /// Text that only appears once the panel has been drawn. Searched for in
         /// what arrives *after* the command was typed: both CLIs draw a status
         /// line at boot that carries some of the same words.
@@ -234,7 +253,11 @@ enum TerminalCLI {
         /// in what was drawn after the command was typed.
         var askedAtOffset = 0
         var submitted = false
-        var asksLeft = 2
+        var dismissed = false
+        // Asking twice is for a boot pause that fooled the quiet heuristic. A
+        // spec that proves its composer has no such pause to recover from, and a
+        // second ask is what turned two mistimed fragments into one prompt.
+        var asksLeft = spec.ready == nil ? 2 : 1
         var sawPanel = false
         var buffer = [UInt8](repeating: 0, count: 8192)
 
@@ -251,6 +274,7 @@ enum TerminalCLI {
             try write(spec.command)
             askedAt = Date.now
             submitted = false
+            dismissed = false
             asksLeft -= 1
         }
 
@@ -279,14 +303,26 @@ enum TerminalCLI {
 
             let quiet = Date.now.timeIntervalSince(lastByteAt)
             if askedAt == nil {
-                // Boot is done when it stops drawing. Only then does the prompt
-                // exist to type into.
-                if quiet >= 0.8, !output.isEmpty { try ask() }
+                // Boot is done when it stops drawing — or, better, when the CLI
+                // says the composer is there. Only then does a prompt exist to
+                // type into.
+                let composerDrawn = spec.ready.map {
+                    String(decoding: output, as: UTF8.self).contains($0)
+                } ?? true
+                if quiet >= 0.8, !output.isEmpty, composerDrawn { try ask() }
             } else if !submitted {
-                // The popup has finished drawing; now the newline is read as one.
+                // The popup has finished drawing. One step at a time, each after
+                // its own pause: dismissing it is a keystroke the CLI has to
+                // redraw for, and a newline arriving in that same read is read
+                // as a key press on the popup rather than on the composer.
                 if quiet >= 0.4 {
-                    try write("\r")
-                    submitted = true
+                    if let dismiss = spec.dismissCompletion, !dismissed {
+                        try write(dismiss)
+                        dismissed = true
+                    } else {
+                        try write("\r")
+                        submitted = true
+                    }
                 }
             } else if sawPanel {
                 if quiet >= settle { return String(decoding: output, as: UTF8.self) }
@@ -338,7 +374,25 @@ enum TerminalCLI {
     }
 }
 
+extension SourceID {
+    /// Whether this provider's CLI is on the machine at all.
+    ///
+    /// The same search the reader does — the paths a panel would spawn from —
+    /// without spawning anything: a few `isExecutableFile` calls. So "installed"
+    /// here and `cliNotFound` there can never disagree, including about a
+    /// `TOKENPACER_*_BIN` override pointing somewhere unusual.
+    var cliIsInstalled: Bool { TerminalCLI.locate(.of(self)) != nil }
+}
+
 extension TerminalCLI.Spec {
+    static func of(_ source: SourceID) -> Self {
+        switch source {
+        case .claude: .claude
+        case .codex: .codex
+        case .copilot: .copilot
+        }
+    }
+
     static var claude: Self {
         Self(
             name: "Claude Code",
@@ -377,6 +431,12 @@ extension TerminalCLI.Spec {
                 AgentHome.codex.appending(path: "packages/standalone/current/bin/codex").path,
             ]),
             command: "/status",
+            // The composer's own placeholder. Codex draws its boxes, a tip line
+            // and a status line before it exists, with pauses in between.
+            ready: "Ask Codex to do anything",
+            // `/status` and `/statusline` share a prefix, so the popup stays open
+            // on the exact command and Enter completes it instead of sending it.
+            dismissCompletion: " ",
             marker: "limit:",
             workingDirectory: TerminalCLI.codexTrustedDirectory
         )

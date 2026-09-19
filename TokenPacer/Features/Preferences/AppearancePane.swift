@@ -41,6 +41,52 @@ struct AppearancePane: View {
         // the second grid is a scroll away.
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                // The two switches lead the pane. They decide what is in the
+                // menu bar at all — and so how wide the row is — and the grids
+                // below only decide how the part that stays is drawn.
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Percentage beside the mark")
+                            .font(Typography.sans(12.5))
+                            .foregroundStyle(.white.opacity(0.85))
+                        Text(
+                            "Off leaves the mark on its own and gives the menu bar "
+                                + "back about 30pt. Every figure is still in the card."
+                        )
+                        .font(Typography.sans(11))
+                        .foregroundStyle(.white.opacity(0.28))
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Toggle("Percentage beside the mark", isOn: $preferences.showsPercentage).labelsHidden()
+                }
+
+                Divider().overlay(.white.opacity(0.08))
+
+                // The other half of the width, and the only part of the row
+                // that changes on its own while you are looking elsewhere.
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Count of sessions working")
+                            .font(Typography.sans(12.5))
+                            .foregroundStyle(.white.opacity(0.85))
+                        Text(
+                            "How many sessions have a model answering, anywhere on "
+                                + "the machine. Off keeps the row still while jobs "
+                                + "come and go; a source that cannot be read still "
+                                + "raises its badge there."
+                        )
+                        .font(Typography.sans(11))
+                        .foregroundStyle(.white.opacity(0.28))
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Toggle("Count of sessions working", isOn: $preferences.showsJobCount)
+                        .labelsHidden()
+                }
+
+                Divider().overlay(.white.opacity(0.08))
+
                 HStack(spacing: 16) {
                     Text("Progress mark")
                         .font(Typography.mono(9.5))
@@ -70,28 +116,6 @@ struct AppearancePane: View {
                 Text("\(preferences.mark.displayName) · \(preferences.mark.axis)")
                     .font(Typography.sans(11))
                     .foregroundStyle(.white.opacity(0.4))
-
-                Divider().overlay(.white.opacity(0.08))
-
-                // The figure is the other half of the row, and it costs about as much
-                // menu bar as the mark does — so it belongs next to the choice that
-                // sets the rest of the width, not in General with the thresholds.
-                HStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Percentage beside the mark")
-                            .font(Typography.sans(12.5))
-                            .foregroundStyle(.white.opacity(0.85))
-                        Text(
-                            "Off leaves the mark on its own and gives the menu bar "
-                                + "back about 30pt. Every figure is still in the card."
-                        )
-                        .font(Typography.sans(11))
-                        .foregroundStyle(.white.opacity(0.28))
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                    Toggle("Percentage beside the mark", isOn: $preferences.showsPercentage).labelsHidden()
-                }
 
                 Divider().overlay(.white.opacity(0.08))
 

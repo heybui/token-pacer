@@ -24,7 +24,6 @@ struct ArchivedState: Codable, Sendable {
     /// at all until the next request is due — ten minutes of a blank, right
     /// after launch, for no reason.
     var limits: [SourceID: RateLimits] = [:]
-    var isPaused = false
     var savedAt = Date.now
 }
 

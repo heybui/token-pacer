@@ -24,9 +24,18 @@ final class PillModel {
         )
     }
 
+    /// How tall the shell actually drew, for the states that size to their
+    /// content. `PillState.size` is a floor for those — the card's rows are a
+    /// list — and the hover rect is built from this, so a card taller than the
+    /// floor no longer hangs outside the area that keeps it open.
+    var contentHeight: CGFloat = 0 {
+        didSet { if contentHeight != oldValue, state.fitsContent { publishChrome() } }
+    }
+
     /// Shell plus menu: what the host must let clicks through to.
     var liveSize: CGSize {
-        let shell = state.size(around: band, wings: wings)
+        var shell = state.size(around: band, wings: wings)
+        if state.fitsContent { shell.height = max(shell.height, contentHeight) }
         guard isMenuOpen else { return shell }
         return CGSize(
             width: max(shell.width, PillState.menuWidth),
@@ -47,7 +56,7 @@ final class PillModel {
         inputs.snapshot = snapshot
         if let preferences {
             inputs.criticalAt = preferences.criticalAt
-            inputs.hideWhenNothingRuns = preferences.hideWhenNothingRuns
+            inputs.hidesAfterQuietMinutes = preferences.hidesAfterQuietMinutes
         }
         // Seeing the pill expanded counts as acknowledging the warning, so it
         // fires once per window rather than every poll.
@@ -69,16 +78,11 @@ final class PillModel {
 
     func togglePinned(at now: Date = Date.now) { setPinned(!inputs.isPinned, at: now) }
 
-    /// Right-click opens it in every state, the panel included — pausing or
-    /// copying should not cost you the panel you just opened.
+    /// Right-click opens it in every state, the panel included — reaching
+    /// Preferences should not cost you the panel you just opened.
     func toggleMenu() { isMenuOpen.toggle() }
 
     func closeMenu() { isMenuOpen = false }
-
-    func setPaused(_ paused: Bool, at now: Date = Date.now) {
-        inputs.isPaused = paused
-        update(snapshot: inputs.snapshot, at: now)
-    }
 
     func setPointerInside(_ inside: Bool, at now: Date = Date.now) {
         inputs.pointerInside = inside
@@ -89,7 +93,11 @@ final class PillModel {
             // so hovering it still counts as inside and it does not close
             // underneath you.
             isMenuOpen = false
-            if state == .ghost { holdGhost(from: now) }
+            // Always, not only when a ghost was showing: hovering a dormant pill
+            // opens the card now, so the state on the way out is `.hover` and the
+            // fade would never have been scheduled. The hold is read only by the
+            // dormant branch, so it costs a busy pill nothing.
+            holdGhost(from: now)
         }
         update(snapshot: inputs.snapshot, at: now)
     }

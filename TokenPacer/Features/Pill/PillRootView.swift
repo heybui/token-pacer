@@ -15,32 +15,28 @@ struct PillRootView: View {
     var menuItems: [NotchMenuItem] {
         [
             NotchMenuItem(title: "Preferences", key: "⌘,", action: onOpenPreferences),
-            NotchMenuItem(title: model.inputs.isPaused ? "Resume tracking" : "Pause tracking") {
-                setPaused(!model.inputs.isPaused)
-            },
             NotchMenuItem(title: "Check for updates", isEnabled: updater?.canCheck ?? false) {
                 updater?.checkForUpdates()
             },
             NotchMenuItem(title: "Send feedback") {
-                NSWorkspace.shared.open(AppInfo.landingPage)
+                NSWorkspace.shared.open(AppInfo.feedbackPage)
             },
             NotchMenuItem(title: "Quit Token Pacer", key: "⌘Q") { NSApp.terminate(nil) },
         ]
     }
 
-    /// Pausing stops the polling as well as the display: "tracking is off, not
-    /// idle". Nothing is read, so nothing can alert, and it survives a relaunch.
-    private func setPaused(_ paused: Bool) {
-        model.setPaused(paused)
-        store.setPaused(paused)
+    /// Jobs in flight, or none when the count is switched off. One answer, so
+    /// the badge the view draws and the wing the model measures cannot disagree
+    /// about whether the count is there.
+    private var workingSessions: Int {
+        preferences.showsJobCount ? store.workingSessions : 0
     }
 
     /// What the right wing's badge slot holds, if anything. The view draws from
     /// the same answer the model measures the wing with.
     private var badge: PillState.Badge? {
         if store.errors[store.activeSource] != nil { return .alert }
-        let working = store.workingSessions
-        return working > 0 ? .working(working) : nil
+        return workingSessions > 0 ? .working(workingSessions) : nil
     }
 
     var body: some View {
@@ -55,10 +51,13 @@ struct PillRootView: View {
             border: preferences.border,
             bordersOn: preferences.bordersOn,
             attention: store.errors[store.activeSource],
-            workingSessions: store.workingSessions,
+            errors: store.errors,
+            workingSessions: workingSessions,
             bySource: store.bySource,
             onTogglePinned: { model.togglePinned() },
             onClose: { model.setPinned(false) },
+            onContentHeight: { model.contentHeight = $0 },
+            onOpenMenu: { model.toggleMenu() },
             isMenuOpen: model.isMenuOpen,
             menuItems: menuItems,
             onCloseMenu: { model.closeMenu() },
@@ -77,6 +76,12 @@ struct PillRootView: View {
                 model.inputs.showsPercentage = shows
                 model.update(snapshot: store.snapshot)
             }
+            // Which provider the strip reports. The card compares them all;
+            // this is the one the menu bar carries.
+            .onChange(of: preferences.pillSource, initial: true) { _, source in
+                store.activeSource = source
+                model.update(snapshot: store.snapshot)
+            }
             // Which providers are polled at all. Pushed into the store rather
             // than filtered out of its answers: an untracked CLI should not be
             // asked anything.
@@ -93,7 +98,7 @@ struct PillRootView: View {
             // The tone rule reaches every bar, ring and square from one place.
             .environment(\.tone, preferences.thresholds)
             .onChange(of: preferences.criticalAt) { _, _ in model.update(snapshot: store.snapshot) }
-            .onChange(of: preferences.hideWhenNothingRuns) { _, _ in
+            .onChange(of: preferences.hidesAfterQuietMinutes) { _, _ in
                 model.update(snapshot: store.snapshot)
             }
             // The shell is black in every state, so its contents are never styled

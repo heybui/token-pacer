@@ -17,7 +17,7 @@ private func defaults() -> UserDefaults {
     #expect(preferences.warnAt == 75)
     #expect(preferences.criticalAt == 90)
     #expect(preferences.soundOnThreshold)
-    #expect(preferences.hideWhenNothingRuns)
+    #expect(preferences.hidesAfterQuietMinutes == 5)
 }
 
 @MainActor
@@ -25,11 +25,52 @@ private func defaults() -> UserDefaults {
     let store = defaults()
     let first = Preferences(store: store)
     first.warnAt = 60
-    first.hideWhenNothingRuns = false
+    first.hidesAfterQuietMinutes = 0
 
     let second = Preferences(store: store)
     #expect(second.warnAt == 60)
-    #expect(second.hideWhenNothingRuns == false)
+    #expect(second.hidesAfterQuietMinutes == 0)
+}
+
+/// A first launch tracks what is actually installed: a switch that is on for a
+/// CLI this Mac does not have can only ever report a missing binary.
+@MainActor
+@Test func firstLaunchTracksOnlyTheInstalledProviders() {
+    let preferences = Preferences(store: defaults(), installed: { $0 == .codex })
+    #expect(preferences.trackedSources == [.codex])
+}
+
+/// None of them installed is not a reason to track nothing: the app would have
+/// no reason to be on screen and no row to complain from.
+@MainActor
+@Test func noCLIAtAllStillOffersEveryProvider() {
+    let preferences = Preferences(store: defaults(), installed: { _ in false })
+    #expect(preferences.trackedSources == Set(SourceID.allCases))
+}
+
+/// The pill carries one provider, and it has to be one that is being polled:
+/// untracking the pinned one moves the pin rather than leaving the strip on a
+/// source nothing asks about.
+@MainActor
+@Test func untrackingThePinnedProviderMovesThePin() {
+    let preferences = Preferences(store: defaults(), installed: { _ in true })
+    #expect(preferences.pillSource == .claude)
+
+    preferences.set(tracking: false, for: .claude)
+    #expect(preferences.pillSource == .codex)
+}
+
+/// A pin survives a relaunch; one on a provider that has since been turned off
+/// does not outlive it.
+@MainActor
+@Test func thePinSurvivesARelaunchUnlessItsProviderIsOff() {
+    let store = defaults()
+    let first = Preferences(store: store, installed: { _ in true })
+    first.pillSource = .copilot
+    #expect(Preferences(store: store, installed: { _ in true }).pillSource == .copilot)
+
+    first.set(tracking: false, for: .copilot)
+    #expect(Preferences(store: store, installed: { _ in true }).pillSource == .claude)
 }
 
 /// "Restore defaults" sits in *App* and says defaults, plural: every switch the
@@ -37,12 +78,14 @@ private func defaults() -> UserDefaults {
 @MainActor
 @Test func restoreDefaultsReturnsEverySetting() {
     let store = defaults()
-    let preferences = Preferences(store: store)
+    // Injected, so the expectation below is about the reset rather than about
+    // what happens to be installed on the machine running the test.
+    let preferences = Preferences(store: store, installed: { _ in true })
     preferences.warnAt = 55
     preferences.criticalAt = 65
     preferences.soundOnThreshold = false
     preferences.notifiesWhenOver = false
-    preferences.hideWhenNothingRuns = false
+    preferences.hidesAfterQuietMinutes = 20
     preferences.mark = .thermometer
     preferences.bordersOn = false
     preferences.set(tracking: false, for: .codex)
@@ -54,7 +97,7 @@ private func defaults() -> UserDefaults {
     #expect(preferences.criticalAt == 90)
     #expect(preferences.soundOnThreshold)
     #expect(preferences.notifiesWhenOver)
-    #expect(preferences.hideWhenNothingRuns)
+    #expect(preferences.hidesAfterQuietMinutes == 5)
     #expect(preferences.mark == .capsuleBar)
     #expect(preferences.bordersOn)
     #expect(preferences.trackedSources == Set(SourceID.allCases))
@@ -89,8 +132,8 @@ private func defaults() -> UserDefaults {
     #expect(model.state == .warning)   // 55% is past a critical mark of 50
 }
 
-/// "Hide pill when hidden" off keeps the collapsed pill on screen through a
-/// quiet spell rather than withdrawing to the 3pt sliver.
+/// Zero minutes keeps the collapsed pill on screen through a quiet spell
+/// rather than withdrawing to the 3pt sliver.
 @Test func dormancyCanBeTurnedOff() {
     var snapshot = UsageSnapshot(source: .claude)
     snapshot.sessionPercent = 20
@@ -98,7 +141,7 @@ private func defaults() -> UserDefaults {
 
     #expect(PillStateResolver.resolve(PillInputs(snapshot: snapshot), at: now) == .hidden)
     #expect(PillStateResolver.resolve(
-        PillInputs(snapshot: snapshot, hideWhenNothingRuns: false), at: now
+        PillInputs(snapshot: snapshot, hidesAfterQuietMinutes: 0), at: now
     ) == .collapsed)
 }
 

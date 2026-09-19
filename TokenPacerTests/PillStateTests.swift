@@ -39,10 +39,11 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(resolve(PillInputs(snapshot: snapshot(lastActivity: nil))) == .hidden)
 }
 
-/// The ghost is the only way to reach the menu while hidden.
-@MainActor @Test func hoveringDeadSpaceRevealsTheGhost() {
+/// Dormant hides the pill; it does not put the figures out of reach. Hovering
+/// dead space opens the same card it opens at any other time.
+@MainActor @Test func hoveringDeadSpaceOpensTheCard() {
     let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
-    #expect(resolve(PillInputs(snapshot: quiet, pointerInside: true)) == .ghost)
+    #expect(resolve(PillInputs(snapshot: quiet, pointerInside: true)) == .hover)
 }
 
 @MainActor @Test func aFullWindowGoesToExhausted() {
@@ -59,14 +60,6 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     let inputs = PillInputs(snapshot: snapshot(percent: 80), criticalAt: 75)
     #expect(resolve(inputs) == .warning)
     #expect(resolve(PillInputs(snapshot: snapshot(percent: 80), criticalAt: 90)) == .collapsed)
-}
-
-/// Off is off: no figures and no alerts, and hovering does not reveal any.
-@MainActor @Test func pauseBeatsEverything() {
-    let inputs = PillInputs(
-        snapshot: snapshot(percent: 100), pointerInside: true, isPinned: true, isPaused: true
-    )
-    #expect(resolve(inputs) == .paused)
 }
 
 @MainActor @Test func pinningHoldsThePanelOpen() {
@@ -222,9 +215,9 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
     model.update(snapshot: quiet, at: now)
     model.setPointerInside(true, at: now)
-    #expect(model.state == .ghost)
+    #expect(model.state == .hover)
 
-    // Still a ghost the instant the pointer leaves…
+    // The ghost is what is left on the way out, for the length of the fade…
     model.setPointerInside(false, at: now)
     #expect(model.state == .ghost)
 

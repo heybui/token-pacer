@@ -12,9 +12,16 @@ struct HoverCard: View {
     /// Every source the store has a reading for, in a stable order.
     let providers: [UsageSnapshot]
     let attention: String?
+    /// Every provider's complaint, so a row that cannot report says why on its
+    /// own line. The badge above follows the active source alone, and a second
+    /// provider failing used to raise nothing at all.
+    var errors: [SourceID: String] = [:]
     /// What is left for the bar once each row's fixed columns are paid for. The
     /// shell measures it: the card is as wide as the state it is drawn in.
     let barWidth: CGFloat
+    /// The two gestures the card used to spell out in a hint, as buttons.
+    var onExpand: () -> Void = {}
+    var onOpenMenu: () -> Void = {}
 
     @Environment(\.tone) private var toneScale
 
@@ -22,6 +29,10 @@ struct HoverCard: View {
     /// room to say it, and a system tooltip never appears here: the panel never
     /// activates, so AppKit never draws one.
     @State private var caption: String?
+
+    /// Which of the rotating lines is showing. The footer says something about
+    /// the reading whenever the pointer is not asking about a figure.
+    @State private var line = 0
 
     var body: some View {
         // 11 between lines. Each row is a whole reading — a provider, where it
@@ -55,14 +66,34 @@ struct HoverCard: View {
                 ScaleRow(line: line, barWidth: barWidth) { caption = $0 }
             }
 
-            Text(caption ?? Self.hint)
-                .font(Typography.mono(9.5))
-                .foregroundStyle(.white.opacity(caption == nil ? 0.3 : 0.55))
-                .lineLimit(1)
-                // A change of words, not of place: the line fades from one to the
-                // next rather than swapping under the pointer.
-                .contentTransition(.opacity)
-                .animation(.easeInOut(duration: 0.18), value: caption)
+            HStack(spacing: 6) {
+                Text(footer)
+                    .font(Typography.mono(9.5))
+                    .foregroundStyle(.white.opacity(caption == nil ? 0.34 : 0.55))
+                    .lineLimit(1)
+                    // A change of words, not of place: the line fades from one to
+                    // the next rather than swapping under the pointer.
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.3), value: footer)
+                    // Only while the card is on screen, which is the only time it
+                    // is read. The id restarts it when the readings change, so a
+                    // line that just went stale is not held for its four seconds.
+                    .task(id: reports) {
+                        while !Task.isCancelled {
+                            try? await Task.sleep(for: .seconds(4))
+                            line += 1
+                        }
+                    }
+                Spacer(minLength: 8)
+                CardButton(
+                    symbol: "arrow.down.left.and.arrow.up.right",
+                    label: "Open the panel",
+                    action: onExpand
+                ) { caption = $0 }
+                CardButton(symbol: "gearshape", label: "Settings", action: onOpenMenu) {
+                    caption = $0
+                }
+            }
         }
         // The band above is already a full menu-bar row of clearance, so the card
         // needs a line of air under it, not a margin. It was reading as a third
@@ -72,9 +103,28 @@ struct HoverCard: View {
         .padding(.bottom, 10)
     }
 
-    /// The line under the rows when nothing is under the pointer: what this
-    /// window can do, since neither gesture is one you would guess at.
-    private static let hint = "Double-click details · right-click settings"
+    /// What the pointer asked about, or the rotating report when it asked
+    /// nothing. Hovering a figure always wins: an answer to a question beats a
+    /// line that arrived on a timer.
+    private var footer: String { caption ?? reports[line % reports.count] }
+
+    /// The state of the reading in sentences, one at a time. Never a figure the
+    /// rows already carry — this is what the numbers add up to.
+    private var reports: [String] {
+        guard let snapshot else { return ["Reading the logs"] }
+        var lines: [String] = []
+        if let percent = snapshot.sessionPercent {
+            lines.append("\(snapshot.source.displayName) at \(Format.percent(percent)) of this window")
+        }
+        if snapshot.resetsAt != nil {
+            lines.append("Window resets in \(Format.countdown(to: snapshot.resetsAt))")
+        }
+        if let week = snapshot.weeklyPercent {
+            lines.append("Week at \(Format.percent(week))")
+        }
+        lines.append(snapshot.isBurning ? "A model is answering now" : "Nothing is running")
+        return lines
+    }
 
     private var statusLine: String {
         guard let percent = snapshot?.sessionPercent else { return "Measuring" }
@@ -102,7 +152,8 @@ struct HoverCard: View {
                 percent: provider.sessionPercent,
                 resetsAt: provider.resetsAt,
                 weekPercent: provider.weeklyPercent,
-                isBurning: provider.isBurning
+                isBurning: provider.isBurning,
+                attention: errors[provider.source]
             )
         }
     }
@@ -113,5 +164,27 @@ struct HoverCard: View {
         guard let confirmedAt = snapshot.confirmedAt else { return "reported" }
         let minutes = Int(Date.now.timeIntervalSince(confirmedAt) / 60)
         return minutes < 1 ? "reported" : "reported \(minutes)m ago"
+    }
+}
+
+/// A control in the card's footer: an icon that says what it does on hover, in
+/// the same line the rows caption themselves into.
+private struct CardButton: View {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+    let onCaption: (String?) -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.42))
+                .frame(width: 18, height: 14)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .onHover { onCaption($0 ? label : nil) }
     }
 }

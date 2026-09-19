@@ -16,11 +16,10 @@ private func temporaryArchive() -> Archive {
     poller.ran(at: t0)
 
     let archive = temporaryArchive()
-    archive.save(ArchivedState(pollers: [.claude: poller], isPaused: true))
+    archive.save(ArchivedState(pollers: [.claude: poller]))
 
     let state = try #require(archive.load())
     var restored = try #require(state.pollers[.claude])
-    #expect(state.isPaused)
 
     restored.record(weighted: 1000)
     #expect(restored.shouldRun(at: t0.addingTimeInterval(60)) == false)

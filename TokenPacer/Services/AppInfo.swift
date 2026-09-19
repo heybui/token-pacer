@@ -19,12 +19,12 @@ enum AppInfo {
     /// Where "Send feedback" goes. One constant, so the day the page moves it
     /// moves once. Not the repo: that one is private, and every user who clicked
     /// this would have landed on a 404.
-    static let landingPage: URL = {
+    static let feedbackPage: URL = {
         // `URL(string:)` is failable and this argument is a literal, so a nil here
         // is a typo in this file, not a runtime condition. `fatalError` names that
         // invariant where `!` only asserted it — and the rule is no force unwrap.
-        guard let url = URL(string: "https://tokenpacer.com") else {
-            fatalError("AppInfo.landingPage is not a valid URL")
+        guard let url = URL(string: "https://tokenpacer.com/#feedback") else {
+            fatalError("AppInfo.feedbackPage is not a valid URL")
         }
         return url
     }()

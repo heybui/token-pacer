@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// How many Claude Code sessions are working right now.
+/// How many sessions are working right now, across every tracked provider.
 ///
 /// Neutral grey on purpose, and the board says why: the mark owns the zone
 /// colour, the badge owns the number. A count tinted green or amber would read

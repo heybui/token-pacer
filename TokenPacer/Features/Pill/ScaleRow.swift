@@ -28,6 +28,27 @@ struct ScaleRow: View {
     @Environment(\.tone) private var tone
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            columns
+            if let attention = line.attention {
+                // Under the row, not in place of it: the figures above may be the
+                // last good reading, and this says why they stopped moving.
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 8.5))
+                    Text(attention)
+                        .font(Typography.mono(9))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(Tokens.amber)
+                // Aligned under the bar, so the wordmark column still reads as a
+                // list of providers down the card.
+                .padding(.leading, Self.wordmarkWidth + Self.spacing)
+            }
+        }
+    }
+
+    private var columns: some View {
         HStack(spacing: Self.spacing) {
             Text(line.label)
                 .font(Typography.mono(9.5, .semibold))

@@ -72,7 +72,7 @@ the border and the point the banner fires, together.
 
 ### The band — always on screen
 
-Eight states, one object. On a notched Mac the shell spans the hardware and the
+Seven states, one object. On a notched Mac the shell spans the hardware and the
 figures sit in the wings either side; off one it is a single 226 × 36 row docked
 top-centre.
 
@@ -82,15 +82,13 @@ top-centre.
 | **Ghost** | resting at 45%, showing the weekly cap |
 | **Collapsed** | the normal one: mark and percentage left, time to reset right |
 | **Over · at the cap** | the same row, mark full, figure and countdown red |
-| **Paused** | a pause glyph and the word, nothing being read |
 | **Hover card** | one row per provider on one scale, each with its own reset |
 | **Over** | the big percentage, the countdown, one coach line |
 | **Pinned panel** | the sparkline, splits by model and project, 30-day history |
 
 Hover opens the card. Double-click pins the panel — a single click was tried and
 reverted; the menu bar is a strip people click at all day. Esc closes. Right-click
-opens the menu: Preferences, Pause tracking, Check for updates, Send feedback,
-Quit.
+opens the menu: Preferences, Check for updates, Send feedback, Quit.
 
 ### The mark — twelve of them
 
@@ -131,7 +129,7 @@ rather than as a second border drawn inside the black.
 do. *Alerts*: notify when over, sound when over (greyed out with the banner off —
 a sound with nothing to carry it is nothing). *Providers*: one switch each; off
 means that CLI is never asked anything, and the last one on cannot be turned off.
-*App*: launch at login, hide when nothing is running, check for updates
+*App*: launch at login, minutes of quiet before the pill hides (0 never hides), check for updates
 automatically, restore defaults — which restores every switch in both panes.
 
 **Appearance.** Two grids of twelve, drawn live at real size and walked from 0 to
@@ -191,10 +189,10 @@ reading as missing features.
 
 | | |
 |---|---|
-| The band, all eight states | ✅ on screen, against live figures |
+| The band, all seven states | ✅ on screen, against live figures |
 | Three providers | ✅ Claude, Codex, Copilot |
 | Twelve marks, twelve borders, both grids live | ✅ |
-| Preferences, notifications, launch at login, pause across relaunch | ✅ |
+| Preferences, notifications, launch at login | ✅ |
 | Pinned panel — sparkline, splits, history | ✅ |
 | In-app updates | ✅ Sparkle, automatic checks on by default |
 | Release — notarized DMG, appcast, Homebrew cask | 🔨 pipeline built, blocked on a Developer ID certificate |

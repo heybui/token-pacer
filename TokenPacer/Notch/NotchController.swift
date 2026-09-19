@@ -48,8 +48,8 @@ final class NotchController {
         panel = NotchPanel(contentRect: NSRect(origin: .zero, size: size))
         host = PassthroughHostingView(rootView: PillRootView(
             model: model, store: store, preferences: preferences, updater: updater,
-            onOpenPreferences: { [preferences, preferencesWindow, updater] in
-                preferencesWindow.show(preferences: preferences, updater: updater)
+            onOpenPreferences: { [preferences, preferencesWindow, store, updater] in
+                preferencesWindow.show(preferences: preferences, store: store, updater: updater)
             }
         ))
         model.preferences = preferences
@@ -84,13 +84,10 @@ final class NotchController {
         reanchor()
         panel.orderFrontRegardless()
 
-        // Restored from the archive, so a paused app comes back paused rather
-        // than quietly resuming on the next launch.
-        model.setPaused(store.isPaused)
-        if !store.isPaused { store.start() }
+        store.start()
         if ProcessInfo.processInfo.environment["TP_OPEN_PREFS"] != nil {
             NSApp.setActivationPolicy(.regular)
-            preferencesWindow.show(preferences: preferences, updater: updater)
+            preferencesWindow.show(preferences: preferences, store: store, updater: updater)
         }
     }
 
@@ -101,7 +98,6 @@ final class NotchController {
     /// rather than only when something is covering it — and only on going over.
     /// Entering watch stays silent and visual; the mark simply tints amber.
     private func considerAlert(for snapshot: UsageSnapshot) {
-        guard !store.isPaused else { return }   // "No alerts fire while paused."
         // The board's "Notify when over". Off, the crossing is still carried by
         // the pill — this silences the banner, not the reading.
         guard preferences.notifiesWhenOver else { return }
@@ -167,7 +163,7 @@ final class NotchController {
         guard event.modifierFlags.contains(.command) else { return event }
         switch event.charactersIgnoringModifiers {
         case ",":
-            preferencesWindow.show(preferences: preferences, updater: updater)
+            preferencesWindow.show(preferences: preferences, store: store, updater: updater)
             model.closeMenu()
         case "q": NSApp.terminate(nil)
         default: return event

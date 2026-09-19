@@ -103,9 +103,6 @@ final class UsageStore {
     private let panels: [SourceID: any UsagePanel]
     private let archive: Archive?
 
-    /// Survives relaunch, so "tracking is off" stays off.
-    private(set) var isPaused: Bool
-
     /// Which providers are being tracked at all.
     ///
     /// Untracked means *not polled*: the whole point of turning Claude off is
@@ -136,7 +133,6 @@ final class UsageStore {
         let restored = archive?.load()
         self.pollers = restored?.pollers ?? [:]
         self.liveLimits = restored?.limits ?? [:]
-        self.isPaused = restored?.isPaused ?? false
     }
 
     /// Hands every source its byte offsets back and repopulates the events the
@@ -194,9 +190,7 @@ final class UsageStore {
     /// Re-reads the registry whole — eleven small files, no cursor. Called from
     /// the watcher, so the cost is paid when a session actually changed state.
     func refreshSessions() {
-        // Paused means nothing is read. A stale count would outlive the pause
-        // and claim someone is waiting long after they stopped.
-        let fresh = isPaused ? [] : SessionRegistry.read()
+        let fresh = SessionRegistry.read()
         guard fresh != sessions else { return }
         sessions = fresh
         Log.ingest.debug("""
@@ -205,16 +199,24 @@ final class UsageStore {
             """)
     }
 
-    func setPaused(_ paused: Bool) {
-        guard paused != isPaused else { return }
-        isPaused = paused
-        refreshSessions()
-        paused ? stop() : start()
+    /// Ask every provider again, from scratch.
+    ///
+    /// `cliNotFound` is fatal — the binary cannot appear while the process runs,
+    /// so the poller stops asking — and that was true until the user went and
+    /// installed it. Without this the message outlives the problem and only a
+    /// relaunch clears it.
+    func recheck() {
+        limitsDisabled.removeAll()
+        limitsErrors.removeAll()
+        errors.removeAll()
+        // The backoff goes with it: a provider that failed four times is due in
+        // an hour, which is not what "check again" means.
+        for id in SourceID.allCases { pollers[id] = PanelPoller() }
         persist()
     }
 
     private func persist() {
-        archive?.save(ArchivedState(pollers: pollers, limits: liveLimits, isPaused: isPaused))
+        archive?.save(ArchivedState(pollers: pollers, limits: liveLimits))
     }
 
     func start() {

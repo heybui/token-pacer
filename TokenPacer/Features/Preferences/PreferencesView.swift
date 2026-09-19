@@ -10,6 +10,9 @@ import SwiftUI
 struct PreferencesView: View {
     @Bindable var preferences: Preferences
     var launchAtLogin: LaunchAtLogin
+    /// What the pollers are finding, so a provider's row can say why it is
+    /// reading nothing. Nil in tests, where there is no store to read.
+    var store: UsageStore?
     /// Nil in tests and in a `swift run` build, where constructing one would
     /// start Sparkle's scheduler. The footer's row greys out with it.
     var updater: Updater?
@@ -30,7 +33,7 @@ struct PreferencesView: View {
                 case .general:
                     GeneralPane(
                         preferences: preferences, launchAtLogin: launchAtLogin,
-                        updater: updater
+                        store: store, updater: updater
                     )
                 case .appearance:
                     AppearancePane(preferences: preferences)
@@ -80,22 +83,24 @@ private extension PreferencesView {
                     updater?.checkForUpdates()
                 }
                 Text("·").foregroundStyle(.white.opacity(0.2))
-                link("Send feedback") { NSWorkspace.shared.open(AppInfo.landingPage) }
+                link("Send feedback") { NSWorkspace.shared.open(AppInfo.feedbackPage) }
             }
             .padding(.top, 12)
         }
     }
 
-    func link(
-        _ title: String, enabled: Bool = true, action: @escaping () -> Void
-    ) -> some View {
-        Button(title, action: action)
-            .buttonStyle(.plain)
-            .font(Typography.sans(11.5))
-            .foregroundStyle(enabled ? Tokens.blue.opacity(0.9) : .white.opacity(0.22))
-            .disabled(!enabled)
-            .fixedSize()
-    }
+}
+
+/// A word that opens something, in both panes' footers and beside a provider.
+private func link(
+    _ title: String, enabled: Bool = true, action: @escaping () -> Void
+) -> some View {
+    Button(title, action: action)
+        .buttonStyle(.plain)
+        .font(Typography.sans(11.5))
+        .foregroundStyle(enabled ? Tokens.blue.opacity(0.9) : .white.opacity(0.22))
+        .disabled(!enabled)
+        .fixedSize()
 }
 
 /// The numbers and the behaviour, in the board's three groups.
@@ -106,8 +111,13 @@ private extension PreferencesView {
 private struct GeneralPane: View {
     @Bindable var preferences: Preferences
     var launchAtLogin: LaunchAtLogin
+    var store: UsageStore?
     var updater: Updater?
 
+    /// Which CLIs are on the machine. Read when the pane opens rather than per
+    /// row draw: it is a filesystem walk, and the answer only changes when the
+    /// user goes and installs something — which is what "Check again" is for.
+    @State private var installed: Set<SourceID> = []
     @State private var launchEnabled = false
     @State private var checksAutomatically = true
 
@@ -126,7 +136,7 @@ private struct GeneralPane: View {
             divider
 
             group("Alerts") {
-                row("Notify when over", note: "Banner once per window") {
+                row("Notify when over", note: AttributedString("Banner once per window")) {
                     Toggle("Notify when over", isOn: $preferences.notifiesWhenOver)
                         .labelsHidden()
                 }
@@ -140,9 +150,48 @@ private struct GeneralPane: View {
 
             divider
 
-            group("Providers") {
+            // The radio column belongs to the group, so the header says what it
+            // is once rather than every row carrying a label for it.
+            group("Providers", accessory: {
+                // The action appears only when there is something for it to fix.
+                // Nothing to fix is worth saying too — silence there reads as
+                // "did it even look?" — but as a state, not a button.
+                if troubled.isEmpty {
+                    ProvidersReady()
+                } else {
+                    // Installing a CLI happens outside this app, so there has to
+                    // be a way to say "it is there now" that is not quitting.
+                    link("Check again") {
+                        installed = Set(SourceID.allCases.filter(\.cliIsInstalled))
+                        store?.recheck()
+                    }
+                }
+            }) {
+                // The radio column has no header of its own, and a circle with
+                // nothing to say what it does is a mystery in a settings window.
+                Text("The dot picks which one the pill shows.")
+                    .font(Typography.sans(11))
+                    .foregroundStyle(.white.opacity(0.3))
                 ForEach(SourceID.allCases, id: \.self) { source in
-                    row(source.displayName) {
+                    // Tracking a provider reads what its CLI writes, so a switch
+                    // on its own is a promise the app cannot keep: nothing is
+                    // there until the tool is installed and signed in. The line
+                    // says the requirement, the link goes to their own install
+                    // page rather than this app repeating the steps.
+                    row(
+                        source.displayName,
+                        note: note(for: source),
+                        noteIsComplaint: complaint(for: source) != nil,
+                        leading: {
+                            PillPin(
+                                isPinned: preferences.pillSource == source,
+                                // The pill reports a provider that is being
+                                // polled, so an untracked one cannot hold the pin.
+                                isEnabled: preferences.tracks(source),
+                                name: source.displayName
+                            ) { preferences.pillSource = source }
+                        }
+                    ) {
                         Toggle(source.displayName, isOn: Binding(
                             get: { preferences.tracks(source) },
                             set: { preferences.set(tracking: $0, for: source) }
@@ -163,11 +212,16 @@ private struct GeneralPane: View {
                         .labelsHidden()
                         .onChange(of: launchEnabled) { _, on in launchAtLogin.set(on) }
                 }
-                row("Hide when nothing is running") {
-                    Toggle("Hide when nothing is running", isOn: $preferences.hideWhenNothingRuns)
-                        .labelsHidden()
+                // The note never changes: the exception belongs where it can be
+                // read before you go looking for it, not after you have set it.
+                row("Hide when nothing is running", note: AttributedString("0 keeps it on screen")) {
+                    // A duration rather than a switch: "hide it" and "leave it" are
+                    // the two ends of the same question, and zero is the off end.
+                    // Typed or stepped, both through the binding that clamps, so
+                    // neither route can set a figure the other cannot show.
+                    QuietField(minutes: quietMinutes)
                 }
-                row("Check for updates automatically", note: "Daily, in the background") {
+                row("Check for updates automatically", note: AttributedString("Daily, in the background")) {
                     Toggle("Check for updates automatically", isOn: $checksAutomatically)
                         .labelsHidden()
                         .onChange(of: checksAutomatically) { _, on in
@@ -191,6 +245,7 @@ private struct GeneralPane: View {
             }
         }
         .onAppear {
+            installed = Set(SourceID.allCases.filter(\.cliIsInstalled))
             launchEnabled = launchAtLogin.isEnabled
             checksAutomatically = updater?.checksAutomatically ?? true
         }
@@ -198,6 +253,15 @@ private struct GeneralPane: View {
 
     private var divider: some View {
         Rectangle().fill(.white.opacity(0.06)).frame(height: 1)
+    }
+
+    /// Clamped here rather than in `Preferences`: the stepper cannot leave the
+    /// range, and a typed figure should not be able to either.
+    private var quietMinutes: Binding<Int> {
+        Binding(
+            get: { preferences.hidesAfterQuietMinutes },
+            set: { preferences.hidesAfterQuietMinutes = min(60, max(0, $0)) }
+        )
     }
 
     /// The thresholds are the app's whole opinion, so say what they do rather
@@ -210,24 +274,59 @@ private struct GeneralPane: View {
     }
 
     private func group(
-        _ title: String, @ViewBuilder rows: () -> some View
+        _ title: String, @ViewBuilder accessory: () -> some View = { EmptyView() },
+        @ViewBuilder rows: () -> some View
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(Typography.mono(9.5))
-                .tracking(1.4)
-                .textCase(.uppercase)
-                .foregroundStyle(.white.opacity(0.38))
+        // 16, not 12: a row with a note under it is two lines tall and the ones
+        // without were reading as a block against them. The air is what tells
+        // one setting from the next, whichever kind of row it is.
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                Text(title)
+                    .font(Typography.mono(9.5))
+                    .tracking(1.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(.white.opacity(0.38))
+                Spacer(minLength: 0)
+                accessory()
+            }
             rows()
         }
     }
 
+    /// The provider's line: what it gives the pill, or — the moment tracking it
+    /// turns one up — the poller's own complaint, "Claude Code CLI not found",
+    /// "sign in to Codex". The link rides at the end of that same sentence,
+    /// because a missing CLI is exactly when somewhere to get it is the point.
+    private func note(for source: SourceID) -> AttributedString {
+        let lead = complaint(for: source) ?? source.blurb
+        let markdown = "\(lead) [\(source.installLabel)](\(source.docs.absoluteString))"
+        return (try? AttributedString(markdown: markdown)) ?? AttributedString(lead)
+    }
+
     /// A row is a label and its control. `note` is the board's second line — the
     /// one that says what the switch above it actually does.
+    /// The providers that are switched on and cannot report. An untracked one is
+    /// not a problem: nothing is being asked of it, and its row says where to get
+    /// it if that is the reason it is off.
+    private var troubled: [SourceID] {
+        SourceID.allCases.filter { preferences.tracks($0) && complaint(for: $0) != nil }
+    }
+
+    /// Why this provider can report nothing, if it cannot: the CLI is not on
+    /// the machine, or the poller found something wrong with the one that is.
+    private func complaint(for source: SourceID) -> String? {
+        if !installed.contains(source) { return "Not installed on this Mac." }
+        return store?.errors[source].map { "\($0)." }
+    }
+
     private func row(
-        _ label: String, note: String? = nil, @ViewBuilder control: () -> some View
+        _ label: String, note: AttributedString? = nil, noteIsComplaint: Bool = false,
+        @ViewBuilder leading: () -> some View = { EmptyView() },
+        @ViewBuilder control: () -> some View
     ) -> some View {
         HStack(spacing: 16) {
+            leading()
             VStack(alignment: .leading, spacing: 3) {
                 Text(label)
                     .font(Typography.sans(12.5))
@@ -235,14 +334,96 @@ private struct GeneralPane: View {
                 if let note {
                     Text(note)
                         .font(Typography.sans(11))
-                        .foregroundStyle(.white.opacity(0.42))
+                        .foregroundStyle(noteIsComplaint ? Tokens.amber : .white.opacity(0.42))
+                        // The link inside takes the tint; everything around it
+                        // keeps the note's own colour.
+                        .tint(Tokens.blue.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 0)
             control()
         }
-        // A floor, not a height: the noted row is two lines tall.
-        .frame(minHeight: 24)
+        // A floor, not a height: the noted row is two lines tall. The floor is
+        // what keeps a plain row from sitting tighter than a noted one.
+        .frame(minHeight: 28)
+    }
+}
+
+/// Which provider the menu bar itself carries.
+///
+/// A radio, not a switch: the strip has room for one reading, so this is a
+/// choice between providers rather than a setting each of them has. The switch
+/// on the other side of the row is a different question — whether the CLI is
+/// asked anything at all — and the pin cannot land on one that is off.
+private struct PillPin: View {
+    let isPinned: Bool
+    let isEnabled: Bool
+    let name: String
+    let onPin: () -> Void
+
+    var body: some View {
+        Button(action: onPin) {
+            Image(systemName: isPinned ? "largecircle.fill.circle" : "circle")
+                .font(.system(size: 13))
+                .foregroundStyle(pinColour)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled || isPinned)
+        .help("Show \(name) on the pill")
+        .accessibilityLabel("Show \(name) on the pill")
+    }
+
+    private var pinColour: Color {
+        if !isEnabled { return .white.opacity(0.12) }
+        return isPinned ? Tokens.green : .white.opacity(0.3)
+    }
+}
+
+/// What the Providers header says when every tracked CLI is answering.
+///
+/// A state, not a control: there is nothing to press when nothing is wrong, and
+/// a live "Check again" invited a click that could only confirm what was already
+/// true.
+private struct ProvidersReady: View {
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(Tokens.green)
+            Text("All set")
+                .font(Typography.sans(11.5))
+                .foregroundStyle(.white.opacity(0.42))
+        }
+        .fixedSize()
+    }
+}
+
+/// Minutes of quiet, typed or stepped.
+///
+/// A stepper alone is fine for 5 and useless for 45, so the figure is a field
+/// you can select and overwrite; the arrows stay for the one-at-a-time case.
+private struct QuietField: View {
+    @Binding var minutes: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField("", value: $minutes, format: .number)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .font(Typography.mono(11.5))
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 22)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(.white.opacity(0.07), in: .rect(cornerRadius: 6))
+            Text("min")
+                .font(Typography.sans(11.5))
+                .foregroundStyle(.white.opacity(0.42))
+            Stepper("Minutes of quiet", value: $minutes, in: 0...60).labelsHidden()
+        }
+        .fixedSize()
     }
 }
 

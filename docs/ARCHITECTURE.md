@@ -289,9 +289,9 @@ figure drifts the first time a mark is nudged, and it drifts silently.
 
 ## 4. UI
 
-`PillState` — `hidden, ghost, collapsed, hover, warning, exhausted, paused,
-pinned` — derived from `(snapshot, pointerInside, isPinned, warnAcknowledged,
-trackingPaused)` in one function. No scattered booleans. Anything not in the enum
+`PillState` — `hidden, ghost, collapsed, hover, warning, exhausted, pinned` —
+derived from `(snapshot, pointerInside, isPinned, warnAcknowledged)` in one
+function. No scattered booleans. Anything not in the enum
 is not a state.
 
 | State | Surface | W × H | radius |
@@ -300,7 +300,6 @@ is not a state.
 | ghost | bar row | both wings at 45% | — |
 | collapsed | bar row | mark + % left, time left right | — |
 | exhausted | bar row | mark full, % and countdown red | — |
-| paused | bar row | pause glyph left, "paused" right | — |
 | hover | drop panel | 404 × 98 floor, then sizes to its rows | 26 |
 | warning | drop panel | big percentage, countdown, one coach line | 26 |
 | pinned | drop panel | 752 × 540 | 26 |

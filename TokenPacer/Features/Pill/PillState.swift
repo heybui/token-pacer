@@ -1,14 +1,14 @@
 import CoreGraphics
 
-/// The eight states from the design board. One object, one shell, different sizes.
+/// The seven states from the design board. One object, one shell, different sizes.
 enum PillState: String, CaseIterable, Sendable {
-    case hidden, ghost, collapsed, hover, warning, exhausted, paused, pinned
+    case hidden, ghost, collapsed, hover, warning, exhausted, pinned
 
     /// Shell dimensions, verbatim from the design board.
     var size: CGSize {
         switch self {
         case .hidden: CGSize(width: 226, height: 3)
-        case .ghost, .collapsed, .exhausted, .paused: CGSize(width: 226, height: 36)
+        case .ghost, .collapsed, .exhausted: CGSize(width: 226, height: 36)
         // A floor, not the height. These two size to their content (`fitsContent`)
         // because the card's rows are a list now — one per provider plus the week,
         // and a preference is coming that turns providers off. The board's 98 was
@@ -28,7 +28,7 @@ enum PillState: String, CaseIterable, Sendable {
     var fitsContent: Bool {
         switch self {
         case .hover, .warning: true
-        case .hidden, .ghost, .collapsed, .exhausted, .paused, .pinned: false
+        case .hidden, .ghost, .collapsed, .exhausted, .pinned: false
         }
     }
 
@@ -36,7 +36,7 @@ enum PillState: String, CaseIterable, Sendable {
     /// the notch, and so stop at the bottom of the menu bar row.
     var fillsFlanks: Bool {
         switch self {
-        case .collapsed, .ghost, .paused, .exhausted: true
+        case .collapsed, .ghost, .exhausted: true
         case .hidden, .hover, .warning, .pinned: false
         }
     }
@@ -55,7 +55,7 @@ enum PillState: String, CaseIterable, Sendable {
     var castsShadow: Bool {
         switch self {
         case .warning: true
-        case .hidden, .ghost, .collapsed, .hover, .paused, .exhausted, .pinned: false
+        case .hidden, .ghost, .collapsed, .hover, .exhausted, .pinned: false
         }
     }
 
@@ -147,7 +147,6 @@ enum PillState: String, CaseIterable, Sendable {
             default: Format.percent(snapshot?.sessionPercent)
             }
             let tail = switch state {
-            case .paused: "paused"
             case .ghost: "week"
             default: Format.countdown(to: snapshot?.resetsAt)
             }
@@ -249,7 +248,7 @@ enum PillState: String, CaseIterable, Sendable {
     var cornerRadius: CGFloat {
         switch self {
         case .hidden: 6
-        case .ghost, .collapsed, .exhausted, .paused: 13
+        case .ghost, .collapsed, .exhausted: 13
         case .hover, .warning, .pinned: 26
         }
     }
@@ -287,7 +286,7 @@ enum PillState: String, CaseIterable, Sendable {
 
     /// Room for the menu below the tallest shell. `PillModel.menuHeight` carries
     /// the real figure at runtime; this reserves for the list the app builds.
-    static let menuDrop = menuGap + menuHeight(items: 5)
+    static let menuDrop = menuGap + menuHeight(items: 4)
 
     /// The context menu's own geometry, from the same design board.
     static let menuGap: CGFloat = 6

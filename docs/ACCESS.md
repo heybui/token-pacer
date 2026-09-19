@@ -74,7 +74,7 @@ Code process per run, $0.0000 — a `/usage` run makes no model call. Therefore:
 - 30 min floor with no local activity at all (web and Claude Design burn the same limit and log nothing here);
 - back at the 5 min floor while a reading keeps moving without local tokens to explain it;
 - exponential backoff to 1 h on failure, persisted across launches;
-- never at all when the source is untracked or tracking is paused — untracked means the CLI is not spawned.
+- never at all when the source is untracked — untracked means the CLI is not spawned.
 
 An idle machine spawns nothing.
 

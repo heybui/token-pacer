@@ -15,10 +15,11 @@ final class PreferencesWindow: NSObject, NSWindowDelegate {
 
     func show(
         preferences: Preferences, launchAtLogin: LaunchAtLogin = LaunchAtLogin(),
-        updater: Updater? = nil
+        store: UsageStore? = nil, updater: Updater? = nil
     ) {
         let window = window ?? make(
-            preferences: preferences, launchAtLogin: launchAtLogin, updater: updater
+            preferences: preferences, launchAtLogin: launchAtLogin,
+            store: store, updater: updater
         )
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
@@ -37,7 +38,8 @@ final class PreferencesWindow: NSObject, NSWindowDelegate {
     }
 
     private func make(
-        preferences: Preferences, launchAtLogin: LaunchAtLogin, updater: Updater?
+        preferences: Preferences, launchAtLogin: LaunchAtLogin,
+        store: UsageStore?, updater: Updater?
     ) -> NSWindow {
         let window = NSWindow(
             contentRect: .zero,
@@ -63,7 +65,8 @@ final class PreferencesWindow: NSObject, NSWindowDelegate {
         // window is placed: a hosting view reports nothing until it has one.
         let content = NSHostingView(
             rootView: PreferencesView(
-                preferences: preferences, launchAtLogin: launchAtLogin, updater: updater
+                preferences: preferences, launchAtLogin: launchAtLogin,
+                store: store, updater: updater
             )
         )
         window.contentView = content

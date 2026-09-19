@@ -17,4 +17,8 @@ struct ScaleLine: Identifiable {
     /// The provider's weekly cap, drawn hollow on the same track.
     var weekPercent: Double?
     var isBurning = false
+    /// Why this provider's figures cannot be trusted, when they cannot — the
+    /// poller's own words. The row keeps whatever it last knew and says this
+    /// underneath, because a blank row tells the user less than a stale one.
+    var attention: String?
 }
