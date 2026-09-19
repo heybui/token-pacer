@@ -253,6 +253,7 @@ enum TerminalCLI {
         /// in what was drawn after the command was typed.
         var askedAtOffset = 0
         var submitted = false
+        var submittedAt = Date.now
         var dismissed = false
         // Asking twice is for a boot pause that fooled the quiet heuristic. A
         // spec that proves its composer has no such pause to recover from, and a
@@ -322,10 +323,21 @@ enum TerminalCLI {
                     } else {
                         try write("\r")
                         submitted = true
+                        submittedAt = Date.now
                     }
                 }
             } else if sawPanel {
                 if quiet >= settle { return String(decoding: output, as: UTF8.self) }
+            } else if spec.ready != nil, Date.now.timeIntervalSince(submittedAt) >= 2 {
+                // Press it again, and never retype. A CLI that is still bringing
+                // its session up ignores the newline — Codex draws its composer
+                // placeholder while the model row still reads `loading`, and
+                // says "tab to queue message" instead of taking the command.
+                // The command is already in the composer, so the only thing
+                // missing is a submit the CLI is awake for; an empty composer
+                // makes the extra ones no-ops.
+                try write("\r")
+                submittedAt = Date.now
             } else if asksLeft > 0, let askedAt, Date.now.timeIntervalSince(askedAt) >= 4 {
                 try ask()                       // the boot pause fooled us
             }
@@ -431,8 +443,13 @@ extension TerminalCLI.Spec {
                 AgentHome.codex.appending(path: "packages/standalone/current/bin/codex").path,
             ]),
             command: "/status",
-            // The composer's own placeholder. Codex draws its boxes, a tip line
-            // and a status line before it exists, with pauses in between.
+            // A cold boot after the machine has slept spends most of this on
+            // bringing the session up: the model row alone read `loading` for
+            // 20s of a 30s budget, and the panel never got its turn.
+            budget: 45,
+            // The composer's own placeholder, drawn before the session is up:
+            // a floor on when to type, not proof that a submit will land. The
+            // resubmit covers the rest.
             ready: "Ask Codex to do anything",
             // `/status` and `/statusline` share a prefix, so the popup stays open
             // on the exact command and Enter completes it instead of sending it.
