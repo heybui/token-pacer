@@ -6,11 +6,41 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B0E400000000000000000030 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B0E400000000000000000032 /* Sparkle */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B0E40000000000000000001A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B0E400000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B0E400000000000000000002;
+			remoteInfo = TokenPacer;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		B0E400000000000000000004 /* TokenPacer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TokenPacer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0E400000000000000000005 /* TokenPacerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokenPacerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0E40000000000000000001D /* PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PLAN.md; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B0E400000000000000000040 /* Exceptions for "TokenPacer" folder in "TokenPacer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B0E400000000000000000002 /* TokenPacer */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B0E400000000000000000008 /* TokenPacer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				B0E400000000000000000040 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				B0E400000000000000000040 /* Exceptions for "TokenPacer" folder in "TokenPacer" target */,
 			);
 			path = TokenPacer;
 			sourceTree = "<group>";
@@ -22,26 +52,23 @@
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		B0E400000000000000000040 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-				TokenPacer.entitlements,
+/* Begin PBXFrameworksBuildPhase section */
+		B0E40000000000000000000B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0E400000000000000000030 /* Sparkle in Frameworks */,
 			);
-			target = B0E400000000000000000002 /* TokenPacer */;
+			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
-/* Begin PBXBuildFile section */
-		B0E400000000000000000030 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B0E400000000000000000032 /* Sparkle */; };
-/* End PBXBuildFile section */
-
-/* Begin PBXFileReference section */
-		B0E400000000000000000004 /* TokenPacer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TokenPacer.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B0E400000000000000000005 /* TokenPacerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokenPacerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		B0E40000000000000000001D /* PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PLAN.md; sourceTree = "<group>"; };
-/* End PBXFileReference section */
+		B0E40000000000000000000E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		B0E400000000000000000006 = {
@@ -65,42 +92,6 @@
 		};
 /* End PBXGroup section */
 
-/* Begin PBXSourcesBuildPhase section */
-		B0E40000000000000000000A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		B0E40000000000000000000D /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-/* End PBXSourcesBuildPhase section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		B0E40000000000000000000B /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (
-				B0E400000000000000000030 /* Sparkle in Frameworks */,
-			); runOnlyForDeploymentPostprocessing = 0; };
-		B0E40000000000000000000E /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-/* End PBXFrameworksBuildPhase section */
-
-/* Begin PBXResourcesBuildPhase section */
-		B0E40000000000000000000C /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
-			); runOnlyForDeploymentPostprocessing = 0; };
-		B0E40000000000000000000F /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXContainerItemProxy section */
-		B0E40000000000000000001A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = B0E400000000000000000001 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = B0E400000000000000000002;
-			remoteInfo = TokenPacer;
-		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXTargetDependency section */
-		B0E400000000000000000019 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = B0E400000000000000000002 /* TokenPacer */;
-			targetProxy = B0E40000000000000000001A /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin PBXNativeTarget section */
 		B0E400000000000000000002 /* TokenPacer */ = {
 			isa = PBXNativeTarget;
@@ -110,8 +101,10 @@
 				B0E40000000000000000000B /* Frameworks */,
 				B0E40000000000000000000C /* Resources */,
 			);
-			buildRules = ();
-			dependencies = ();
+			buildRules = (
+			);
+			dependencies = (
+			);
 			fileSystemSynchronizedGroups = (
 				B0E400000000000000000008 /* TokenPacer */,
 			);
@@ -131,7 +124,8 @@
 				B0E40000000000000000000E /* Frameworks */,
 				B0E40000000000000000000F /* Resources */,
 			);
-			buildRules = ();
+			buildRules = (
+			);
 			dependencies = (
 				B0E400000000000000000019 /* PBXTargetDependency */,
 			);
@@ -153,20 +147,28 @@
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
-					B0E400000000000000000002 = { CreatedOnToolsVersion = 27.0; };
-					B0E400000000000000000003 = { CreatedOnToolsVersion = 27.0; TestTargetID = B0E400000000000000000002; };
+					B0E400000000000000000002 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					B0E400000000000000000003 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = B0E400000000000000000002;
+					};
 				};
 			};
 			buildConfigurationList = B0E400000000000000000010 /* Build configuration list for PBXProject "TokenPacer" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
-			knownRegions = ( en, Base );
+			knownRegions = (
+				en,
+				Base,
+			);
 			mainGroup = B0E400000000000000000006;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			packageReferences = (
 				B0E400000000000000000033 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
+			preferredProjectObjectVersion = 77;
 			productRefGroup = B0E400000000000000000007 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -176,6 +178,48 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B0E40000000000000000000C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0E40000000000000000000F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B0E40000000000000000000A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0E40000000000000000000D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B0E400000000000000000019 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B0E400000000000000000002 /* TokenPacer */;
+			targetProxy = B0E40000000000000000001A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		B0E400000000000000000013 /* Debug */ = {
@@ -188,7 +232,10 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = ( "DEBUG=1", "$(inherited)" );
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
@@ -223,11 +270,15 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = B2WR56QVT7;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TokenPacer/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = ( "$(inherited)", "@executable_path/../Frameworks" );
-				PRODUCT_BUNDLE_IDENTIFIER = com.redevify.token-pacer;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.redevify.token-pacer";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -237,15 +288,21 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = TokenPacer/TokenPacer.entitlements;
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = B2WR56QVT7;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TokenPacer/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = ( "$(inherited)", "@executable_path/../Frameworks" );
-				PRODUCT_BUNDLE_IDENTIFIER = com.redevify.token-pacer;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.redevify.token-pacer";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Release;
@@ -258,7 +315,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.redevify.token-pacer.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.redevify.token-pacer.tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TokenPacer.app/Contents/MacOS/TokenPacer";
 			};
@@ -272,7 +329,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.redevify.token-pacer.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.redevify.token-pacer.tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TokenPacer.app/Contents/MacOS/TokenPacer";
 			};
@@ -283,19 +340,28 @@
 /* Begin XCConfigurationList section */
 		B0E400000000000000000010 /* Build configuration list for PBXProject "TokenPacer" */ = {
 			isa = XCConfigurationList;
-			buildConfigurations = ( B0E400000000000000000013 /* Debug */, B0E400000000000000000014 /* Release */ );
+			buildConfigurations = (
+				B0E400000000000000000013 /* Debug */,
+				B0E400000000000000000014 /* Release */,
+			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		B0E400000000000000000011 /* Build configuration list for PBXNativeTarget "TokenPacer" */ = {
 			isa = XCConfigurationList;
-			buildConfigurations = ( B0E400000000000000000015 /* Debug */, B0E400000000000000000016 /* Release */ );
+			buildConfigurations = (
+				B0E400000000000000000015 /* Debug */,
+				B0E400000000000000000016 /* Release */,
+			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		B0E400000000000000000012 /* Build configuration list for PBXNativeTarget "TokenPacerTests" */ = {
 			isa = XCConfigurationList;
-			buildConfigurations = ( B0E400000000000000000017 /* Debug */, B0E400000000000000000018 /* Release */ );
+			buildConfigurations = (
+				B0E400000000000000000017 /* Debug */,
+				B0E400000000000000000018 /* Release */,
+			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
