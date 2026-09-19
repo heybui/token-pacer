@@ -31,8 +31,9 @@ percentage is missing.
 
 ## Development setup
 
-Xcode 16 or later. The first build resolves **Sparkle** 2.6+ from SPM; it is the
-only dependency.
+Xcode 26 or later — older toolchains fail on SwiftUI isolation this relies on.
+**Sparkle** is the only dependency and it is checked in under `Vendor/Sparkle`,
+so a clone builds with nothing to download.
 
 ```sh
 git clone <this repo> && cd token-pacer

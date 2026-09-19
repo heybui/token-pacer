@@ -531,7 +531,13 @@ Bundle id: `com.redevify.token-pacer`.
 
 ## 8. Standing decisions
 
-- **No new package without asking.** Sparkle is the only dependency.
+- **No new package without asking.** Sparkle is the only dependency, and it is
+  vendored under `Vendor/Sparkle` as a local package rather than fetched —
+  upstream ships it as a release asset, which SwiftPM pulls once per clean
+  checkout with no retry, no timeout and no progress. `Vendor/Sparkle/Package.swift`
+  carries the reasoning and the upgrade steps. Only the framework reaches the
+  app bundle; the CLI tools beside it are release-time only, and the disk image
+  is the same size to within compression noise.
 - **Reduce Motion is not honoured**, anywhere, by decision.
 - **Nothing in this app tracks the system colour scheme.** `.regularMaterial`
   follows the desktop appearance, which once rendered the context menu

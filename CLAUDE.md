@@ -37,7 +37,7 @@ macOS 15, Swift 6 strict concurrency. The modern spelling is the rule, not a pre
 - Swift-native over the Foundation bridge: `replacing(_:with:)`, `URL.homeDirectory.appending(path:)`.
 - Static member lookup: `.circle`, `.utility`, `.borderedProminent`.
 - No force unwrap and no force `try` under `TokenPacer/`. Tests may force a fixture: a wrong fixture should fail loudly.
-- No new package without asking. Sparkle is the only one.
+- No new package without asking. Sparkle is the only one, vendored at `Vendor/Sparkle`.
 
 ## SwiftUI
 
