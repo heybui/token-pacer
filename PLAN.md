@@ -1145,8 +1145,10 @@ update path is — an installed copy will only accept an update signed the same 
   centred half a line *beyond* the silhouette now: `track` is negative, and the container and its
   mask grow by a `bleed` on the three edges the light runs along — never at the top, which is the
   notch. Verified on the built-in against screenshots: breathe glow, bottom sweep and comet all on
-  the desktop side of the edge, nothing inside the black. **Open:** d204c30's own complaint, the
-  loose green bar on an external display, has not been re-checked since the reversal.
+  the desktop side of the edge, nothing inside the black. d204c30's own complaint — the loose green
+  bar on an external display — was re-checked there after the reversal and does not return: the
+  outset band reads as an outline either side of the boundary, where the inset one read as a bar
+  under it.
 - Single instance enforced, including a raw binary launched past LaunchServices.
 - Shadow follows the clipped shape.
 - Collapsed pill and hover card, on screen, against live figures.
