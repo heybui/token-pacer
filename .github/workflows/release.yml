@@ -1,0 +1,140 @@
+## Cut a release from CI. `make release` is still the whole recipe — this only
+## hands it a machine, a keychain and a checkout of the site repo, so the two
+## paths cannot describe different releases.
+##
+## Three irrecoverable credentials live in this repo's secrets for it: the
+## Developer ID private key, the notary password and Sparkle's EdDSA key.
+## docs/ARCHITECTURE.md §7 lists them and what the button costs.
+name: Release
+
+on:
+  workflow_dispatch:
+
+## One release at a time: they race for the same tag and the same feed.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  ## `make release` tags this repo so the next run knows where its notes start.
+  contents: write
+
+jobs:
+  release:
+    ## codesign, notarytool and Sparkle's tools are all Apple-only.
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ## CFBundleVersion is the commit count and the notes read the log back
+          ## to the last tag. A shallow clone would renumber every build to 1,
+          ## which Sparkle sees as a downgrade.
+          fetch-depth: 0
+
+      - name: Read the version
+        id: version
+        run: |
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" TokenPacer/Info.plist)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Token Pacer $VERSION"
+
+      - name: Refuse to publish a version that already shipped
+        env:
+          GH_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
+          SITE_REPO: ${{ vars.SITE_REPO || 'heybui/tokenpacer.com' }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" --repo "$SITE_REPO" >/dev/null 2>&1; then
+            echo "::error::v$VERSION is already released. Bump CFBundleShortVersionString in TokenPacer/Info.plist."
+            exit 1
+          fi
+
+      - name: Import the Developer ID certificate
+        env:
+          DEVID_P12_BASE64: ${{ secrets.DEVID_P12_BASE64 }}
+          DEVID_P12_PASSWORD: ${{ secrets.DEVID_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+
+          echo "$DEVID_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/devid.p12"
+          security import "$RUNNER_TEMP/devid.p12" -k "$KEYCHAIN" \
+            -P "$DEVID_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/devid.p12"
+
+          # codesign builds the chain out of the keychain search list, not the
+          # system trust store, and a fresh keychain holds neither the G2 issuer
+          # nor the root it hangs off. Without them signing dies on
+          # `unable to build chain to self-signed root` / errSecInternalComponent.
+          curl -fsSL https://www.apple.com/appleca/AppleIncRootCertificate.cer \
+            -o "$RUNNER_TEMP/root.cer"
+          curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer \
+            -o "$RUNNER_TEMP/g2.cer"
+          security import "$RUNNER_TEMP/root.cer" -k "$KEYCHAIN"
+          security import "$RUNNER_TEMP/g2.cer" -k "$KEYCHAIN"
+
+          # Without a partition list every use of the key waits on a dialog
+          # nobody is there to click, which surfaces as errSecInternalComponent.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+
+          security find-identity -v -p codesigning
+
+      - name: Store the notary credentials
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          xcrun notarytool store-credentials token-pacer \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --team-id "$NOTARY_TEAM_ID" \
+            --keychain "$KEYCHAIN"
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
+          SITE_REPO: ${{ vars.SITE_REPO || 'heybui/tokenpacer.com' }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          # `make release` commits to the site checkout and tags this one.
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # The token rides in the URL so the push inside `make release` needs no
+          # credential helper. The clone dies with the runner.
+          git clone --depth 1 \
+            "https://x-access-token:$GH_TOKEN@github.com/$SITE_REPO.git" "$RUNNER_TEMP/site"
+
+          # Sparkle reads this from the login Keychain, which a runner has none of.
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key"
+          trap 'rm -f "$RUNNER_TEMP/sparkle.key"' EXIT
+
+          make release \
+            SITE_DIR="$RUNNER_TEMP/site" \
+            NOTARY_ARGS="--keychain-profile token-pacer --keychain $KEYCHAIN" \
+            APPCAST_ARGS="--ed-key-file $RUNNER_TEMP/sparkle.key"
+
+      - name: Keep the notarized image
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TokenPacer-${{ steps.version.outputs.version }}
+          path: |
+            build/TokenPacer-*.dmg
+            build/appcast.xml
+            build/token-pacer.rb
+          if-no-files-found: ignore
+          retention-days: 30

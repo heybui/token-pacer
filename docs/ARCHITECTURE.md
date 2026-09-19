@@ -470,19 +470,52 @@ The feed is served from the domain, never from the release it ships with: a buil
 polls the URL it was compiled with for ever. `SITE_REPO`, `SITE_DIR`, `TAP_REPO`
 and `TAP_DIR` in the Makefile are the only knobs.
 
-**Deliberately not in CI.** Automating it means putting the Developer ID `.p12`,
-the notary password and the Sparkle signing key into repository secrets — three
-irrecoverable credentials leaving the Mac to save one `make`.
+**Also from CI.** `.github/workflows/release.yml` runs that same `make release`
+on a `macos-15` runner, by hand from the Actions tab. It only supplies what a
+laptop already has: a throwaway keychain holding the Developer ID identity, a
+checkout of the site repo as `SITE_DIR`, and the two overrides the Makefile
+exposes — `NOTARY_ARGS` for credentials that live in that keychain rather than
+the login one, `APPCAST_ARGS` for a signing key read from a file rather than a
+Keychain. Nothing about the release is described twice, so the two paths cannot
+drift apart.
+
+The cost was weighed, not avoided. Seven secrets live in this repo, three of
+them irrecoverable:
+
+| Secret | What it is |
+|---|---|
+| `DEVID_P12_BASE64` | the Developer ID certificate and its private key |
+| `DEVID_P12_PASSWORD` | the password on that `.p12` |
+| `NOTARY_APPLE_ID`, `NOTARY_PASSWORD`, `NOTARY_TEAM_ID` | an Apple ID, an app-specific password, `B2WR56QVT7` |
+| `SPARKLE_ED_PRIVATE_KEY` | the EdDSA key every update is signed with |
+| `SITE_REPO_TOKEN` | fine-grained PAT, contents write on the site repo |
+
+A compromise of this repository is now a compromise of the signing identity. The
+certificate can be revoked and reissued; the Sparkle key cannot be rotated at
+all, because every installed copy checks updates against the public half
+compiled into it. `SUPublicEDKey` in `Info.plist` is a one-way door.
 
 One-time setup, in order:
 
-0. The two public repos and the domain; `gh` authenticated as their owner.
+0. The two public repos and the domain; `gh` authenticated as their owner for
+   the local path, `SITE_REPO_TOKEN` for the CI one.
 1. **A Developer ID Application certificate** (paid Developer Program). An Apple
    Development certificate cannot be notarized and Gatekeeper refuses it on any
-   other Mac. `make check-devid` says so. **This is the current blocker.**
+   other Mac; `make check-devid` says so. Take the **G2 sub-CA** when the portal
+   offers a choice: a leaf cannot outlive the CA that issued it, and the older
+   Developer ID CA expires 2027-02-01, so a certificate issued under it is capped
+   at that date no matter when it was created. G2 runs to 2031.
 2. `xcrun notarytool store-credentials token-pacer`, once.
 3. Sparkle's EdDSA key pair — public half in `Info.plist`, private half in the
-   login Keychain as *Private key for signing Sparkle updates*.
+   login Keychain as *Private key for signing Sparkle updates*, exported with
+   `generate_keys -x` for the CI secret.
+
+Never set Trust on an Apple certificate by hand. Marking the Developer ID
+intermediate *Always Trust* makes it an anchor that is not self-signed, and every
+signature then fails with `unable to build chain to self-signed root` followed by
+`errSecInternalComponent` — a message that points nowhere near the cause.
+`security dump-trust-settings` should print nothing; `security remove-trusted-cert`
+puts it back.
 
 Updates: **Sparkle ships alongside the cask, not instead of it.** `brew upgrade`
 covers the tap; the feed covers the DMG. Gentle reminders are implemented because
