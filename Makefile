@@ -35,6 +35,12 @@ RELEASE_URL := https://github.com/$(SITE_REPO)/releases/download
 DEVID   := $(shell security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk '{print $$2}')
 ## `xcrun notarytool store-credentials token-pacer` once, then it is silent.
 NOTARY_PROFILE ?= token-pacer
+## CI keeps its credentials in a throwaway keychain rather than the login one,
+## so it overrides this with the same profile plus `--keychain <path>`.
+NOTARY_ARGS ?= --keychain-profile $(NOTARY_PROFILE)
+## Empty locally: the EdDSA key is read from the login Keychain. CI writes the
+## key to a file and passes `--ed-key-file` here — there is no Keychain to read.
+APPCAST_ARGS ?=
 
 ## Sparkle ships as an XCFramework. SPM links it but cannot embed it, so the
 ## bundle assembly below copies it in and signs it inside-out.
@@ -149,14 +155,14 @@ appcast: $(DMG)
 	@# holds exactly what ships, so the feed cannot describe anything else.
 	rm -rf build/feed && mkdir -p build/feed
 	cp $(DMG) build/feed/
-	$(SPARKLE_BIN)/generate_appcast --download-url-prefix \
+	$(SPARKLE_BIN)/generate_appcast $(APPCAST_ARGS) --download-url-prefix \
 	  $(RELEASE_URL)/v$(VERSION)/ build/feed
 	cp build/feed/appcast.xml build/appcast.xml
 	@echo "→ build/appcast.xml"
 
 ## Apple staples the ticket to the image, so a first launch works offline.
 notarize: dmg
-	xcrun notarytool submit $(DMG) --keychain-profile $(NOTARY_PROFILE) --wait
+	xcrun notarytool submit $(DMG) $(NOTARY_ARGS) --wait
 	xcrun stapler staple $(DMG)
 	spctl --assess --type open --context context:primary-signature -v $(DMG)
 	@echo "→ notarized $(DMG)"
@@ -215,11 +221,19 @@ release:
 	git -C $(SITE_DIR) add public/appcast.xml
 	git -C $(SITE_DIR) commit -m "release: $(APP) $(VERSION)"
 	git -C $(SITE_DIR) push
-	mkdir -p $(TAP_DIR)/Casks
-	cp build/token-pacer.rb $(TAP_DIR)/Casks/token-pacer.rb
-	git -C $(TAP_DIR) add Casks/token-pacer.rb
-	git -C $(TAP_DIR) commit -m "token-pacer $(VERSION)"
-	git -C $(TAP_DIR) push
+	@# The tap is a convenience, not the product: Sparkle and the DMG above
+	@# are how anyone actually gets the app. A release must not fail because
+	@# the tap is not checked out beside this repo — which is also what lets
+	@# CI run this same target without one.
+	@if [ -d "$(TAP_DIR)/.git" ]; then \
+	  mkdir -p $(TAP_DIR)/Casks; \
+	  cp build/token-pacer.rb $(TAP_DIR)/Casks/token-pacer.rb; \
+	  git -C $(TAP_DIR) add Casks/token-pacer.rb; \
+	  git -C $(TAP_DIR) commit -m "token-pacer $(VERSION)"; \
+	  git -C $(TAP_DIR) push; \
+	else \
+	  echo "No tap at $(TAP_DIR) — skipped the cask; build/token-pacer.rb is ready."; \
+	fi
 	@echo "→ released $(APP) $(VERSION)"
 
 xcbuild:   ## shipping path: signing, entitlements, hardened runtime
