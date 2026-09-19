@@ -93,7 +93,6 @@ final class LogWatcher: @unchecked Sendable {
     /// gate whose watcher has gone reports "nothing changed" for ever.
     @MainActor
     static func watchedSources() -> (sources: [any UsageSource], watchers: [LogWatcher]) {
-        let home = FileManager.default.homeDirectoryForCurrentUser
         // Watched independently: a machine with Codex installed but unused had
         // its tree walked every five seconds for ever, and one shared gate would
         // have woken both sources whenever either wrote.
