@@ -43,9 +43,10 @@ NOTARY_ARGS ?= --keychain-profile $(NOTARY_PROFILE)
 APPCAST_ARGS ?=
 
 ## Sparkle ships as an XCFramework. SPM links it but cannot embed it, so the
-## bundle assembly below copies it in and signs it inside-out.
-SPARKLE := .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework
-SPARKLE_BIN := .build/artifacts/sparkle/Sparkle/bin
+## bundle assembly below copies it in and signs it inside-out. Checked in under
+## Vendor rather than downloaded per checkout — see Vendor/Sparkle/Package.swift.
+SPARKLE := Vendor/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework
+SPARKLE_BIN := Vendor/Sparkle/bin
 ## Release signing adds these; a debug build gets neither.
 SIGNFLAGS ?=
 
