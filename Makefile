@@ -50,7 +50,7 @@ SPARKLE_BIN := Vendor/Sparkle/bin
 ## Release signing adds these; a debug build gets neither.
 SIGNFLAGS ?=
 
-.PHONY: icon run build app test xcbuild xctest clean release-app dmg notarize cask appcast check-devid release
+.PHONY: icon run build app test xcbuild xctest clean release-app dmg notarize cask appcast notes check-devid release
 
 ## SPM links Sparkle but leaves no usable rpath in the bare binary, so an
 ## in-place run has to be told where the framework is. The bundle does not need
@@ -156,10 +156,36 @@ appcast: $(DMG)
 	@# holds exactly what ships, so the feed cannot describe anything else.
 	rm -rf build/feed && mkdir -p build/feed
 	cp $(DMG) build/feed/
+	$(MAKE) notes
 	$(SPARKLE_BIN)/generate_appcast $(APPCAST_ARGS) --download-url-prefix \
 	  $(RELEASE_URL)/v$(VERSION)/ build/feed
 	cp build/feed/appcast.xml build/appcast.xml
 	@echo "→ build/appcast.xml"
+
+## Release notes, from this repo's log since the last tag — the website's log
+## would list landing-page commits under an app version. Two shapes of the same
+## text: markdown for the release body, and an HTML fragment named after the
+## archive for Sparkle. A fragment carrying no DOCTYPE or body tags is embedded
+## into the feed as CDATA rather than linked, so there is no second asset to
+## upload and no URL to keep alive for as long as anyone runs this version.
+SINCE = $$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+notes:
+	@mkdir -p build/feed
+	@git log --no-merges --pretty='- %s' $(SINCE)..HEAD > build/notes.md
+	@# Nothing since the last tag means nothing to say, and an empty list in the
+	@# feed reads worse than no description at all. Leaving the file out is what
+	@# tells generate_appcast there are no notes.
+	@if [ -s build/notes.md ]; then \
+	  { echo "<ul>"; \
+	    git log --no-merges --pretty='%s' $(SINCE)..HEAD \
+	      | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
+	            -e 's|^|<li>|' -e 's|$$|</li>|'; \
+	    echo "</ul>"; } > build/feed/$(APP)-$(VERSION).html; \
+	  echo "→ build/notes.md, build/feed/$(APP)-$(VERSION).html ($$(wc -l < build/notes.md | tr -d ' ') entries)"; \
+	else \
+	  rm -f build/feed/$(APP)-$(VERSION).html; \
+	  echo "→ build/notes.md is empty: no commits since $(SINCE)"; \
+	fi
 
 ## Apple staples the ticket to the image, so a first launch works offline.
 notarize: dmg
@@ -203,12 +229,9 @@ release:
 	$(MAKE) notarize
 	$(MAKE) appcast
 	$(MAKE) cask
-	@# Notes come from this repo's log. --generate-notes reads the repo the
-	@# release is created in, which is the website: it would list landing-page
-	@# commits under an app version. No tag yet means the whole history.
-	git log --no-merges --pretty='- %s' \
-	  $$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)..HEAD \
-	  > build/notes.md
+	@# build/notes.md came from `appcast` above, which needed the same text for
+	@# the feed. --generate-notes is not an option: it reads the repo the release
+	@# is filed in, which is the website.
 	gh release create v$(VERSION) --repo $(SITE_REPO) \
 	  --title "$(APP) $(VERSION)" --notes-file build/notes.md $(DMG) build/appcast.xml
 	@# Tag here too, so the next release knows where these notes start.
