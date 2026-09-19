@@ -55,13 +55,41 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Token Pacer $VERSION"
 
-      - name: Refuse to publish a version that already shipped
+      - name: Check what this needs before it signs anything
+        ## A missing secret is an empty string, not an error, so every one of
+        ## these fails somewhere later and further from the cause — the token
+        ## surfaced as gh claiming it was never given one, forty minutes into a
+        ## run that had already notarized a build.
         env:
           GH_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
           SITE_REPO: ${{ vars.SITE_REPO || 'heybui/tokenpacer.com' }}
           VERSION: ${{ steps.version.outputs.version }}
+          DEVID_P12_BASE64: ${{ secrets.DEVID_P12_BASE64 }}
+          DEVID_P12_PASSWORD: ${{ secrets.DEVID_P12_PASSWORD }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
-          if gh release view "v$VERSION" --repo "$SITE_REPO" >/dev/null 2>&1; then
+          missing=""
+          for name in GH_TOKEN DEVID_P12_BASE64 DEVID_P12_PASSWORD \
+                      NOTARY_APPLE_ID NOTARY_PASSWORD NOTARY_TEAM_ID \
+                      SPARKLE_ED_PRIVATE_KEY; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Empty or unset:$missing. GH_TOKEN is the SITE_REPO_TOKEN secret."
+            exit 1
+          fi
+
+          ## Proves the token reaches the repo. Without this the release check
+          ## below reads a permission failure as "no such release" and sails on.
+          gh api "repos/$SITE_REPO" --jq .full_name > /dev/null || {
+            echo "::error::SITE_REPO_TOKEN cannot read $SITE_REPO. It needs contents write on that repo."
+            exit 1
+          }
+
+          if gh release view "v$VERSION" --repo "$SITE_REPO" > /dev/null 2>&1; then
             echo "::error::v$VERSION is already released. Bump CFBundleShortVersionString in TokenPacer/Info.plist."
             exit 1
           fi
