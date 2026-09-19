@@ -48,9 +48,13 @@ struct JSONLReader {
         cursor.offset += UInt64(lastNewline) + 1
         cursors[url] = cursor
 
-        return data[..<lastNewline]
+        // Annotated because `Sequence` and `Collection` both declare this
+        // `split` and neither wins on its own. `Data.init` is load bearing too:
+        // a slice keeps its parent's indices, so it has to be re-based before
+        // anything decodes it.
+        let lines: [Data.SubSequence] = data[..<lastNewline]
             .split(separator: 0x0A, omittingEmptySubsequences: true)
-            .map(Data.init)
+        return lines.map(Data.init)
     }
 
     /// Every `.jsonl` under a root, or empty if the root doesn't exist.

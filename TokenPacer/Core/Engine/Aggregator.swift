@@ -98,12 +98,15 @@ enum Aggregator {
         }
         let sum = totals.values.reduce(0, +)
         guard sum > 0 else { return [] }
-        return totals
-            .map { UsageSplit(name: $0.key, share: $0.value / sum * 100) }
-            // Name breaks the tie so equal shares don't reorder on every refresh.
-            .sorted { $0.share == $1.share ? $0.name < $1.name : $0.share > $1.share }
-            .prefix(limit)
-            .map { $0 }
+        // Spelled out in steps rather than one chain: map, sort, prefix and map
+        // together are more than the type checker will solve in reasonable time
+        // on a dictionary, and it gives up rather than slowing down.
+        var rows: [UsageSplit] = totals.map {
+            UsageSplit(name: $0.key, share: $0.value / sum * 100)
+        }
+        // Name breaks the tie so equal shares don't reorder on every refresh.
+        rows.sort { $0.share == $1.share ? $0.name < $1.name : $0.share > $1.share }
+        return Array(rows.prefix(limit))
     }
 
     static func history(
