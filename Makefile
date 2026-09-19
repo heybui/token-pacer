@@ -124,6 +124,10 @@ dmg: release-app
 	hdiutil create -volname "$(APP) $(VERSION)" -srcfolder build/dmg \
 	               -ov -format UDZO $(DMG)
 	rm -rf build/dmg
+	@# Gatekeeper assesses the image itself, not just the app inside it, so
+	@# the image carries its own signature. Stapling afterwards only appends
+	@# the ticket, which leaves that signature intact.
+	codesign --force --sign $(DEVID) --timestamp $(DMG)
 	@echo "→ $(DMG)"
 
 ## `appcast` and `cask` both describe an image that already exists — the one Apple
@@ -139,8 +143,15 @@ $(DMG):
 ## Signs each update with the EdDSA key in the login Keychain — without it an
 ## installed copy refuses the download, which is the whole point of the key.
 appcast: $(DMG)
+	@# Against `build` itself the tool would pick up every leftover in the
+	@# scratch directory — an old ad-hoc zip, a delta against it — and write
+	@# them into the feed as enclosures the release never uploads. Staging
+	@# holds exactly what ships, so the feed cannot describe anything else.
+	rm -rf build/feed && mkdir -p build/feed
+	cp $(DMG) build/feed/
 	$(SPARKLE_BIN)/generate_appcast --download-url-prefix \
-	  $(RELEASE_URL)/v$(VERSION)/ build
+	  $(RELEASE_URL)/v$(VERSION)/ build/feed
+	cp build/feed/appcast.xml build/appcast.xml
 	@echo "→ build/appcast.xml"
 
 ## Apple staples the ticket to the image, so a first launch works offline.
