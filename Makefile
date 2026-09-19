@@ -185,12 +185,23 @@ release:
 	$(MAKE) notarize
 	$(MAKE) appcast
 	$(MAKE) cask
+	@# Notes come from this repo's log. --generate-notes reads the repo the
+	@# release is created in, which is the website: it would list landing-page
+	@# commits under an app version. No tag yet means the whole history.
+	git log --no-merges --pretty='- %s' \
+	  $$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)..HEAD \
+	  > build/notes.md
 	gh release create v$(VERSION) --repo $(SITE_REPO) \
-	  --title "$(APP) $(VERSION)" --generate-notes $(DMG) build/appcast.xml
+	  --title "$(APP) $(VERSION)" --notes-file build/notes.md $(DMG) build/appcast.xml
+	@# Tag here too, so the next release knows where these notes start.
+	git tag -a v$(VERSION) -m "$(APP) $(VERSION)"
+	git push origin v$(VERSION)
 	@# The feed lives at the domain, not at the release: a build polls the URL it
 	@# shipped with for ever, and that one has to outlive wherever the DMG sits.
-	cp build/appcast.xml $(SITE_DIR)/appcast.xml
-	git -C $(SITE_DIR) add appcast.xml
+	@# It goes in public/ — the site deploys dist/, built from src/ and public/,
+	@# so a copy at the repo root is never served and Sparkle would 404.
+	cp build/appcast.xml $(SITE_DIR)/public/appcast.xml
+	git -C $(SITE_DIR) add public/appcast.xml
 	git -C $(SITE_DIR) commit -m "release: $(APP) $(VERSION)"
 	git -C $(SITE_DIR) push
 	mkdir -p $(TAP_DIR)/Casks
