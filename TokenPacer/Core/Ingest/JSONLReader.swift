@@ -48,13 +48,13 @@ struct JSONLReader {
         cursor.offset += UInt64(lastNewline) + 1
         cursors[url] = cursor
 
-        // Annotated because `Sequence` and `Collection` both declare this
-        // `split` and neither wins on its own. `Data.init` is load bearing too:
-        // a slice keeps its parent's indices, so it has to be re-based before
-        // anything decodes it.
-        let lines: [Data.SubSequence] = data[..<lastNewline]
+        // Annotated, and called rather than passed: `Sequence` and `Collection`
+        // both declare this `split`, and `Data.init` names three overloads that
+        // all fit, so neither resolves on its own. The copy is load bearing —
+        // a slice keeps its parent's indices, and a decoder reads those.
+        return data[..<lastNewline]
             .split(separator: 0x0A, omittingEmptySubsequences: true)
-        return lines.map(Data.init)
+            .map { (line: Data.SubSequence) in Data(line) }
     }
 
     /// Every `.jsonl` under a root, or empty if the root doesn't exist.
