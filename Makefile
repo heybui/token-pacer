@@ -145,8 +145,8 @@ $(DMG):
 	 echo "the cask have to describe the stapled image, not a freshly built one."; \
 	 exit 1
 
-## The feed Sparkle reads. Uploaded as a release asset next to the DMG, so
-## `releases/latest/download/appcast.xml` always points at the newest one.
+## The feed Sparkle reads, served from the domain and nowhere else. A second
+## copy attached to the release would be read by nothing and trusted by someone.
 ## Signs each update with the EdDSA key in the login Keychain — without it an
 ## installed copy refuses the download, which is the whole point of the key.
 appcast: $(DMG)
@@ -233,7 +233,7 @@ release:
 	@# the feed. --generate-notes is not an option: it reads the repo the release
 	@# is filed in, which is the website.
 	gh release create v$(VERSION) --repo $(SITE_REPO) \
-	  --title "$(APP) $(VERSION)" --notes-file build/notes.md $(DMG) build/appcast.xml
+	  --title "$(APP) $(VERSION)" --notes-file build/notes.md $(DMG)
 	@# Tag here too, so the next release knows where these notes start.
 	git tag -a v$(VERSION) -m "$(APP) $(VERSION)"
 	git push origin v$(VERSION)
