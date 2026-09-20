@@ -27,6 +27,7 @@
 	<key>SUFeedURL</key><string>https://tokenpacer.com/appcast.xml</string>
 	<key>SUPublicEDKey</key><string>upjF7oD8vW9TXGxqDlR4XSQ5AQNojCkT8Xi87J0DZWc=</string>
 	<key>SUEnableAutomaticChecks</key><true/>
+	<key>SUAutomaticallyUpdate</key><true/>
 	<key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>

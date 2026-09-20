@@ -119,7 +119,7 @@ private struct GeneralPane: View {
     /// user goes and installs something — which is what "Check again" is for.
     @State private var installed: Set<SourceID> = []
     @State private var launchEnabled = false
-    @State private var checksAutomatically = true
+    @State private var updatesAutomatically = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -221,11 +221,11 @@ private struct GeneralPane: View {
                     // neither route can set a figure the other cannot show.
                     QuietField(minutes: quietMinutes)
                 }
-                row("Check for updates automatically", note: AttributedString("Daily, in the background")) {
-                    Toggle("Check for updates automatically", isOn: $checksAutomatically)
+                row("Update automatically", note: AttributedString("Daily, in the background")) {
+                    Toggle("Update automatically", isOn: $updatesAutomatically)
                         .labelsHidden()
-                        .onChange(of: checksAutomatically) { _, on in
-                            updater?.checksAutomatically = on
+                        .onChange(of: updatesAutomatically) { _, on in
+                            updater?.updatesAutomatically = on
                         }
                         // Nil in tests and in a `swift run` build: no Sparkle, so
                         // nothing behind the switch to set.
@@ -247,7 +247,7 @@ private struct GeneralPane: View {
         .onAppear {
             installed = Set(SourceID.allCases.filter(\.cliIsInstalled))
             launchEnabled = launchAtLogin.isEnabled
-            checksAutomatically = updater?.checksAutomatically ?? true
+            updatesAutomatically = updater?.updatesAutomatically ?? true
         }
     }
 

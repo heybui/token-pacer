@@ -29,13 +29,22 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
     /// than queueing a second one.
     var canCheck: Bool { controller?.updater.canCheckForUpdates ?? false }
 
-    /// Sparkle owns the storage — `SUEnableAutomaticChecks` in Info.plist is the
-    /// default until the switch is touched, and the user default it writes wins
-    /// afterwards. Nothing in `Preferences` mirrors it, so "Restore defaults"
-    /// leaves it alone.
-    var checksAutomatically: Bool {
-        get { controller?.updater.automaticallyChecksForUpdates ?? true }
-        set { controller?.updater.automaticallyChecksForUpdates = newValue }
+    /// One switch, both halves: checking and installing are the same question
+    /// to everyone but Sparkle, and leaving them apart puts a second checkbox
+    /// in Sparkle's own update dialog for the setting the pane already owns.
+    ///
+    /// Sparkle owns the storage — `SUEnableAutomaticChecks` and
+    /// `SUAutomaticallyUpdate` in Info.plist are the defaults until the switch
+    /// is touched, and the user defaults they write win afterwards. Nothing in
+    /// `Preferences` mirrors it, so "Restore defaults" leaves it alone.
+    var updatesAutomatically: Bool {
+        get { controller?.updater.automaticallyDownloadsUpdates ?? true }
+        set {
+            // Order matters: `automaticallyDownloadsUpdates` reports NO while
+            // checks are off, so turning on has to enable checking first.
+            controller?.updater.automaticallyChecksForUpdates = newValue
+            controller?.updater.automaticallyDownloadsUpdates = newValue
+        }
     }
 
     func checkForUpdates() {
