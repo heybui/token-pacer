@@ -50,6 +50,8 @@ struct PillView: View {
     var onContentHeight: (CGFloat) -> Void = { _ in }
     /// Same menu the right-click opens; the hover card has a button for it.
     var onOpenMenu: () -> Void = {}
+    /// Ask every provider again, from the card's own headline.
+    var onRecheck: () -> Void = {}
     var isMenuOpen = false
     var menuItems: [NotchMenuItem] = []
     var onCloseMenu: () -> Void = {}
@@ -267,7 +269,7 @@ struct PillView: View {
             HoverCard(
                 snapshot: snapshot, providers: providers,
                 attention: attention, errors: errors, barWidth: providerBarWidth,
-                onExpand: onTogglePinned, onOpenMenu: onOpenMenu
+                onExpand: onTogglePinned, onOpenMenu: onOpenMenu, onRecheck: onRecheck
             )
         case .pinned:
             PinnedPanelView(

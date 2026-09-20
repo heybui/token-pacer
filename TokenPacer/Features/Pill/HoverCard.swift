@@ -22,6 +22,9 @@ struct HoverCard: View {
     /// The two gestures the card used to spell out in a hint, as buttons.
     var onExpand: () -> Void = {}
     var onOpenMenu: () -> Void = {}
+    /// Ask every provider again. Only reachable while something is wrong, which
+    /// is the only time there is anything to ask again about.
+    var onRecheck: () -> Void = {}
 
     @Environment(\.tone) private var toneScale
 
@@ -49,8 +52,15 @@ struct HoverCard: View {
                     .foregroundStyle(.white)
                     .onHover { caption = $0 ? zoneRule : nil }
                 Spacer(minLength: 8)
-                if let attention {
-                    AttentionBadge(message: attention, size: 10)
+                if let trouble {
+                    // A triangle here repeated what the failing rows already say
+                    // under their own bars, and it could not be pressed: the only
+                    // way to clear a stale complaint was Preferences → Check
+                    // again. The slot is worth more as the button for that.
+                    CardButton(
+                        symbol: "arrow.clockwise", label: "Check again",
+                        tint: Tokens.amber, spins: true, action: onRecheck
+                    ) { caption = $0 ?? trouble }
                 } else if let snapshot, snapshot.sessionPercent != nil {
                     // How old the figure is. Between readings the pill is showing
                     // the last one unmoved, and saying so is the difference
@@ -101,6 +111,15 @@ struct HoverCard: View {
         .padding(.top, 4)
         .padding(.horizontal, 18)
         .padding(.bottom, 10)
+    }
+
+    /// The complaint the button answers. The badge this slot used to hold
+    /// followed the active source alone, so a card whose Codex row was saying it
+    /// could not be read showed nothing up here and offered nothing to press —
+    /// which is the state the button exists for. `recheck` asks every provider
+    /// again regardless, so any row's complaint is reason enough to draw it.
+    private var trouble: String? {
+        attention ?? providers.lazy.compactMap { errors[$0.source] }.first
     }
 
     /// What the pointer asked about, or the rotating report when it asked
@@ -172,14 +191,25 @@ struct HoverCard: View {
 private struct CardButton: View {
     let symbol: String
     let label: String
+    var tint: Color = .white.opacity(0.42)
+    /// One turn on press. A reading takes seconds to come back and the panel
+    /// looks identical while it does, so without this a press reads as a miss.
+    var spins = false
     let action: () -> Void
     let onCaption: (String?) -> Void
 
+    @State private var turns = 0
+
     var body: some View {
-        Button(action: action) {
+        Button {
+            if spins { turns += 1 }
+            action()
+        } label: {
             Image(systemName: symbol)
                 .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(.white.opacity(0.42))
+                .foregroundStyle(tint)
+                .rotationEffect(.degrees(Double(turns) * 360))
+                .animation(.easeInOut(duration: 0.55), value: turns)
                 .frame(width: 18, height: 14)
                 .contentShape(.rect)
         }

@@ -58,6 +58,7 @@ struct PillRootView: View {
             onClose: { model.setPinned(false) },
             onContentHeight: { model.contentHeight = $0 },
             onOpenMenu: { model.toggleMenu() },
+            onRecheck: { store.recheck() },
             isMenuOpen: model.isMenuOpen,
             menuItems: menuItems,
             onCloseMenu: { model.closeMenu() },
