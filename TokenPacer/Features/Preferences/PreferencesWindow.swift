@@ -25,6 +25,24 @@ final class PreferencesWindow: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
+    /// Above the pill, which floats at `.statusBar` — and therefore above every
+    /// other window this app opens. Sparkle's update dialog came up *behind* the
+    /// window carrying the button that asked for it.
+    private static let floating = NSWindow.Level(
+        rawValue: NSWindow.Level.statusBar.rawValue + 1
+    )
+
+    /// So the level is held only while this is the window being used. A settings
+    /// window that is not in front has nothing to float over: it was raised to
+    /// clear the notch, not to outrank the app's own dialogs.
+    func windowDidBecomeKey(_ notification: Notification) {
+        window?.level = Self.floating
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        window?.level = .normal
+    }
+
     /// Closing has to end what is inside, not just hide it.
     ///
     /// A SwiftUI view in a window that merely closed is never told it
@@ -58,7 +76,7 @@ final class PreferencesWindow: NSObject, NSWindowDelegate {
         // higher puts it in front of the thing it configures — and it hides
         // when the app deactivates, so it never floats over another app's
         // work once you have moved on.
-        window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+        window.level = Self.floating
         window.hidesOnDeactivate = ProcessInfo.processInfo.environment["TP_OPEN_PREFS"] == nil
         window.delegate = self
         // The content sizes the window, which is why it is installed before the
