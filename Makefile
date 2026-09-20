@@ -3,7 +3,20 @@ APP  := TokenPacer
 ## any more, so no grant rides on it — but Sparkle keys updates to the designated
 ## requirement, and an ad-hoc one changes on every rebuild. A real signing identity
 ## keeps it stable. Override with `make app SIGN=-` to go back to ad-hoc.
-SIGN ?= $(shell security find-identity -v -p codesigning | awk 'NR==1{print $$2}')
+## The Developer ID certificate, the same one the Xcode scheme signs debug builds
+## with. Not "whatever is first": an Apple Development certificate can be revoked
+## without warning, and a revoked signature is not merely untrusted — macOS reads
+## it as malware, refuses the launch and moves the app to the Trash. Worse,
+## `find-identity -v` still lists a revoked certificate as valid, because it walks
+## the chain and never asks the revocation list. `spctl --assess` is what catches
+## it: CSSMERR_TP_CERT_REVOKED.
+SIGN ?= $(shell security find-identity -v -p codesigning \
+          | grep "Developer ID Application" | head -1 | awk '{print $$2}')
+## No Developer ID on this machine: fall back to the first identity there is, and
+## then to ad-hoc. Both still build; neither is what a release is cut with.
+ifeq ($(strip $(SIGN)),)
+SIGN := $(shell security find-identity -v -p codesigning | awk 'NR==1{print $$2}')
+endif
 ifeq ($(strip $(SIGN)),)
 SIGN := -
 endif
