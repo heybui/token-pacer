@@ -29,7 +29,7 @@ struct PaneSwitcher: View {
         // happen to sit next to each other.
         .accessibilityRepresentation {
             Picker("Pane", selection: $pane) {
-                ForEach(PreferencesView.Pane.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(PreferencesView.Pane.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
         }
@@ -43,7 +43,7 @@ private struct PaneTab: View {
 
     var body: some View {
         Button(action: select) {
-            Text(option.rawValue)
+            Text(option.title)
                 .font(Typography.sans(11.5, isSelected ? .medium : .regular))
                 .foregroundStyle(.white.opacity(isSelected ? 1 : 0.52))
                 .padding(.vertical, 5)

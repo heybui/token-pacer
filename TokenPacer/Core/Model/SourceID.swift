@@ -3,6 +3,8 @@ import Foundation
 enum SourceID: String, CaseIterable, Sendable, Codable {
     case claude, codex, copilot
 
+    /// A product name, so never localized — "Claude Code" is "Claude Code" in
+    /// every language, and `wordmark` below is the same name cut to fit.
     var displayName: String {
         switch self {
         case .claude: "Claude Code"
@@ -16,9 +18,9 @@ enum SourceID: String, CaseIterable, Sendable, Codable {
     /// repeating "needs the CLI" say nothing about which of the three to keep.
     var blurb: String {
         switch self {
-        case .claude: "Your 5-hour window and weekly cap, read from ~/.claude."
-        case .codex: "The 5-hour and weekly figures Codex prints, from ~/.codex."
-        case .copilot: "The monthly credit budget Copilot reports, from ~/.copilot."
+        case .claude: String(localized: "Your 5-hour window and weekly cap, read from ~/.claude.")
+        case .codex: String(localized: "The 5-hour and weekly figures Codex prints, from ~/.codex.")
+        case .copilot: String(localized: "The monthly credit budget Copilot reports, from ~/.copilot.")
         }
     }
 
@@ -26,9 +28,9 @@ enum SourceID: String, CaseIterable, Sendable, Codable {
     /// of links are three different offers rather than one word three times.
     var installLabel: String {
         switch self {
-        case .claude: "Get Claude Code"
-        case .codex: "Get the Codex CLI"
-        case .copilot: "Get Copilot CLI"
+        case .claude: String(localized: "Get Claude Code")
+        case .codex: String(localized: "Get the Codex CLI")
+        case .copilot: String(localized: "Get Copilot CLI")
         }
     }
 

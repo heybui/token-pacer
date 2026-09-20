@@ -69,11 +69,11 @@ struct ScaleRow: View {
                 width: barWidth,
                 isBurning: line.isBurning
             )
-            .onHover { explain($0 ? "5-hour window · the dot is the week" : nil) }
+            .onHover { explain($0 ? String(localized: "5-hour window · the dot is the week") : nil) }
 
             OdometerText(text: Format.percent(line.percent), size: 11, color: tone(line.percent))
                 .frame(width: Self.percentWidth, alignment: .trailing)
-                .onHover { explain($0 ? "Used in this 5-hour window" : nil) }
+                .onHover { explain($0 ? String(localized: "Used in this 5-hour window") : nil) }
 
             // The dot's own figure. Without it the second marker is a position
             // with no number, which is half a reading.
@@ -81,13 +81,13 @@ struct ScaleRow: View {
                 .font(Typography.mono(9.5))
                 .foregroundStyle(.white.opacity(0.5))
                 .frame(width: Self.weekWidth, alignment: .trailing)
-                .onHover { explain($0 ? "Used of the weekly cap" : nil) }
+                .onHover { explain($0 ? String(localized: "Used of the weekly cap") : nil) }
 
             Text(Format.countdown(to: line.resetsAt))
                 .font(Typography.mono(9.5))
                 .foregroundStyle(.white.opacity(0.42))
                 .frame(width: Self.resetWidth, alignment: .trailing)
-                .onHover { explain($0 ? "Time left until the window resets" : nil) }
+                .onHover { explain($0 ? String(localized: "Time left until the window resets") : nil) }
         }
     }
 }

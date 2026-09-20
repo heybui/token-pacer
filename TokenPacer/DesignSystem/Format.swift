@@ -10,8 +10,16 @@ enum Format {
         guard let date else { return "--" }
         let minutes = max(0, Int(date.timeIntervalSince(now) / 60))
         let hours = minutes / 60
-        if hours >= 24 { return "\(hours / 24)d \(hours % 24)h" }
-        return "\(hours)h \((minutes % 60).formatted(.number.precision(.integerLength(2))))m"
+        if hours >= 24 {
+            return String(
+                localized: "\(hours / 24)d \(hours % 24)h",
+                comment: "Countdown past a day. Two unit letters only: monospaced column, no room."
+            )
+        }
+        return String(
+            localized: "\(hours)h \((minutes % 60).formatted(.number.precision(.integerLength(2))))m",
+            comment: "Countdown under a day. Keep the two-digit minute padding: monospaced column."
+        )
     }
 
     static func percent(_ value: Double?) -> String {
@@ -41,13 +49,16 @@ enum Format {
     static func projection(used: Money?, now: Date = Date.now, calendar: Calendar = .current) -> String {
         guard let used, used.amountMinor > 0,
               let month = calendar.range(of: .day, in: .month, for: now)
-        else { return "no spend yet this month" }
+        else { return String(localized: "no spend yet this month") }
         let elapsed = max(1, calendar.component(.day, from: now))
         var projected = used
         projected.amountMinor = Int(
             (Double(used.amountMinor) / Double(elapsed) * Double(month.count)).rounded()
         )
-        return "projected \(amount(projected)) by month end"
+        return String(
+            localized: "projected \(amount(projected)) by month end",
+            comment: "Straight-line forecast of this month's extra spend."
+        )
     }
 
     /// Volume, for `--probe` and the splits — never as a headline, which is a

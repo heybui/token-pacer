@@ -352,3 +352,67 @@ private actor TallyingSource: UsageSource {
 
     store.removePersistentDomain(forName: "tokenpacer.tests.newprovider")
 }
+
+// MARK: - language
+
+/// Only what this app itself has written. `stringArray(forKey: "AppleLanguages")`
+/// falls through to the global domain and hands back the *system's* list, which
+/// is the whole reason `Preferences` keeps a key of its own rather than reading
+/// Foundation's back.
+private func override(in suite: String) -> [String]? {
+    UserDefaults().persistentDomain(forName: suite)?["AppleLanguages"] as? [String]
+}
+
+/// The picker writes two keys: ours, which is unambiguous, and Foundation's,
+/// which is what actually changes the language at the next launch.
+@MainActor
+@Test func choosingALanguageSetsTheOneFoundationReads() {
+    let suite = "token-pacer-tests-\(UUID().uuidString)"
+    let store = UserDefaults(suiteName: suite)!
+    defer { store.removePersistentDomain(forName: suite) }
+
+    let preferences = Preferences(store: store)
+    #expect(preferences.language == nil)
+    #expect(override(in: suite) == nil)
+
+    preferences.language = "vi"
+    #expect(override(in: suite) == ["vi"])
+    #expect(Preferences(store: store).language == "vi")
+}
+
+/// Back to the system language, which means the override has to be *removed*
+/// rather than set to whatever English happens to be called: a left-behind
+/// `AppleLanguages` would pin the app to a language nobody chose.
+@MainActor
+@Test func clearingTheLanguageRemovesTheOverride() {
+    let suite = "token-pacer-tests-\(UUID().uuidString)"
+    let store = UserDefaults(suiteName: suite)!
+    defer { store.removePersistentDomain(forName: suite) }
+
+    let preferences = Preferences(store: store)
+    preferences.language = "vi"
+
+    preferences.language = nil
+    #expect(override(in: suite) == nil)
+    #expect(Preferences(store: store).language == nil)
+}
+
+/// "Restore defaults" is about the board's marks and thresholds. Rewriting the
+/// window in a language the reader did not ask for is a different promise.
+@MainActor
+@Test func restoringDefaultsLeavesTheLanguageAlone() {
+    let preferences = Preferences(store: defaults())
+    preferences.language = "vi"
+    preferences.warnAt = 60
+
+    preferences.restoreDefaults()
+    #expect(preferences.warnAt == 75)
+    #expect(preferences.language == "vi")
+    #expect(preferences.hasDefaults)
+}
+
+/// A `swift test` build has no bundle and no compiled `.lproj`, so there is one
+/// language and the row that offers a choice never appears.
+@Test func oneLanguageIsNotAChoice() {
+    #expect(!Language.isOffered)
+}

@@ -38,18 +38,18 @@ enum BorderEffect: String, CaseIterable, Sendable {
 
     var displayName: String {
         switch self {
-        case .comet: "Comet"
-        case .dualComet: "Dual comet"
-        case .zoneSweep: "Zone sweep"
-        case .marchingDashes: "Marching dashes"
-        case .pulseWave: "Pulse wave"
-        case .quarterTrace: "Quarter trace"
-        case .counterPair: "Counter pair"
-        case .breathe: "Breathe"
-        case .breatheGlow: "Breathe glow"
-        case .edgeRunners: "Edge runners"
-        case .sideDrip: "Side drip"
-        case .bottomSweep: "Bottom sweep"
+        case .comet: String(localized: "Comet")
+        case .dualComet: String(localized: "Dual comet")
+        case .zoneSweep: String(localized: "Zone sweep")
+        case .marchingDashes: String(localized: "Marching dashes")
+        case .pulseWave: String(localized: "Pulse wave")
+        case .quarterTrace: String(localized: "Quarter trace")
+        case .counterPair: String(localized: "Counter pair")
+        case .breathe: String(localized: "Breathe")
+        case .breatheGlow: String(localized: "Breathe glow")
+        case .edgeRunners: String(localized: "Edge runners")
+        case .sideDrip: String(localized: "Side drip")
+        case .bottomSweep: String(localized: "Bottom sweep")
         }
     }
 
@@ -57,18 +57,18 @@ enum BorderEffect: String, CaseIterable, Sendable {
     /// selected tile.
     var axis: String {
         switch self {
-        case .comet: "one head, fading tail"
-        case .dualComet: "two heads, opposed"
-        case .zoneSweep: "whole palette rotating"
-        case .marchingDashes: "dash train"
-        case .pulseWave: "soft band, no head"
-        case .quarterTrace: "long arc"
-        case .counterPair: "two heads crossing"
-        case .breathe: "edge brightness, in place"
-        case .breatheGlow: "cast glow, outside the edge"
-        case .edgeRunners: "three edges, staggered"
-        case .sideDrip: "verticals only"
-        case .bottomSweep: "one edge"
+        case .comet: String(localized: "one head, fading tail")
+        case .dualComet: String(localized: "two heads, opposed")
+        case .zoneSweep: String(localized: "whole palette rotating")
+        case .marchingDashes: String(localized: "dash train")
+        case .pulseWave: String(localized: "soft band, no head")
+        case .quarterTrace: String(localized: "long arc")
+        case .counterPair: String(localized: "two heads crossing")
+        case .breathe: String(localized: "edge brightness, in place")
+        case .breatheGlow: String(localized: "cast glow, outside the edge")
+        case .edgeRunners: String(localized: "three edges, staggered")
+        case .sideDrip: String(localized: "verticals only")
+        case .bottomSweep: String(localized: "one edge")
         }
     }
 

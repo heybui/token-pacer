@@ -38,6 +38,9 @@ struct WarningCard: View {
     /// The reset, never a projection of when the window runs dry: that needed a
     /// conversion from tokens to points that no provider publishes.
     private var warningLine: String {
-        "\(Format.countdown(to: snapshot?.resetsAt)) to reset · wrap up soon"
+        String(
+            localized: "\(Format.countdown(to: snapshot?.resetsAt)) to reset · wrap up soon",
+            comment: "The warning card's one line. Value is a countdown like \"2h 04m\"."
+        )
     }
 }

@@ -9,6 +9,10 @@ import SwiftUI
 /// to the system face, which is why availability is checked explicitly and logged.
 /// A silent fallback that nobody notices is how a design drifts.
 enum Typography {
+    /// The bundled cut is the Latin subset: 343 codepoints, no Vietnamese and no
+    /// CJK. Every label goes through `sans`, so the first language past English
+    /// needs the fuller face from Google Fonts — CoreText falls back per glyph
+    /// otherwise and "Đang chạy" comes out half Instrument Sans, half SF.
     static let family = "Instrument Sans"
 
     private nonisolated(unsafe) static var registered = false

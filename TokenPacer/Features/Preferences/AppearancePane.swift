@@ -49,10 +49,10 @@ struct AppearancePane: View {
                         Text("Percentage beside the mark")
                             .font(Typography.sans(12.5))
                             .foregroundStyle(.white.opacity(0.85))
-                        Text(
-                            "Off leaves the mark on its own and gives the menu bar "
-                                + "back about 30pt. Every figure is still in the card."
-                        )
+                        Text("""
+                            Off leaves the mark on its own and gives the menu bar \
+                            back about 30pt. Every figure is still in the card.
+                            """)
                         .font(Typography.sans(11))
                         .foregroundStyle(.white.opacity(0.28))
                         .fixedSize(horizontal: false, vertical: true)
@@ -70,12 +70,12 @@ struct AppearancePane: View {
                         Text("Count of sessions working")
                             .font(Typography.sans(12.5))
                             .foregroundStyle(.white.opacity(0.85))
-                        Text(
-                            "How many sessions have a model answering, anywhere on "
-                                + "the machine. Off keeps the row still while jobs "
-                                + "come and go; a source that cannot be read still "
-                                + "raises its badge there."
-                        )
+                        Text("""
+                            How many sessions have a model answering, anywhere on \
+                            the machine. Off keeps the row still while jobs come \
+                            and go; a source that cannot be read still raises its \
+                            badge there.
+                            """)
                         .font(Typography.sans(11))
                         .foregroundStyle(.white.opacity(0.28))
                         .fixedSize(horizontal: false, vertical: true)
@@ -149,11 +149,11 @@ struct AppearancePane: View {
                     .font(Typography.sans(11))
                     .foregroundStyle(.white.opacity(0.4))
 
-                Text(
-                    "The light runs the shell's outline while a model is answering, "
-                        + "and takes its colour from the zone you are in. It never "
-                        + "runs along the top edge: that one lies against the notch."
-                )
+                Text("""
+                    The light runs the shell's outline while a model is answering, \
+                    and takes its colour from the zone you are in. It never runs \
+                    along the top edge: that one lies against the notch.
+                    """)
                 .font(Typography.sans(11))
                 .foregroundStyle(.white.opacity(0.28))
                 .fixedSize(horizontal: false, vertical: true)

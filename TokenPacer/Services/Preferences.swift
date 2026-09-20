@@ -87,6 +87,27 @@ final class Preferences {
         didSet { store.set(pillSource.rawValue, forKey: Key.pillSource) }
     }
 
+    /// Which language the app draws itself in, or nil to follow the system.
+    ///
+    /// Applied by writing `AppleLanguages` into the app's own domain — the same
+    /// switch System Settings flips — which is read once at launch, so the row
+    /// says it takes a restart. Kept under our own key as well because an unset
+    /// `AppleLanguages` reads back as the *system's* list, and that cannot be
+    /// told apart from a deliberate choice of the same language.
+    var language: String? {
+        didSet {
+            store.set(language, forKey: Key.language)
+            if let language {
+                store.set([language], forKey: Self.appleLanguages)
+            } else {
+                store.removeObject(forKey: Self.appleLanguages)
+            }
+        }
+    }
+
+    /// Foundation's own key, not ours. Written rather than read: see above.
+    private static let appleLanguages = "AppleLanguages"
+
     /// Which providers are tracked. Never empty: an app tracking nothing is an
     /// app with no reason to be on screen, so the last one on cannot be turned
     /// off — `set(tracking:)` refuses rather than the UI having to.
@@ -143,6 +164,7 @@ final class Preferences {
         border = (store.string(forKey: Key.border).flatMap(BorderEffect.init(rawValue:)))
             ?? Default.border
         bordersOn = store.object(forKey: Key.bordersOn) as? Bool ?? Default.bordersOn
+        language = store.string(forKey: Key.language)
         let names = store.stringArray(forKey: Key.trackedSources) ?? []
         let restored = Set(names.compactMap(SourceID.init(rawValue:)))
         // A provider added by an update was never offered to this install, so its
@@ -198,6 +220,10 @@ final class Preferences {
         showsJobCount = Default.showsJobCount
         trackedSources = Self.defaultSources(installed)
         pillSource = Self.firstTracked(of: trackedSources)
+        // Language is deliberately not here, and so is not in `hasDefaults`
+        // either. "Restore defaults" is about the board's marks and thresholds;
+        // changing the language the window is written in while someone is
+        // reading it is a different kind of change, and they did not ask for it.
     }
 
     /// Nothing left to restore, so the row's button greys out rather than
@@ -255,6 +281,7 @@ final class Preferences {
         static let showsJobCount = "pref.showsJobCount"
         static let border = "pref.border"
         static let bordersOn = "pref.bordersOn"
+        static let language = "pref.language"
         static let trackedSources = "pref.trackedSources"
         static let pillSource = "pref.pillSource"
         /// Every provider this install has ever shown a switch for.

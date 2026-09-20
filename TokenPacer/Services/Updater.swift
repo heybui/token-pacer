@@ -67,8 +67,8 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
     ) {
         guard !state.userInitiated else { return }
         notifier.alert(
-            title: "Token Pacer \(update.displayVersionString) is available",
-            body: "Right-click the notch and choose Check for updates to install it.",
+            title: String(localized: "Token Pacer \(update.displayVersionString) is available"),
+            body: String(localized: "Right-click the notch and choose Check for updates to install it."),
             sound: false, whenNotchHidden: false
         )
     }

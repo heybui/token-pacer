@@ -114,17 +114,22 @@ struct PinnedPanelView: View {
     private var weeklyCaption: String {
         let percent = Format.percent(snapshot?.weeklyPercent)
         guard let resetsAt = snapshot?.weeklyResetsAt else { return percent }
-        return "\(percent) · resets \(Format.weekday(resetsAt))"
+        return String(
+            localized: "\(percent) · resets \(Format.weekday(resetsAt))",
+            comment: "Weekly cap caption. Second value is a localized weekday and time."
+        )
     }
 
     /// The sparkline's own span, not a figure derived from it: 26 five-minute
     /// buckets. A rate in tokens an hour used to sit here and said nothing a
     /// person could act on — the shape is the whole point of this row.
     private var activityCaption: String {
-        snapshot?.isActive == true ? "last 2 hours" : "window empty"
+        snapshot?.isActive == true
+            ? String(localized: "last 2 hours")
+            : String(localized: "window empty")
     }
 
-    private func captionRow(_ label: String, _ value: String, tone: Color? = nil) -> some View {
+    private func captionRow(_ label: LocalizedStringKey, _ value: String, tone: Color? = nil) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text(label)
                 .font(Typography.sans(11))
@@ -175,9 +180,12 @@ struct PinnedPanelView: View {
     private var historyLabel: String {
         let rows = panel.history
         guard let peak = rows.max(by: { $0.weighted < $1.weighted }), peak.weighted > 0 else {
-            return "No history yet"
+            return String(localized: "No history yet")
         }
-        return "Last \(rows.count) days · busiest \(Format.day(peak.day))"
+        return String(
+            localized: "Last \(rows.count) days · busiest \(Format.day(peak.day))",
+            comment: "History caption. Second value is a localized short date."
+        )
     }
 }
 
@@ -204,7 +212,7 @@ private struct Sparkline: View {
 }
 
 private struct SplitColumn: View {
-    let title: String
+    let title: LocalizedStringKey
     let rows: [UsageSplit]
 
     /// The design's ranking colours: the leader stands out, the tail recedes.

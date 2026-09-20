@@ -14,14 +14,14 @@ struct PillRootView: View {
 
     var menuItems: [NotchMenuItem] {
         [
-            NotchMenuItem(title: "Preferences", key: "⌘,", action: onOpenPreferences),
-            NotchMenuItem(title: "Check for updates", isEnabled: updater?.canCheck ?? false) {
+            NotchMenuItem(title: String(localized: "Preferences"), key: "⌘,", action: onOpenPreferences),
+            NotchMenuItem(title: String(localized: "Check for updates"), isEnabled: updater?.canCheck ?? false) {
                 updater?.checkForUpdates()
             },
-            NotchMenuItem(title: "Send feedback") {
+            NotchMenuItem(title: String(localized: "Send feedback")) {
                 NSWorkspace.shared.open(AppInfo.feedbackPage)
             },
-            NotchMenuItem(title: "Quit Token Pacer", key: "⌘Q") { NSApp.terminate(nil) },
+            NotchMenuItem(title: String(localized: "Quit Token Pacer"), key: "⌘Q") { NSApp.terminate(nil) },
         ]
     }
 

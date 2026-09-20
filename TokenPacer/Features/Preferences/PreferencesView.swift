@@ -20,8 +20,17 @@ struct PreferencesView: View {
     @State private var pane: Pane = .general
 
     enum Pane: String, CaseIterable, Identifiable {
-        case general = "General", appearance = "Appearance"
+        case general, appearance
         var id: Self { self }
+
+        /// The tab's word. Separate from `rawValue`, which is the identifier the
+        /// switcher tags with and must not move when the word is translated.
+        var title: LocalizedStringKey {
+            switch self {
+            case .general: "General"
+            case .appearance: "Appearance"
+            }
+        }
     }
 
     var body: some View {
@@ -93,7 +102,7 @@ private extension PreferencesView {
 
 /// A word that opens something, in both panes' footers and beside a provider.
 private func link(
-    _ title: String, enabled: Bool = true, action: @escaping () -> Void
+    _ title: LocalizedStringKey, enabled: Bool = true, action: @escaping () -> Void
 ) -> some View {
     Button(title, action: action)
         .buttonStyle(.plain)
@@ -136,7 +145,7 @@ private struct GeneralPane: View {
             divider
 
             group("Alerts") {
-                row("Notify when over", note: AttributedString("Banner once per window")) {
+                row("Notify when over", note: AttributedString(localized: "Banner once per window")) {
                     Toggle("Notify when over", isOn: $preferences.notifiesWhenOver)
                         .labelsHidden()
                 }
@@ -179,7 +188,9 @@ private struct GeneralPane: View {
                     // says the requirement, the link goes to their own install
                     // page rather than this app repeating the steps.
                     row(
-                        source.displayName,
+                        // A product name, never translated: `LocalizedStringKey` looks it
+                        // up, finds nothing, and hands back the name unchanged.
+                        LocalizedStringKey(source.displayName),
                         note: note(for: source),
                         noteIsComplaint: complaint(for: source) != nil,
                         leading: {
@@ -207,6 +218,21 @@ private struct GeneralPane: View {
             divider
 
             group("App") {
+                // Hidden while the bundle carries one language: a picker with a
+                // single row is not a choice, and this build ships English alone
+                // until a second `.lproj` comes out of the catalog.
+                if Language.isOffered {
+                    row("Language", note: AttributedString(localized: "Takes effect on restart")) {
+                        Picker("Language", selection: $preferences.language) {
+                            Text("System").tag(String?.none)
+                            ForEach(Language.available, id: \.self) { code in
+                                Text(Language.name(code)).tag(String?.some(code))
+                            }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                }
                 row("Launch at login") {
                     Toggle("Launch at login", isOn: $launchEnabled)
                         .labelsHidden()
@@ -214,14 +240,14 @@ private struct GeneralPane: View {
                 }
                 // The note never changes: the exception belongs where it can be
                 // read before you go looking for it, not after you have set it.
-                row("Hide when nothing is running", note: AttributedString("0 keeps it on screen")) {
+                row("Hide when nothing is running", note: AttributedString(localized: "0 keeps it on screen")) {
                     // A duration rather than a switch: "hide it" and "leave it" are
                     // the two ends of the same question, and zero is the off end.
                     // Typed or stepped, both through the binding that clamps, so
                     // neither route can set a figure the other cannot show.
                     QuietField(minutes: quietMinutes)
                 }
-                row("Update automatically", note: AttributedString("Daily, in the background")) {
+                row("Update automatically", note: AttributedString(localized: "Daily, in the background")) {
                     Toggle("Update automatically", isOn: $updatesAutomatically)
                         .labelsHidden()
                         .onChange(of: updatesAutomatically) { _, on in
@@ -274,7 +300,7 @@ private struct GeneralPane: View {
     }
 
     private func group(
-        _ title: String, @ViewBuilder accessory: () -> some View = { EmptyView() },
+        _ title: LocalizedStringKey, @ViewBuilder accessory: () -> some View = { EmptyView() },
         @ViewBuilder rows: () -> some View
     ) -> some View {
         // 16, not 12: a row with a note under it is two lines tall and the ones
@@ -316,12 +342,12 @@ private struct GeneralPane: View {
     /// Why this provider can report nothing, if it cannot: the CLI is not on
     /// the machine, or the poller found something wrong with the one that is.
     private func complaint(for source: SourceID) -> String? {
-        if !installed.contains(source) { return "Not installed on this Mac." }
+        if !installed.contains(source) { return String(localized: "Not installed on this Mac.") }
         return store?.errors[source].map { "\($0)." }
     }
 
     private func row(
-        _ label: String, note: AttributedString? = nil, noteIsComplaint: Bool = false,
+        _ label: LocalizedStringKey, note: AttributedString? = nil, noteIsComplaint: Bool = false,
         @ViewBuilder leading: () -> some View = { EmptyView() },
         @ViewBuilder control: () -> some View
     ) -> some View {
@@ -496,7 +522,7 @@ private struct ThresholdScale: View {
         }
     }
 
-    private func legend(_ title: String, _ value: Double, _ tone: Color) -> some View {
+    private func legend(_ title: LocalizedStringKey, _ value: Double, _ tone: Color) -> some View {
         HStack(spacing: 7) {
             Text(title)
                 .font(Typography.sans(12.5))

@@ -58,7 +58,7 @@ struct HoverCard: View {
                     // way to clear a stale complaint was Preferences → Check
                     // again. The slot is worth more as the button for that.
                     CardButton(
-                        symbol: "arrow.clockwise", label: "Check again",
+                        symbol: "arrow.clockwise", label: String(localized: "Check again"),
                         tint: Tokens.amber, spins: true, action: onRecheck
                     ) { caption = $0 ?? trouble }
                 } else if let snapshot, snapshot.sessionPercent != nil {
@@ -68,7 +68,7 @@ struct HoverCard: View {
                     Text(reportedLabel(snapshot))
                         .font(Typography.mono(9.5))
                         .foregroundStyle(.white.opacity(0.34))
-                        .onHover { caption = $0 ? "When the numbers were last read" : nil }
+                        .onHover { caption = $0 ? String(localized: "When the numbers were last read") : nil }
                 }
             }
 
@@ -97,10 +97,10 @@ struct HoverCard: View {
                 Spacer(minLength: 8)
                 CardButton(
                     symbol: "arrow.down.left.and.arrow.up.right",
-                    label: "Open the panel",
+                    label: String(localized: "Open the panel"),
                     action: onExpand
                 ) { caption = $0 }
-                CardButton(symbol: "gearshape", label: "Settings", action: onOpenMenu) {
+                CardButton(symbol: "gearshape", label: String(localized: "Settings"), action: onOpenMenu) {
                     caption = $0
                 }
             }
@@ -130,30 +130,40 @@ struct HoverCard: View {
     /// The state of the reading in sentences, one at a time. Never a figure the
     /// rows already carry — this is what the numbers add up to.
     private var reports: [String] {
-        guard let snapshot else { return ["Reading the logs"] }
+        guard let snapshot else { return [String(localized: "Reading the logs")] }
         var lines: [String] = []
         if let percent = snapshot.sessionPercent {
-            lines.append("\(snapshot.source.displayName) at \(Format.percent(percent)) of this window")
+            lines.append(String(
+                localized: "\(snapshot.source.displayName) at \(Format.percent(percent)) of this window",
+                comment: "Rotating footer line. First value is a product name, second a percentage."
+            ))
         }
         if snapshot.resetsAt != nil {
-            lines.append("Window resets in \(Format.countdown(to: snapshot.resetsAt))")
+            lines.append(String(localized: "Window resets in \(Format.countdown(to: snapshot.resetsAt))"))
         }
         if let week = snapshot.weeklyPercent {
-            lines.append("Week at \(Format.percent(week))")
+            lines.append(String(localized: "Week at \(Format.percent(week))"))
         }
-        lines.append(snapshot.isBurning ? "A model is answering now" : "Nothing is running")
+        lines.append(snapshot.isBurning
+            ? String(localized: "A model is answering now")
+            : String(localized: "Nothing is running"))
         return lines
     }
 
     private var statusLine: String {
-        guard let percent = snapshot?.sessionPercent else { return "Measuring" }
-        if percent >= toneScale.critAt { return "Wrap up soon" }
-        return percent >= toneScale.warnAt ? "Running hot" : "Plenty of room"
+        guard let percent = snapshot?.sessionPercent else { return String(localized: "Measuring") }
+        if percent >= toneScale.critAt { return String(localized: "Wrap up soon") }
+        return percent >= toneScale.warnAt
+            ? String(localized: "Running hot")
+            : String(localized: "Plenty of room")
     }
 
     /// What the colours mean, in the user's own numbers.
     private var zoneRule: String {
-        "Safe to \(Int(toneScale.warnAt))% · watch to \(Int(toneScale.critAt))% · over above"
+        String(
+            localized: "Safe to \(Int(toneScale.warnAt))% · watch to \(Int(toneScale.critAt))% · over above",
+            comment: "What the three tones mean, in the user's own thresholds."
+        )
     }
 
     /// Every window worth a row, in the order they belong to each other.
@@ -180,9 +190,11 @@ struct HoverCard: View {
     /// "reported" alone would imply the figure was just read. Between anchors it
     /// is that reading carried forward by local token flow, so say how old it is.
     private func reportedLabel(_ snapshot: UsageSnapshot) -> String {
-        guard let confirmedAt = snapshot.confirmedAt else { return "reported" }
+        guard let confirmedAt = snapshot.confirmedAt else { return String(localized: "reported") }
         let minutes = Int(Date.now.timeIntervalSince(confirmedAt) / 60)
-        return minutes < 1 ? "reported" : "reported \(minutes)m ago"
+        return minutes < 1
+            ? String(localized: "reported")
+            : String(localized: "reported \(minutes)m ago")
     }
 }
 

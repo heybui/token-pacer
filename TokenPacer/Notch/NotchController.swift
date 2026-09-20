@@ -108,10 +108,15 @@ final class NotchController {
         ) != nil else { return }
 
         notifier.alert(
-            title: "Over",
-            body: "\(Format.percent(snapshot.sessionPercent)) used, "
-                + "\(Format.countdown(to: snapshot.resetsAt)) to the reset. "
-                + "Consider finishing the current task before starting anything big.",
+            title: String(localized: "Over"),
+            body: String(
+                localized: """
+                    \(Format.percent(snapshot.sessionPercent)) used, \
+                    \(Format.countdown(to: snapshot.resetsAt)) to the reset. \
+                    Consider finishing the current task before starting anything big.
+                    """,
+                comment: "Banner body when usage crosses the critical threshold."
+            ),
             sound: preferences.soundOnThreshold,
             whenNotchHidden: false
         )

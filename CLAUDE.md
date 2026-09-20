@@ -24,6 +24,12 @@ the technical spec, `docs/ACCESS.md` what it reads off disk.
 
 - `TokenPacer/Core/` imports Foundation and `os` only — no SwiftUI, no AppKit. That constraint is what keeps the engine testable and the usage sources swappable; `os.Logger` is infrastructure, not a UI framework, so it does not break it.
 - Logging is `os.Logger` via `Log`, never `print`: a bundled app launched from Finder has nowhere to send stdout. Mark safe values `.public` — `os_log` redacts dynamic values otherwise — and never log a token.
+- User-facing copy goes through `Resources/Localizable.xcstrings`. SwiftUI's
+  `Text`/`Button`/`Toggle`/`.help` take a `LocalizedStringKey`, so a literal is
+  already a key — pass a `LocalizedStringKey` through a helper rather than a
+  `String`, or the call site silently stops being translatable. Everywhere else
+  it is `String(localized:)`. Product names (`Claude Code`, `Token Pacer`) are
+  never keys.
 - Design tokens and the tone rule (green <75, amber 75–90, red >90) live in `DesignSystem/Tokens.swift`. One place, no exceptions.
 - Shell dimensions come from the design board and belong in `PillState`, never inline in a view.
 

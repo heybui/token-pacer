@@ -104,6 +104,13 @@ app: build
 	cp TokenPacer/Info.plist $(DEST)/Contents/Info.plist
 	cp TokenPacer/Resources/InstrumentSans.ttf $(DEST)/Contents/Resources/
 	cp TokenPacer/Resources/TokenPacer.icns $(DEST)/Contents/Resources/TokenPacer.icns
+	@# The String Catalog, compiled to one .lproj per language. Xcode's
+	@# synchronized folder group does this on its own path; this is the
+	@# Makefile's half, so the two bundles carry the same strings. A catalog
+	@# with no translations yet emits nothing, which is the correct bundle:
+	@# every key falls back to the English it was written as.
+	xcrun xcstringstool compile --output-directory $(DEST)/Contents/Resources \
+	  TokenPacer/Resources/Localizable.xcstrings
 	mkdir -p $(DEST)/Contents/Frameworks
 	cp -R $(SPARKLE) $(DEST)/Contents/Frameworks/
 	install_name_tool -add_rpath @executable_path/../Frameworks $(DEST)/Contents/MacOS/$(APP)

@@ -24,18 +24,18 @@ enum Mark: String, CaseIterable, Sendable {
 
     var displayName: String {
         switch self {
-        case .capsuleBar: "Capsule bar"
-        case .ringWings: "Ring wings"
-        case .notchTank: "Notch tank"
-        case .pips: "Pips"
-        case .halfGauge: "Half gauge"
-        case .eclipse: "Eclipse"
-        case .tokenStack: "Token stack"
-        case .hourglass: "Hourglass"
-        case .dottedArc: "Dotted arc"
-        case .dotMatrix: "Dot matrix"
-        case .signalStrength: "Signal strength"
-        case .thermometer: "Thermometer"
+        case .capsuleBar: String(localized: "Capsule bar")
+        case .ringWings: String(localized: "Ring wings")
+        case .notchTank: String(localized: "Notch tank")
+        case .pips: String(localized: "Pips")
+        case .halfGauge: String(localized: "Half gauge")
+        case .eclipse: String(localized: "Eclipse")
+        case .tokenStack: String(localized: "Token stack")
+        case .hourglass: String(localized: "Hourglass")
+        case .dottedArc: String(localized: "Dotted arc")
+        case .dotMatrix: String(localized: "Dot matrix")
+        case .signalStrength: String(localized: "Signal strength")
+        case .thermometer: String(localized: "Thermometer")
         }
     }
 
@@ -43,18 +43,18 @@ enum Mark: String, CaseIterable, Sendable {
     /// what the Appearance pane shows under the selected tile.
     var axis: String {
         switch self {
-        case .capsuleBar: "position on a zone track"
-        case .ringWings: "angle on a zone track"
-        case .notchTank: "liquid remaining"
-        case .pips: "count of 8"
-        case .halfGauge: "needle angle"
-        case .eclipse: "disc occluded"
-        case .tokenStack: "discs remaining"
-        case .hourglass: "sand transferred"
-        case .dottedArc: "count of 12, circular"
-        case .dotMatrix: "count of 9"
-        case .signalStrength: "bars remaining"
-        case .thermometer: "column height"
+        case .capsuleBar: String(localized: "position on a zone track")
+        case .ringWings: String(localized: "angle on a zone track")
+        case .notchTank: String(localized: "liquid remaining")
+        case .pips: String(localized: "count of 8")
+        case .halfGauge: String(localized: "needle angle")
+        case .eclipse: String(localized: "disc occluded")
+        case .tokenStack: String(localized: "discs remaining")
+        case .hourglass: String(localized: "sand transferred")
+        case .dottedArc: String(localized: "count of 12, circular")
+        case .dotMatrix: String(localized: "count of 9")
+        case .signalStrength: String(localized: "bars remaining")
+        case .thermometer: String(localized: "column height")
         }
     }
 
