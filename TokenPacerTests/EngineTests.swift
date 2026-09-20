@@ -143,90 +143,31 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
 
 // MARK: - the activity dot
 
-/// The dot answers "is anything happening right now", which is not the same
-/// question as "is a window open" — a window stays open for hours after you stop.
-@Test func burningFollowsRecentLogGrowthNotTheOpenWindow() {
-    let now = t0.addingTimeInterval(3 * 3600)      // three hours into the window
-    let stale = SnapshotBuilder.build(
-        source: .claude, limits: nil, events: [event(0)], at: now
-    )
-    #expect(stale.isActive)              // the 5-hour window is still open
-    #expect(stale.isBurning == false)    // but nothing has been logged for hours
-}
-
-@Test func freshLogLinesLightTheDot() {
+/// The dot, the running border and the badge are one fact: how many sessions of
+/// this provider have a model answering. It used to be inferred from how recently
+/// a log line had landed, which pulsed at the bookkeeping written *after* a turn
+/// and went dark in the middle of a long one — a dot blinking at a machine where
+/// nothing was running.
+@Test func theDotFollowsTheCountOfSessionsAnswering() {
     let now = t0.addingTimeInterval(600)
-    let justNow = SnapshotBuilder.build(
-        source: .claude, limits: nil,
-        events: [event(600.0 / 3600)],   // logged seconds ago
-        at: now
+    let quiet = SnapshotBuilder.build(
+        source: .claude, limits: nil, events: [event(600.0 / 3600)], working: 0, at: now
     )
-    #expect(justNow.isBurning)
-}
+    #expect(quiet.isActive)              // the window is open
+    #expect(quiet.isBurning == false)    // and nothing is answering in it
 
-@Test func theDotGoesOutAfterTheBurningWindow() {
-    let now = t0.addingTimeInterval(600)
-    let inside = SnapshotBuilder.build(
-        source: .claude, limits: nil,
-        events: [event((600 - SnapshotBuilder.burningWindow + 1) / 3600)],
-        at: now
+    let busy = SnapshotBuilder.build(
+        source: .claude, limits: nil, events: [event(0)], working: 1, at: now
     )
-    let outside = SnapshotBuilder.build(
-        source: .claude, limits: nil,
-        events: [event((600 - SnapshotBuilder.burningWindow - 1) / 3600)],
-        at: now
-    )
-    #expect(inside.isBurning)
-    #expect(outside.isBurning == false)
-}
-
-/// The complaint this fixes: the dot went still while Claude was thinking. A
-/// usage record only lands when the exchange completes, so a long turn logs
-/// nothing at all — and "no tokens for five seconds" read as "nothing happening".
-@Test func aTurnInFlightKeepsTheDotLit() {
-    let asked = t0
-    let now = asked.addingTimeInterval(4 * 60)   // four minutes of thinking
-    let waiting = LogActivity(lastLineAt: asked, lastLineType: "user", turnAt: asked)
-
-    #expect(SnapshotBuilder.isBurning(activity: waiting, lastEvent: nil, at: now))
-    // The same silence with the turn already answered is genuinely idle.
-    let answered = LogActivity(lastLineAt: asked, lastLineType: "assistant",
-                               turnAt: asked, turnEnded: true)
-    #expect(SnapshotBuilder.isBurning(activity: answered, lastEvent: nil, at: now) == false)
-}
-
-/// A CLI killed mid-turn leaves its last line looking like a turn that never
-/// ended; the dot must not pulse for the rest of the day.
-@Test func anAbandonedTurnStopsPulsing() {
-    let waiting = LogActivity(lastLineAt: t0, lastLineType: "user", turnAt: t0)
-    let later = t0.addingTimeInterval(SnapshotBuilder.inFlightWindow + 60)
-    #expect(SnapshotBuilder.isBurning(activity: waiting, lastEvent: nil, at: later) == false)
-}
-
-/// Once the answer lands the dot goes out promptly — one poll interval, not a
-/// minute of pulsing at a finished session.
-@Test func aFinishedTurnGoesOutWithTheBurningWindow() {
-    let answered = LogActivity(lastLineAt: t0, lastLineType: "assistant",
-                               turnAt: t0, turnEnded: true)
-    #expect(SnapshotBuilder.isBurning(activity: answered, lastEvent: t0, at: t0.addingTimeInterval(2)))
-    #expect(SnapshotBuilder.isBurning(activity: answered, lastEvent: t0,
-                                      at: t0.addingTimeInterval(20)) == false)
+    // Hours since the last token was logged, and still lit: a long turn writes
+    // nothing at all while it runs.
+    #expect(busy.isBurning)
 }
 
 @Test func nothingLoggedIsNotBurning() {
-    let empty = SnapshotBuilder.build(
-        source: .claude, limits: nil, events: [], at: t0
-    )
+    let empty = SnapshotBuilder.build(source: .claude, limits: nil, events: [], at: t0)
     #expect(empty.isBurning == false)
     #expect(empty.lastActivity == nil)
-}
-
-/// A tool call is the other half of the silence: the model stops, a build runs
-/// for two minutes, and nothing is written until it comes back.
-@Test func aToolRunningKeepsTheDotLit() {
-    let stopped = LogActivity(lastLineAt: t0, lastLineType: "assistant", turnAt: t0)
-    #expect(SnapshotBuilder.isBurning(activity: stopped, lastEvent: nil,
-                                      at: t0.addingTimeInterval(2 * 60)))
 }
 
 // MARK: - usage that leaves no log here
@@ -306,4 +247,89 @@ private func event(_ offsetHours: Double, output: Int = 1000, id: String = UUID(
     #expect(UsageStore.isDisordered(ordered, after: t0.addingTimeInterval(10 * 3600)))
     // ...and a batch can be ragged within itself.
     #expect(UsageStore.isDisordered([event(3), event(1)], after: t0))
+}
+
+/// The captions used to say "5-hour window" whatever the row was showing. A
+/// workspace metered in credits has a month there and nothing shorter.
+@Test func aCaptionNamesTheWindowItPointsAt() {
+    #expect(Format.windowName(300) == "5-hour window")
+    #expect(Format.windowName(10_080) == "week")
+    #expect(Format.windowName(43_200) == "month")
+    #expect(Format.windowName(nil) == "window")
+    #expect(Format.windowTag(300) == "5-HOUR")
+    #expect(Format.windowTag(43_200) == "MONTHLY")
+}
+
+/// And that the window's length reaches the caption at all: it is read off the
+/// provider's own reading, never assumed.
+@Test func theSnapshotCarriesHowLongItsWindowsRun() {
+    let now = Date()
+    let month = RateLimitWindow(
+        usedPercent: 3, windowMinutes: 43_200, resetsAt: now.addingTimeInterval(864_000)
+    )
+    let snapshot = SnapshotBuilder.build(
+        source: .codex,
+        limits: RateLimits(primary: month, secondary: nil, planType: "Enterprise", observedAt: now),
+        events: [], at: now
+    )
+    #expect(snapshot.windowMinutes == 43_200)
+    #expect(snapshot.weeklyWindowMinutes == nil)
+}
+
+// MARK: - what the window went on
+
+/// The third column used to be a cross-provider split sitting in a panel that
+/// reads one provider at a time. This one is about the provider on screen: where
+/// its weighted tokens went. Weighted is the point — a cached read is a tenth of
+/// a fresh one, so the kind that is most of the raw traffic is a sliver here.
+@Test func theMixIsWeightedAndNeverCountsReasoningTwice() {
+    let event = UsageEvent(
+        id: "a", source: .claude, timestamp: t0,
+        model: nil, project: nil, sessionID: nil,
+        counts: TokenCounts(input: 100, output: 100, cacheWrite: 0, cacheRead: 100, reasoning: 90)
+    )
+    let mix = Aggregator.mix([event])
+
+    // Four kinds, one row each, minus the ones that cost nothing — and never a
+    // reasoning row: those tokens are already inside output.
+    #expect(mix.map(\.name) == ["Output", "Input", "Cache read"])
+    #expect(mix.map(\.share).reduce(0, +) == 100)
+    // Equal counts, unequal shares: that is the weighting showing its work.
+    #expect(mix[0].share > mix[1].share)
+    #expect(mix[1].share > mix[2].share)
+
+    #expect(Aggregator.mix([]).isEmpty)
+}
+
+/// The splits described a five-hour window whatever the provider was metered by,
+/// so a workspace on a monthly credit budget showed "no open window" in all three
+/// columns for days on end — under a headline figure that was plainly moving.
+/// They cover the window the headline is about now.
+@Test func splitsCoverTheWindowTheHeadlineIsAbout() {
+    let now = Date(timeIntervalSince1970: 1_789_000_000)
+    func event(_ daysAgo: Double) -> UsageEvent {
+        UsageEvent(
+            id: "\(daysAgo)", source: .copilot,
+            timestamp: now.addingTimeInterval(-daysAgo * 86_400),
+            model: "gpt-6-astra", project: "thing", sessionID: nil,
+            counts: TokenCounts(input: 100, output: 100)
+        )
+    }
+    // A month that resets in ten days began twenty days ago.
+    let month = RateLimitWindow(
+        usedPercent: 42, windowMinutes: 43_200, resetsAt: now.addingTimeInterval(10 * 86_400)
+    )
+    let snapshot = SnapshotBuilder.build(
+        source: .copilot,
+        limits: RateLimits(primary: month, secondary: nil, planType: nil, observedAt: now),
+        events: [event(10), event(25)], at: now
+    )
+
+    #expect(snapshot.panel.byModel.map(\.name) == ["gpt-6-astra"])
+    #expect(snapshot.panel.byProject.map(\.name) == ["thing"])
+    #expect(snapshot.panel.byKind.map(\.name) == ["Output", "Input"])
+    // The one from before this billing period began is not in it: the columns
+    // would otherwise add up to more than the percentage above them.
+    #expect(snapshot.panel.byModel[0].share == 100)
+    #expect(snapshot.sessionTokens == 0)   // and no five-hour window is open
 }

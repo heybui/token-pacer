@@ -8,8 +8,14 @@ struct UsageSnapshot: Equatable, Sendable {
     var sessionPercent: Double?
     var sessionTokens: Int = 0
     var resetsAt: Date?
+    /// How long the window behind `sessionPercent` runs. Not always five hours:
+    /// a workspace metered in credits reports a month and nothing shorter, and
+    /// every caption that names the window reads this rather than assuming.
+    var windowMinutes: Int?
     var weeklyPercent: Double?
     var weeklyResetsAt: Date?
+    /// The same, for the longer window under the dot. Usually a week.
+    var weeklyWindowMinutes: Int?
     /// A 5-hour window is open. True for hours at a time.
     var isActive: Bool = false
     /// Tokens are flowing *now* — the logs grew within `burningWindow`. This is
@@ -29,29 +35,12 @@ struct UsageSnapshot: Equatable, Sendable {
 }
 
 enum SnapshotBuilder {
-    /// Is anything happening *right now*?
+    /// How long a session may claim to be working without saying so again.
     ///
-    /// Token records are written when an exchange completes, so they answer
-    /// "was anything happening a moment ago". While the model is thinking — the
-    /// stretch where a still dot is most misleading — nothing is logged at all,
-    /// and the answer has to come from the shape of the newest line instead.
-    static func isBurning(activity: LogActivity?, lastEvent: Date?, at now: Date) -> Bool {
-        if let activity, activity.isAwaitingResponse {
-            return now.timeIntervalSince(activity.lastLineAt) < inFlightWindow
-        }
-        let newest = [activity?.lastLineAt, lastEvent].compactMap(\.self).max()
-        return newest.map { now.timeIntervalSince($0) < burningWindow } ?? false
-    }
-
-    /// How recently the logs must have grown to count as still burning, once a
-    /// turn has finished. Two polls plus slack, not one: a line written just
-    /// before a tick is already older than a 5s window by the next one, so the
-    /// dot blinked off between beats of work it should have sat through.
-    static let burningWindow: TimeInterval = 12
-
-    /// A turn in flight keeps the dot lit without any tokens being logged — the
-    /// record only lands when the exchange completes. Capped, because a crashed
-    /// CLI leaves its last line looking like a turn that never ended.
+    /// A CLI killed mid-turn leaves its last word looking like work that never
+    /// finished; a registry entry for a session that died leaves the same. Every
+    /// provider's count is capped by this, so nothing pulses for the rest of the
+    /// day on the strength of a file nobody is writing to any more.
     static let inFlightWindow: TimeInterval = 15 * 60
 
     /// The provider's own limits when they are present and fresh; otherwise the
@@ -60,7 +49,10 @@ enum SnapshotBuilder {
         source: SourceID,
         limits: RateLimits?,
         events: [UsageEvent],
-        activity: LogActivity? = nil,
+        /// Sessions of this provider with a model answering right now. The dot,
+        /// the running border and the badge are one fact told three ways, so
+        /// they are one number.
+        working: Int = 0,
         at now: Date,
         weights: TokenWeights = .default,
         panelMovedAt: Date? = nil,
@@ -76,11 +68,13 @@ enum SnapshotBuilder {
         var snapshot = UsageSnapshot(source: source)
         snapshot.sessionTokens = current?.counts.total ?? 0
         snapshot.isActive = current != nil
-        // Burning is asked of the logs alone. A panel reading proves work happened
-        // somewhere in the last half hour, not that tokens are flowing this second,
-        // and the ring claims the second.
+        // A job is running or it is not. This used to be inferred from how
+        // recently a log line had landed, which pulsed at bookkeeping written
+        // after a finished turn and went dark in the middle of a long one — the
+        // dot blinked at a machine where nothing was running at all. Every
+        // provider now says outright how many sessions are answering.
         let logged = windows.last?.lastActivity
-        snapshot.isBurning = Self.isBurning(activity: activity, lastEvent: logged, at: now)
+        snapshot.isBurning = working > 0
         // Dormancy is asked of both. Web and Claude Design write nothing here, so
         // on the logs alone the pill withdrew mid-session and took a climbing
         // figure with it — the one moment it exists to be on screen for.
@@ -94,6 +88,7 @@ enum SnapshotBuilder {
         if let primary {
             snapshot.sessionPercent = primary.usedPercent
             snapshot.resetsAt = primary.resetsAt
+            snapshot.windowMinutes = primary.windowMinutes
             snapshot.confirmedAt = limits?.observedAt
         } else {
             // No reading, so no percentage — the window's own end is still worth
@@ -104,14 +99,27 @@ enum SnapshotBuilder {
         if let secondary = limits?.secondary.flatMap({ $0.resetsAt > now ? $0 : nil }) {
             snapshot.weeklyPercent = secondary.usedPercent
             snapshot.weeklyResetsAt = secondary.resetsAt
+            snapshot.weeklyWindowMinutes = secondary.windowMinutes
         }
+
+        // The span the splits cover: the provider's own window when it states
+        // one, and the log's five-hour window when it does not. A workspace on a
+        // credit budget has a month up in the headline and no five-hour window
+        // at all, so all three columns read "no open window" for days at a time
+        // under a figure that was plainly moving.
+        let splitSpan = primary.map {
+            DateInterval(
+                start: $0.resetsAt.addingTimeInterval(-Double($0.windowMinutes) * 60),
+                end: $0.resetsAt
+            )
+        } ?? current.map { DateInterval(start: $0.start, end: $0.end) }
 
         // Handed in when the caller still has a recent one. Aggregating it walks
         // every retained event — thirty days of them — and it feeds the pinned
         // panel alone, which is shut almost always. On the 5s tick it was the
         // most expensive thing the app did, and it grew with the history.
         snapshot.panel = panel ?? Aggregator.panel(
-            events: events, window: current, at: now, weights: weights
+            events: events, window: splitSpan, at: now, weights: weights
         )
 
         return snapshot

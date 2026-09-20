@@ -24,6 +24,11 @@ struct PanelData: Equatable, Sendable {
     var sparkline: [Double] = []
     var byModel: [UsageSplit] = []
     var byProject: [UsageSplit] = []
+    /// What the window's weighted tokens were spent on, rather than who spent
+    /// them. The only split that explains the figure above it: a cached read is
+    /// a tenth of a fresh one, so the kind that is most of the raw traffic can
+    /// be a sliver of the percentage.
+    var byKind: [UsageSplit] = []
     var history: [DayUsage] = []
 
     static let empty = PanelData()
@@ -47,7 +52,10 @@ enum Aggregator {
 
     static func panel(
         events: [UsageEvent],
-        window: SessionWindow?,
+        /// The span the splits describe. Not always a five-hour window: a
+        /// workspace on a credit budget is metered by the month, and the three
+        /// columns have to cover the same period as the figure above them.
+        window: DateInterval?,
         at now: Date,
         weights: TokenWeights = .default,
         historyDays: Int = historyDays,
@@ -63,9 +71,29 @@ enum Aggregator {
             sparkline: sparkline(events: events, at: now, weights: weights),
             byModel: shares(inWindow, weights: weights) { Self.displayModel($0.model) },
             byProject: shares(inWindow, weights: weights) { $0.project ?? "—" },
+            byKind: mix(inWindow, weights: weights),
             history: history(events: events, at: now, days: historyDays,
                              weights: weights, calendar: calendar)
         )
+    }
+
+    /// The window split by kind of token.
+    ///
+    /// Not `shares`: every event carries all four kinds at once, so there is no
+    /// key to group by. `reasoning` is left out on purpose — it is a subset of
+    /// `output` in both CLIs, and a row for it would count the same tokens twice.
+    static func mix(_ events: [UsageEvent], weights: TokenWeights = .default) -> [UsageSplit] {
+        let counts = events.reduce(TokenCounts.zero) { $0 + $1.counts }
+        let rows = [
+            (String(localized: "Output"), Double(counts.output) * weights.output),
+            (String(localized: "Input"), Double(counts.input) * weights.input),
+            (String(localized: "Cache write"), Double(counts.cacheWrite) * weights.cacheWrite),
+            (String(localized: "Cache read"), Double(counts.cacheRead) * weights.cacheRead),
+        ]
+        let sum = rows.reduce(0) { $0 + $1.1 }
+        guard sum > 0 else { return [] }
+        let spent = rows.filter { $0.1 > 0 }.sorted { $0.1 > $1.1 }
+        return spent.map { UsageSplit(name: $0.0, share: $0.1 / sum * 100) }
     }
 
     static func sparkline(

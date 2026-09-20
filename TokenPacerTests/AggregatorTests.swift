@@ -77,7 +77,10 @@ private func event(
         counts: TokenCounts(input: 0, output: 1000), weighted: 5000,
         lastActivity: t0.addingTimeInterval(-600)
     )
-    let panel = Aggregator.panel(events: events, window: window, at: t0, calendar: utc)
+    let panel = Aggregator.panel(
+        events: events, window: DateInterval(start: window.start, end: window.end),
+        at: t0, calendar: utc
+    )
     #expect(panel.byProject.map(\.name) == ["now"])
 }
 

@@ -51,11 +51,13 @@ actor ClaudeCodeSource: UsageSource {
     func poll() throws -> SourceSnapshot {
         let now = Date.now
         guard !canSkipScan(at: now) else {
-            return SourceSnapshot(source: .claude, events: [], limits: nil, activity: scanner.activity)
+            return SourceSnapshot(source: .claude, events: [], limits: nil)
         }
         lastScan = now
         let events = try scanner.scan(root: root, since: cutoff, decode: Self.decode)
-        return SourceSnapshot(source: .claude, events: events, limits: nil, activity: scanner.activity)
+        // No count: Claude Code registers every session in a file of its own,
+        // with a kind and a live pid, and the store asks that instead.
+        return SourceSnapshot(source: .claude, events: events, limits: nil)
     }
 
     static func decode(_ line: Data, file: URL) -> [UsageEvent] {

@@ -33,14 +33,19 @@ struct LogActivity: Equatable, Sendable {
     /// Newest line of any kind, bookkeeping included. Drives the quiet window.
     var lastLineAt: Date
     var lastLineType: String?
-    /// Newest line that is part of the conversation, and whether it closed the
-    /// turn. Nil for sources that do not mark their turns (Codex).
+    /// Newest line that opened or closed a turn, and which of the two it was.
+    /// Nil until a source has marked one.
     var turnAt: Date?
     var turnEnded = false
 
-    /// Two thirds of a session log is bookkeeping — `ai-title`, `mode`,
-    /// `queue-operation`, `attachment` — so only these two answer the question.
-    static let conversational: Set<String> = ["user", "assistant"]
+    /// The lines that open and close a turn, in both formats. Two thirds of a
+    /// session log is bookkeeping — `ai-title`, `mode`, `queue-operation`,
+    /// `attachment`, `item_completed` — so only these four answer the question.
+    ///
+    /// Claude marks a turn with the conversation itself: a `user` line opens
+    /// one, an `assistant` line that did not stop for a tool closes it. Codex
+    /// says so outright, one level down, in `payload.type`.
+    static let turnMarkers: Set<String> = ["user", "assistant", "task_started", "task_complete"]
 
     /// A prompt or a tool result with no answer yet, or an assistant line that
     /// stopped to run a tool. Both mean work is happening with nothing logged.
@@ -58,8 +63,32 @@ struct LogScanner {
     /// ponytail: flat cap, swap for a time-windowed set if a heavy user trips it.
     private static let seenLimit = 50_000
 
-    /// The newest line seen across every log, whatever its type.
-    private(set) var activity: LogActivity?
+    /// One reading per log file. A machine runs several sessions at once and
+    /// they are not one stream: the newest line belongs to whichever session was
+    /// quickest, and the turn in flight is as often another's.
+    private(set) var activityByFile: [URL: LogActivity] = [:]
+
+    /// The liveliest session, which is not the loudest one. A turn in flight
+    /// wins over one that has ended however recently the finished session wrote
+    /// — bookkeeping from a session that just stopped used to hide the session
+    /// that was still working.
+    var activity: LogActivity? {
+        let all = activityByFile.values
+        return all.filter(\.isAwaitingResponse).max { $0.lastLineAt < $1.lastLineAt }
+            ?? all.max { $0.lastLineAt < $1.lastLineAt }
+    }
+
+    /// Sessions with a turn open right now.
+    ///
+    /// Capped at the same in-flight window the dot uses: a CLI killed mid-turn
+    /// leaves its last line looking like work that never finished, and a log
+    /// that has said nothing for a quarter of an hour is not a job in progress.
+    func working(at now: Date) -> Int {
+        activityByFile.values.count {
+            $0.isAwaitingResponse
+                && now.timeIntervalSince($0.lastLineAt) < SnapshotBuilder.inFlightWindow
+        }
+    }
 
     mutating func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {
         reader.archived = cursors
@@ -74,16 +103,30 @@ struct LogScanner {
         /// `tool_use` means the model stopped to run something and is coming
         /// back; anything else means it handed the turn back.
         let message: Message?
+        /// Codex nests the kind of line one level down, and leaves the top-level
+        /// `type` saying only which stream it belongs to — `event_msg`.
+        let payload: Payload?
 
         struct Message: Decodable { let stop_reason: String? }
+        struct Payload: Decodable { let type: String? }
 
-        var endsTurn: Bool { type == "assistant" && message?.stop_reason != "tool_use" }
+        /// What kind of line this is, whichever level its format states it at.
+        /// Claude's lines carry no payload, so the top level answers there.
+        var kind: String? { payload?.type ?? type }
+
+        var endsTurn: Bool {
+            kind == "task_complete"
+                || (kind == "assistant" && message?.stop_reason != "tool_use")
+        }
     }
 
-    /// How far back through a poll's new lines to look for a conversational one.
-    /// A finished turn is followed by a short flurry of bookkeeping, never a long
-    /// one.
-    private static let turnScan = 16
+    /// How far back through a poll's new lines to look for a turn marker. A
+    /// finished turn is followed by a short flurry of bookkeeping, never a long
+    /// one — but Codex writes a line per tool call and per reasoning block, and
+    /// at 16 a busy second's worth of them hid the `task_complete` behind them,
+    /// which leaves a finished turn looking like one still in flight. The scan
+    /// stops at the first marker it meets, so this is only the worst case.
+    private static let turnScan = 64
 
     mutating func scan(
         root: URL,
@@ -98,22 +141,21 @@ struct LogScanner {
             // undo the byte prefilter that keeps a cold start cheap.
             if let last = lines.last, let meta = try? JSONDecoder().decode(LineMeta.self, from: last),
                let stamp = meta.timestamp.flatMap(ISO8601.parse),
-               stamp > (activity?.lastLineAt ?? .distantPast) {
-                activity = LogActivity(
+               stamp > (activityByFile[file]?.lastLineAt ?? .distantPast) {
+                activityByFile[file] = LogActivity(
                     lastLineAt: stamp, lastLineType: meta.type,
-                    turnAt: activity?.turnAt, turnEnded: activity?.turnEnded ?? false
+                    turnAt: activityByFile[file]?.turnAt,
+                    turnEnded: activityByFile[file]?.turnEnded ?? false
                 )
             }
-            // ponytail: newest turn across every log wins, so two sessions at
-            // once report the livelier one. Per-session state if that ever bites.
             for line in lines.suffix(Self.turnScan).reversed() {
                 guard let meta = try? JSONDecoder().decode(LineMeta.self, from: line),
-                      let type = meta.type, LogActivity.conversational.contains(type),
+                      let kind = meta.kind, LogActivity.turnMarkers.contains(kind),
                       let stamp = meta.timestamp.flatMap(ISO8601.parse)
                 else { continue }
-                if stamp > (activity?.turnAt ?? .distantPast) {
-                    activity?.turnAt = stamp
-                    activity?.turnEnded = meta.endsTurn
+                if stamp > (activityByFile[file]?.turnAt ?? .distantPast) {
+                    activityByFile[file]?.turnAt = stamp
+                    activityByFile[file]?.turnEnded = meta.endsTurn
                 }
                 break
             }
@@ -125,6 +167,20 @@ struct LogScanner {
             }
         }
         if seen.count > Self.seenLimit { seen.removeAll(keepingCapacity: true) }
+        prune(at: Date.now)
         return events.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    /// A month of retained logs is a month of files, and all but the last few
+    /// are answered questions. Keep every session that could still be working,
+    /// and the newest reading whatever its age — the dot asks for that one by
+    /// name, and on a quiet machine it is the only one there is.
+    private mutating func prune(at now: Date) {
+        guard let newest = activityByFile.max(by: { $0.value.lastLineAt < $1.value.lastLineAt })?.key
+        else { return }
+        activityByFile = activityByFile.filter {
+            $0.key == newest
+                || now.timeIntervalSince($0.value.lastLineAt) < SnapshotBuilder.inFlightWindow
+        }
     }
 }
