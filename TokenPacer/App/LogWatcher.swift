@@ -39,14 +39,19 @@ final class LogWatcher: @unchecked Sendable {
     static let registryLatency: CFTimeInterval = 0.3
 
     /// Called on the watcher's own queue whenever something under `root`
-    /// changed, for a root whose reading is cheap enough to do on the spot.
-    /// Nil leaves the dirty flag as the only signal, which is what a log root
-    /// wants: there the tick decides when the reading is worth its cost.
-    private let onChange: (@Sendable () -> Void)?
+    /// changed. Set after the fact for the log roots: the store they wake is
+    /// built from the sources these same watchers gate, so it cannot be handed
+    /// to them in their own initialiser.
+    private var handler: (@Sendable () -> Void)?
+
+    var onChange: (@Sendable () -> Void)? {
+        get { lock.withLock { handler } }
+        set { lock.withLock { handler = newValue } }
+    }
 
     init?(root: URL, latency: CFTimeInterval = LogWatcher.latency, onChange: (@Sendable () -> Void)? = nil) {
         guard FileManager.default.fileExists(atPath: root.path) else { return nil }
-        self.onChange = onChange
+        self.handler = onChange
 
         var context = FSEventStreamContext(
             version: 0,
@@ -105,6 +110,11 @@ final class LogWatcher: @unchecked Sendable {
             [
                 ClaudeCodeSource(changed: Self.gate(claude)),
                 CodexSource(changed: Self.gate(codex)),
+                // Unwatched on purpose: `~/.copilot` holds a sqlite database and
+                // eighty process logs, and waking the store for every write to
+                // any of them would cost more than the one file is worth. It is
+                // a `stat` a tick, and a decode only when that file moved.
+                CopilotSource(),
             ],
             [claude, codex].compactMap(\.self)
         )

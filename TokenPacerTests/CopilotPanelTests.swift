@@ -20,6 +20,11 @@ private let calendar = Calendar.current
     #expect(limits.primary?.windowMinutes == CopilotUsagePanel.planWindowMinutes)
     #expect(limits.spend?.used == Money(amountMinor: 7074, currency: "AIC", exponent: 0))
     #expect(limits.spend?.limit == Money(amountMinor: 18000, currency: "AIC", exponent: 0))
+    // The panel states no percentage for the budget — only Claude's endpoint
+    // does — so the bar under it fills from the pair itself. It used to be
+    // drawn with nil and sat empty beside two figures that said 39%.
+    #expect(limits.spend?.percent == nil)
+    #expect(limits.spend?.share == Double(7074) / Double(18000) * 100)
 }
 
 /// The one thing that makes Copilot a different shape: a budget, and no window

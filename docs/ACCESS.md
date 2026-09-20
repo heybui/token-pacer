@@ -1,7 +1,7 @@
 # What Token Pacer reads from your agents
 
 Every path by which this app learns anything about your usage. Four flows for
-Claude Code, three for Codex, one for Copilot, all read-only: nothing under
+Claude Code, three for Codex, three for Copilot, all read-only: nothing under
 `~/.claude`, `~/.claude.json`, `~/.codex` or `~/.copilot` is ever written, and
 the only file this app writes is its own state under
 `~/Library/Application Support/TokenPacer/`.
@@ -234,11 +234,11 @@ path, sorted, so the choice is stable between runs.
 
 ## Copilot
 
-One flow, and no logs at all.
-
 | # | Flow | Reads | Mechanism | Cadence |
 |---|---|---|---|---|
 | 1 | Plan budget | the `copilot` binary's `/usage` screen | pty + `posix_spawn` | idle floor only, ≥ 30 min |
+| 2 | Sessions working now | `~/.copilot/open-sessions-state.json` | `Data(contentsOf:)` | a `stat` per tick, decoded only when it moved |
+| 3 | Request log | `~/.copilot/session-store.db` | SQLite, read-only | a `stat` per tick, queried only when it moved |
 
 ### The `/usage` panel
 
@@ -260,12 +260,29 @@ Copilot has no five-hour or weekly window, so this is the only figure, and the
 reset is inferred as the month boundary — the panel never prints the billing
 anniversary.
 
+### The request log
+
+`TokenPacer/Core/Ingest/CopilotSource.swift`
+
+`session-store.db` keeps one row per request in `assistant_usage_events` — the
+model, the four token counts, the reasoning subset and the AIU it cost — joined
+to `sessions` for the repository or working directory it ran in. It is opened
+read-only with `SQLITE_OPEN_READONLY` and never written to, not even to
+checkpoint; the connection is opened only when the store or its `-wal` has
+moved, and the query resumes from the last row id rather than reading the table
+again.
+
+`input_tokens` is the whole prompt there — cache reads and writes included, as
+the row's own `token_details_json` spells out — so those are subtracted, exactly
+as Codex needs, and only the fresh remainder is charged as input.
+
+The same file holds `turns`, with the prompts and the replies in full. Nothing
+here reads that table.
+
 ### Not read
 
-`~/.copilot/data.db` is opened by nothing here. In CLI 1.0.86 it holds sessions,
-context-window rows and workspace state — no per-request token rows — so Copilot
-contributes no sparkline, no splits and no history, and the card shows those
-sections empty rather than filled from somewhere else. The desktop app's local
+`~/.copilot/data.db` is opened by nothing here: in CLI 1.0.86 it holds accounts,
+activity items and workspace state, none of which is usage. The desktop app's local
 daemon (`~/.copilot/run/ws.port`, `ws.token`) is not spoken to at all: it serves
 only the app it belongs to, and reaching into it would mean reverse engineering a
 private socket whose port and token rotate (ARCHITECTURE.md §1.1).
