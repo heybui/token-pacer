@@ -449,7 +449,8 @@ land them in the same place.
 ## 7. Release
 
 ```
-make release VERSION=0.1.0
+# Releases → Draft a new release → tag v0.1.0, write the notes, Publish
+make release VERSION=0.1.0                   # the same thing, from a laptop
 ```
 
 `notarize` → `appcast` → `cask`, then the publish. The order is load-bearing:
@@ -470,8 +471,34 @@ The feed is served from the domain, never from the release it ships with: a buil
 polls the URL it was compiled with for ever. `SITE_REPO`, `SITE_DIR`, `TAP_REPO`
 and `TAP_DIR` in the Makefile are the only knobs.
 
+**Publishing a release in this repo is the release.** Its tag names the version
+and its body is the notes. The workflow hands the tag to `make` as `VERSION`,
+and `make app` stamps it into `CFBundleShortVersionString`; the figure in
+`TokenPacer/Info.plist` is only the fallback a local build uses. So nothing has
+to be bumped before releasing, and no button can disagree with the tag about
+what shipped. Drafts do not fire it — the event is `published`.
+
+**The same version can be released twice.** Force-pushing a tag that already
+exists is deliberate, so a second run is a retry — of a release that notarized
+and then died on the tap, say. It replaces the notes and the image on the
+existing GitHub release rather than failing the run, keeping that release's URL
+and the download link already in someone's hands. The feed, the cask and the
+site commit are idempotent to match: nothing to commit is success, not a failure
+to publish.
+
+**Release notes are written, not generated.** The body of that release is the
+only copy: CI writes it to `build/notes.md`, `gh api /markdown` renders the
+fragment Sparkle embeds, and the site's release page carries the same text. A
+generated log was tried and thrown out — it lists `chore` and `ci` under a
+version, and the update dialog is the last place anyone wants to read that.
+Locally, `make notes` reads the body back off the release, so a laptop and a
+runner publish the same words. An empty body publishes without a description
+rather than failing. `docs/RELEASE_NOTES.md` is the template and the house rules
+for writing one: what that dialog can render, and what leaks out of a private
+repo if you paste it in.
+
 **Also from CI.** `.github/workflows/release.yml` runs that same `make release`
-on a `macos-15` runner, by hand from the Actions tab. It only supplies what a
+on a `macos-26` runner, triggered by the tag push. It only supplies what a
 laptop already has: a throwaway keychain holding the Developer ID identity, a
 checkout of the site repo as `SITE_DIR`, and the two overrides the Makefile
 exposes — `NOTARY_ARGS` for credentials that live in that keychain rather than

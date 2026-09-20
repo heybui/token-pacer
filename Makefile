@@ -12,6 +12,11 @@ DEST := build/$(APP).app
 
 ## Marketing version from the plist; build number from the commit count, so it
 ## only ever goes up. Sparkle compares CFBundleVersion, not the pretty one.
+##
+## CI overrides this with the tag that triggered the run — `v1.2.0` is the
+## release, and the tag is the one place it is written down. The plist figure is
+## what a local `make release` and a development build fall back to; `app`
+## stamps whichever it was into the bundle either way.
 VERSION ?= $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" TokenPacer/Info.plist)
 BUILD   ?= $(shell git rev-list --count HEAD)
 DMG     := build/$(APP)-$(VERSION).dmg
@@ -162,29 +167,35 @@ appcast: $(DMG)
 	cp build/feed/appcast.xml build/appcast.xml
 	@echo "→ build/appcast.xml"
 
-## Release notes, from this repo's log since the last tag — the website's log
-## would list landing-page commits under an app version. Two shapes of the same
-## text: markdown for the release body, and an HTML fragment named after the
-## archive for Sparkle. A fragment carrying no DOCTYPE or body tags is embedded
-## into the feed as CDATA rather than linked, so there is no second asset to
-## upload and no URL to keep alive for as long as anyone runs this version.
-SINCE = $$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+## Release notes, written by hand on the GitHub release in *this* repo.
+##
+## Generated notes were tried and thrown out: a raw log lists the scaffolding —
+## `chore`, `ci`, `build` — under a version, and Sparkle's update dialog is the
+## last place anyone wants to read it. Summarizing the log guesses at what
+## mattered. The release form is already the right place to say it once.
+##
+## CI writes the release body here before it builds. Locally the body is read
+## back off the same release, so a laptop and a runner publish the same words.
+## `gh api /markdown` renders the fragment Sparkle embeds — GitHub's own
+## renderer, so the feed says exactly what the release page says. A fragment
+## with no DOCTYPE or body tags goes into the feed as CDATA rather than a link,
+## so there is no second asset to upload and no URL to keep alive for as long
+## as anyone runs this version.
+NOTES_MD ?= build/notes.md
 notes:
 	@mkdir -p build/feed
-	@git log --no-merges --pretty='- %s' $(SINCE)..HEAD > build/notes.md
-	@# Nothing since the last tag means nothing to say, and an empty list in the
-	@# feed reads worse than no description at all. Leaving the file out is what
-	@# tells generate_appcast there are no notes.
-	@if [ -s build/notes.md ]; then \
-	  { echo "<ul>"; \
-	    git log --no-merges --pretty='%s' $(SINCE)..HEAD \
-	      | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
-	            -e 's|^|<li>|' -e 's|$$|</li>|'; \
-	    echo "</ul>"; } > build/feed/$(APP)-$(VERSION).html; \
-	  echo "→ build/notes.md, build/feed/$(APP)-$(VERSION).html ($$(wc -l < build/notes.md | tr -d ' ') entries)"; \
+	@[ -s $(NOTES_MD) ] \
+	  || gh release view v$(VERSION) --json body -q .body > $(NOTES_MD) 2>/dev/null \
+	  || true
+	@# No notes is a state, not a failure: leaving the fragment out is what tells
+	@# generate_appcast this version has nothing to say.
+	@if [ -s $(NOTES_MD) ]; then \
+	  gh api --method POST /markdown -f mode=gfm -f text="$$(cat $(NOTES_MD))" \
+	    > build/feed/$(APP)-$(VERSION).html; \
+	  echo "→ $(NOTES_MD), build/feed/$(APP)-$(VERSION).html"; \
 	else \
 	  rm -f build/feed/$(APP)-$(VERSION).html; \
-	  echo "→ build/notes.md is empty: no commits since $(SINCE)"; \
+	  echo "→ no release notes for v$(VERSION): publishing without a description"; \
 	fi
 
 ## Apple staples the ticket to the image, so a first launch works offline.
@@ -229,21 +240,40 @@ release:
 	$(MAKE) notarize
 	$(MAKE) appcast
 	$(MAKE) cask
-	@# build/notes.md came from `appcast` above, which needed the same text for
-	@# the feed. --generate-notes is not an option: it reads the repo the release
-	@# is filed in, which is the website.
-	gh release create v$(VERSION) --repo $(SITE_REPO) \
-	  --title "$(APP) $(VERSION)" --notes-file build/notes.md $(DMG)
-	@# Tag here too, so the next release knows where these notes start.
-	git tag -a v$(VERSION) -m "$(APP) $(VERSION)"
-	git push origin v$(VERSION)
+	@# The same words the release in this repo carries — `appcast` above already
+	@# fetched them for the feed. --generate-notes is not an option: it reads the
+	@# repo the release is filed in, which is the website.
+	@# Re-releasing the same version replaces what is there rather than failing.
+	@# Pushing a tag that already exists takes a deliberate `--force`, so by the
+	@# time a second run reaches here it is a retry — of a release that notarized
+	@# and then died on the tap, or one whose image has to be rebuilt. Edit and
+	@# clobber rather than delete and recreate: the release keeps its URL, and
+	@# the download link already in someone's hands keeps working.
+	@if gh release view v$(VERSION) --repo $(SITE_REPO) >/dev/null 2>&1; then \
+	  echo "v$(VERSION) is already released — replacing its notes and image."; \
+	  gh release edit v$(VERSION) --repo $(SITE_REPO) \
+	    --title "$(APP) $(VERSION)" --notes-file $(NOTES_MD); \
+	  gh release upload v$(VERSION) --repo $(SITE_REPO) $(DMG) --clobber; \
+	else \
+	  gh release create v$(VERSION) --repo $(SITE_REPO) \
+	    --title "$(APP) $(VERSION)" --notes-file $(NOTES_MD) $(DMG); \
+	fi
+	@# Publishing the release on GitHub created this tag already, and CI checked
+	@# it out. Creating it again would fail the run after it had published, so
+	@# this only covers a release cut from a laptop before the tag exists.
+	@git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null \
+	  || { git tag -a v$(VERSION) -m "$(APP) $(VERSION)" && git push origin v$(VERSION); }
 	@# The feed lives at the domain, not at the release: a build polls the URL it
 	@# shipped with for ever, and that one has to outlive wherever the DMG sits.
 	@# It goes in public/ — the site deploys dist/, built from src/ and public/,
 	@# so a copy at the repo root is never served and Sparkle would 404.
 	cp build/appcast.xml $(SITE_DIR)/public/appcast.xml
 	git -C $(SITE_DIR) add public/appcast.xml
-	git -C $(SITE_DIR) commit -m "release: $(APP) $(VERSION)"
+	@# A re-release of the same version signs the same bytes to the same length,
+	@# so the feed can come out identical. Nothing to commit is success here, not
+	@# a failure to publish.
+	@git -C $(SITE_DIR) diff --cached --quiet \
+	  || git -C $(SITE_DIR) commit -m "release: $(APP) $(VERSION)"
 	git -C $(SITE_DIR) push
 	@# The tap is a convenience, not the product: Sparkle and the DMG above
 	@# are how anyone actually gets the app. A release must not fail because
@@ -253,7 +283,8 @@ release:
 	  mkdir -p $(TAP_DIR)/Casks; \
 	  cp build/token-pacer.rb $(TAP_DIR)/Casks/token-pacer.rb; \
 	  git -C $(TAP_DIR) add Casks/token-pacer.rb; \
-	  git -C $(TAP_DIR) commit -m "token-pacer $(VERSION)"; \
+	  git -C $(TAP_DIR) diff --cached --quiet \
+	    || git -C $(TAP_DIR) commit -m "token-pacer $(VERSION)"; \
 	  git -C $(TAP_DIR) push; \
 	else \
 	  echo "No tap at $(TAP_DIR) — skipped the cask; build/token-pacer.rb is ready."; \

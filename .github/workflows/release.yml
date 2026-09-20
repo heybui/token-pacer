@@ -7,8 +7,17 @@
 ## docs/ARCHITECTURE.md §7 lists them and what the button costs.
 name: Release
 
+## Publishing a release in this repo is the whole ceremony. Its tag names the
+## version, its body is the release notes, and publishing it starts this run.
+## Nothing has to be bumped in the repo first, and nothing about the release is
+## written twice: what you typed in the form is what the site's release page,
+## the Sparkle dialog and the update banner all say.
+##
+## Draft releases do not fire this — `published` is the event, so the form can
+## be saved and edited until it is right.
 on:
-  workflow_dispatch:
+  release:
+    types: [published]
 
 ## One release at a time: they race for the same tag and the same feed.
 concurrency:
@@ -16,7 +25,8 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  ## `make release` tags this repo so the next run knows where its notes start.
+  ## The tag already exists — it triggered this. Write stays for the fallback in
+  ## `make release`, which creates it when a release is cut from a laptop.
   contents: write
 
 jobs:
@@ -36,6 +46,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ## The release's own tag, not whatever the default branch points at.
+          ref: ${{ github.event.release.tag_name }}
           ## CFBundleVersion is the commit count and the notes read the log back
           ## to the last tag. A shallow clone would renumber every build to 1,
           ## which Sparkle sees as a downgrade.
@@ -54,12 +66,33 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Read the version
+      - name: Read the version and the notes
         id: version
+        ## The version comes from the tag, not the plist: `make app` stamps
+        ## whatever it is handed into CFBundleShortVersionString, so one figure
+        ## reaches the bundle, the feed, the cask and the release title.
+        ##
+        ## The notes come off the release body and go straight to the file the
+        ## Makefile publishes from. Through the environment rather than an
+        ## expression inside the script: a body is arbitrary markdown, and
+        ## pasting it into a shell would run whatever it happens to contain.
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          BODY: ${{ github.event.release.body }}
         run: |
-          VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" TokenPacer/Info.plist)
+          VERSION="${TAG#v}"
+          case "$VERSION" in
+            [0-9]*.[0-9]*) ;;
+            *) echo "::error::Tag $TAG is not a version. Tag the release v1.2.0."; exit 1 ;;
+          esac
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Token Pacer $VERSION"
+          mkdir -p build
+          printf '%s' "$BODY" > build/notes.md
+          if [ -s build/notes.md ]; then
+            echo "Token Pacer $VERSION — $(wc -l < build/notes.md | tr -d ' ') lines of notes"
+          else
+            echo "::warning::$TAG has an empty body — publishing without a description."
+          fi
 
       - name: Check what this needs before it signs anything
         ## A missing secret is an empty string, not an error, so every one of
@@ -95,9 +128,12 @@ jobs:
             exit 1
           }
 
+          ## Not an error any more. Re-pushing a tag takes `--force`, so a second
+          ## run of the same version is a retry, and `make release` replaces the
+          ## notes and the image in place instead of refusing. Said out loud
+          ## because the only other way to notice is the release history.
           if gh release view "v$VERSION" --repo "$SITE_REPO" > /dev/null 2>&1; then
-            echo "::error::v$VERSION is already released. Bump CFBundleShortVersionString in TokenPacer/Info.plist."
-            exit 1
+            echo "::warning::v$VERSION already exists in $SITE_REPO — this run replaces it."
           fi
 
       - name: Import the Developer ID certificate
@@ -176,6 +212,7 @@ jobs:
           trap 'rm -f "$RUNNER_TEMP/sparkle.key"' EXIT
 
           make release \
+            VERSION="${{ steps.version.outputs.version }}" \
             SITE_DIR="$RUNNER_TEMP/site" \
             NOTARY_ARGS="--keychain-profile token-pacer --keychain $KEYCHAIN --timeout 12m" \
             APPCAST_ARGS="--ed-key-file $RUNNER_TEMP/sparkle.key"
