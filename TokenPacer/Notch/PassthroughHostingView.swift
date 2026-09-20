@@ -34,6 +34,12 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
         )
     }
 
+    /// The app is an accessory and the panel never activates, so a click into it
+    /// arrives at a window of an inactive app. Without this, AppKit spends the
+    /// first one on focus and the row under the pointer does nothing until the
+    /// second — the pill is a thing you click once, in passing, or not at all.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
     override func rightMouseDown(with event: NSEvent) { onRightMouseDown?() }
 
     override func hitTest(_ point: NSPoint) -> NSView? {

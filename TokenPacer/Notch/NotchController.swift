@@ -10,7 +10,6 @@ final class NotchController {
     private var watchers: [LogWatcher]
     private let store: UsageStore
     private let preferences = Preferences()
-    private let notifier = Notifier()
     private var alerts = AlertPolicy()
     private let preferencesWindow = PreferencesWindow()
     /// Constructing it starts Sparkle's scheduler, so it is owned here and
@@ -25,12 +24,17 @@ final class NotchController {
     /// Live only while the panel is pinned — Esc has to close it, and nothing
     /// else in this app takes the keyboard.
     private var escapeMonitor: Any?
+    /// Live for the same span: a click anywhere but here dismisses, the way
+    /// every panel that takes over the screen behaves.
+    private var outsideMonitor: Any?
     /// The screen the panel is anchored to, kept so a resize can re-derive the
     /// frame without asking AppKit for the display list again.
     private var metrics: ScreenMetrics?
     /// A pending shrink. Cancelled by whatever happens next, which is what makes
     /// a hover that comes back mid-collapse cost nothing.
     private var shrink: Task<Void, Never>?
+    /// When the install locations were last looked at. See `detectInstalled`.
+    private var lastDetect = Date.distantPast
 
     init() {
         let watched = LogWatcher.watchedSources()
@@ -67,9 +71,30 @@ final class NotchController {
         host.onRightMouseDown = { [weak model] in model?.toggleMenu() }
         // Hover belongs to the host: it is the only thing that knows the rect the
         // shell actually occupies on screen.
-        host.onHoverChange = { [weak model] inside in model?.setPointerInside(inside) }
+        host.onHoverChange = { [weak model, weak store] inside in
+            model?.setPointerInside(inside)
+            // Looking at it is how a crossing is answered. No dismiss button:
+            // the card is one line of figures, and reading it is the whole
+            // interaction it asks for.
+            if inside { store?.acknowledge() }
+        }
 
-        store.onSnapshot = { [weak self] snapshot in self?.considerAlert(for: snapshot) }
+        store.onSnapshot = { [weak self] snapshot in
+            self?.detectInstalled()
+        }
+        // The marks themselves are handed down by the view, which is where a
+        // slider moving is already being watched. This is the sound alone.
+        store.onAlert = { [weak self] alert in self?.announce(alert) }
+
+        // The logs push too, now that there is a store to push into. The dirty
+        // flag alone left the pill up to five seconds behind a prompt that had
+        // already been written down — the watcher knew within a second and had
+        // nobody to tell.
+        for watcher in watchers {
+            watcher.onChange = { [weak store] in
+                Task { @MainActor in await store?.refreshSoon() }
+            }
+        }
 
         // The registry pushes rather than being polled: the callback is the whole
         // update, and it hops to the main actor because that is where the store
@@ -91,36 +116,33 @@ final class NotchController {
         }
     }
 
+    /// Which providers exist on this Mac, asked again now and then.
+    ///
+    /// The providers pane re-reads the disk when it opens; this is for the app
+    /// nobody opens. Installing a CLI is not an event this app can be told
+    /// about, so it looks — a handful of `isExecutableFile` calls every half
+    /// minute, on a tick that is already running, rather than a timer whose
+    /// whole job is to ask.
+    private func detectInstalled(now: Date = .now) {
+        guard now.timeIntervalSince(lastDetect) > 30 else { return }
+        lastDetect = now
+        preferences.refreshTracked()
+    }
+
     func flush() async { await store.flush() }
 
     /// The board's rule: the notch carries the state, the banner carries the
     /// moment it changed. So it fires beside a notch that is in plain sight
     /// rather than only when something is covering it — and only on going over.
     /// Entering watch stays silent and visual; the mark simply tints amber.
-    private func considerAlert(for snapshot: UsageSnapshot) {
-        // The board's "Notify when over". Off, the crossing is still carried by
-        // the pill — this silences the banner, not the reading.
-        guard preferences.notifiesWhenOver else { return }
-        guard alerts.crossing(
-            percent: snapshot.sessionPercent,
-            resetsAt: snapshot.resetsAt,
-            thresholds: [preferences.criticalAt]
-        ) != nil else { return }
-
-        notifier.alert(
-            title: String(localized: "Over"),
-            body: String(
-                localized: """
-                    \(Format.percent(snapshot.sessionPercent)) used, \
-                    \(Format.countdown(to: snapshot.resetsAt)) to the reset. \
-                    Consider finishing the current task before starting anything big.
-                    """,
-                comment: "Banner body when usage crosses the critical threshold."
-            ),
-            sound: preferences.soundOnThreshold,
-            whenNotchHidden: false
-        )
-        Log.notch.info("over banner at \(Int(self.preferences.criticalAt), privacy: .public)%")
+    /// The sound, which is the only part of a crossing the pill cannot do for
+    /// itself. The card is raised by the store and drawn by the pill; nothing
+    /// here asks macOS for permission to say something the notch is already
+    /// showing.
+    private func announce(_ alert: ZoneAlert) {
+        guard preferences.notifiesOnZone, preferences.soundOnThreshold else { return }
+        NSSound.beep()
+        Log.notch.info("zone card at \(Int(alert.threshold), privacy: .public)%")
     }
 
     private func observe() {
@@ -149,9 +171,20 @@ final class NotchController {
             escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 self.flatMap { $0.handle(event) } ?? event
             }
+            // Global, so it only ever sees clicks delivered to *another* app:
+            // the panel's own controls and Preferences — which is ours — can
+            // never trip it, and there is nothing to hit-test. Mouse events need
+            // no accessibility permission; a global keyboard monitor would.
+            outsideMonitor = NSEvent.addGlobalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown]
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.dismiss() }
+            }
         } else {
             escapeMonitor.map(NSEvent.removeMonitor)
             escapeMonitor = nil
+            outsideMonitor.map(NSEvent.removeMonitor)
+            outsideMonitor = nil
             NSApp.deactivate()
             panel.orderFrontRegardless()
         }
@@ -161,8 +194,7 @@ final class NotchController {
     /// seen. An app with no menu bar has no responder chain to route them.
     private func handle(_ event: NSEvent) -> NSEvent? {
         if event.keyCode == 53 {                                     // Esc
-            // The menu is drawn on top of the panel, so it closes first.
-            if model.isMenuOpen { model.closeMenu() } else { model.setPinned(false) }
+            dismiss()
             return nil
         }
         guard event.modifierFlags.contains(.command) else { return event }
@@ -174,6 +206,12 @@ final class NotchController {
         default: return event
         }
         return nil
+    }
+
+    /// What Esc and a click outside both mean: put back whatever is on top. The
+    /// menu is drawn over the panel, so it goes first.
+    private func dismiss() {
+        if model.isMenuOpen { model.closeMenu() } else { model.setPinned(false) }
     }
 
     private func reanchor() {
