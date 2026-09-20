@@ -55,7 +55,13 @@ struct PreferencesView: View {
             // the third one, and it pushed "Hide when nothing is running" straight
             // through the footer. General sizes itself now; Appearance holds two
             // grids of twelve and scrolls inside whatever that comes to.
-            .frame(minHeight: 380, alignment: .top)
+            //
+            // Greedy at the top end as well, so the slack in a window sized for
+            // the taller pane lands *here* rather than around the whole column:
+            // General has no scroll view and Appearance does, so one pane filled
+            // the window and the other sat centred in it — and the switcher
+            // above them, which never moves, appeared to.
+            .frame(minHeight: 380, maxHeight: .infinity, alignment: .top)
 
             footer
         }
@@ -132,35 +138,9 @@ private struct GeneralPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            group("Zones") {
-                ThresholdScale(warn: $preferences.warnAt, critical: $preferences.criticalAt)
-                // Directly under the control it describes: a legend at the far
-                // end of the window is read after the fact, if at all.
-                Text(footnote)
-                    .font(Typography.sans(11))
-                    .foregroundStyle(.white.opacity(0.4))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
 
-            divider
-
-            group("Alerts") {
-                row("Notify when over", note: AttributedString(localized: "Banner once per window")) {
-                    Toggle("Notify when over", isOn: $preferences.notifiesWhenOver)
-                        .labelsHidden()
-                }
-                row("Sound when over") {
-                    Toggle("Sound when over", isOn: $preferences.soundOnThreshold)
-                        .labelsHidden()
-                        // A sound with no banner to carry it is nothing at all.
-                        .disabled(!preferences.notifiesWhenOver)
-                }
-            }
-
-            divider
-
-            // The radio column belongs to the group, so the header says what it
-            // is once rather than every row carrying a label for it.
+            // First: the providers are what the app is about, and each row now
+            // carries the marks that provider is read by.
             group("Providers", accessory: {
                 // The action appears only when there is something for it to fix.
                 // Nothing to fix is worth saying too — silence there reads as
@@ -172,46 +152,138 @@ private struct GeneralPane: View {
                     // be a way to say "it is there now" that is not quitting.
                     link("Check again") {
                         installed = Set(SourceID.allCases.filter(\.cliIsInstalled))
+                        preferences.refreshTracked()
                         store?.recheck()
                     }
                 }
             }) {
                 // The radio column has no header of its own, and a circle with
                 // nothing to say what it does is a mystery in a settings window.
-                Text("The dot picks which one the pill shows.")
+                // Above the rows: what they are and what the handles do.
+                Text("Tracked automatically. Drag to set where each one turns amber and red.")
                     .font(Typography.sans(11))
                     .foregroundStyle(.white.opacity(0.3))
-                ForEach(SourceID.allCases, id: \.self) { source in
+                ForEach(Array(SourceID.allCases.enumerated()), id: \.element) { index, source in
                     // Tracking a provider reads what its CLI writes, so a switch
                     // on its own is a promise the app cannot keep: nothing is
                     // there until the tool is installed and signed in. The line
                     // says the requirement, the link goes to their own install
                     // page rather than this app repeating the steps.
-                    row(
-                        // A product name, never translated: `LocalizedStringKey` looks it
-                        // up, finds nothing, and hands back the name unchanged.
-                        LocalizedStringKey(source.displayName),
-                        note: note(for: source),
-                        noteIsComplaint: complaint(for: source) != nil,
-                        leading: {
-                            PillPin(
-                                isPinned: preferences.pillSource == source,
-                                // The pill reports a provider that is being
-                                // polled, so an untracked one cannot hold the pin.
-                                isEnabled: preferences.tracks(source),
-                                name: source.displayName
-                            ) { preferences.pillSource = source }
+                    // The pin used to sit on the left of this row. It is on the
+                    // hover card now, beside the figures it is chosen by — a
+                    // window away from them, it was a choice made blind.
+                    VStack(alignment: .leading, spacing: 9) {
+                        row(
+                            // A product name, never translated: `LocalizedStringKey`
+                            // looks it up, finds nothing, and hands back the name.
+                            LocalizedStringKey(source.displayName),
+                            note: note(for: source),
+                            noteIsComplaint: complaint(for: source) != nil
+                        ) {
+                            // The green tick said "found", which the row's own
+                            // note already says when it is missing. The slot is
+                            // worth more as the one choice left here: whether
+                            // this provider gets a row on the card at all.
+                            Toggle("Show on the card", isOn: Binding(
+                                get: { preferences.showsOnCard(source) },
+                                set: { preferences.setShowsOnCard($0, for: source) }
+                            ))
+                            .labelsHidden()
+                            // Nothing to show, nothing to choose.
+                            .disabled(!installed.contains(source))
+                            .tooltip(installed.contains(source)
+                                ? "Show this provider on the card"
+                                : "Install it first — there is nothing to show")
                         }
-                    ) {
-                        Toggle(source.displayName, isOn: Binding(
-                            get: { preferences.tracks(source) },
-                            set: { preferences.set(tracking: $0, for: source) }
-                        ))
-                        .labelsHidden()
-                        // The last one on cannot be turned off: an app tracking
-                        // nothing has no reason to be on screen.
-                        .disabled(preferences.trackedSources == [source])
+                        // Above the marks line under it, for the same reason.
+                        .zIndex(1)
+                        // And the marks it is read by, under the name they belong
+                        // to. They had a section of their own with a provider
+                        // picker in it — two places asking the same question, one
+                        // of them a mode you had to be in.
+                        HStack(spacing: 14) {
+                            ThresholdScale(
+                                warn: warnBinding(source),
+                                critical: criticalBinding(source),
+                                isCompact: true
+                            )
+                            mark("watch", preferences.zone(for: source).warnAt, Tokens.amber)
+                            mark("over", preferences.zone(for: source).critAt, Tokens.red)
+                            // A quiet icon rather than a line of blue text: the
+                            // row already carries a name, a note, a link and two
+                            // figures, and a fifth thing spelled out in words was
+                            // the loudest of them. Always drawn, so the row does
+                            // not resize when the marks happen to match, and dim
+                            // when there is nothing to copy.
+                            Button { applyMarks(of: source) } label: {
+                                Image(systemName: "square.on.square")
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(.white.opacity(sharesMarks(source) ? 0.4 : 0.12))
+                                    // 22×20, not 16×14: a tooltip needs a second
+                                    // of stillness inside the shape, and a target
+                                    // the size of the glyph is one the pointer
+                                    // crosses rather than rests in.
+                                    .frame(width: 22, height: 20)
+                                    .contentShape(.rect)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!sharesMarks(source))
+                            .hoverChip(padding: 2)
+                            .accessibilityLabel(Text("Use these marks for every provider"))
+                            .tooltip(sharesMarks(source)
+                                ? "Give every provider these marks"
+                                : "Every provider already has these marks")
+                        }
+                        .padding(.bottom, 4)
                     }
+                    // Earlier rows draw over later ones. A tooltip hangs below
+                    // the control it explains, and SwiftUI draws siblings in
+                    // order — so without this the row underneath is painted on
+                    // top of it and the tip reads as a transparent smear.
+                    .zIndex(Double(SourceID.allCases.count - index))
+                }
+
+                // Under the rows rather than above them: it explains what the
+                // two handles just dragged actually do, and that is a thing you
+                // look for after touching them, not before.
+                Text(zoneFootnote)
+                    .font(Typography.sans(11))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // At the end of what it undoes. It sat in *App*, a section away
+                // from the marks it puts back, where it read as a button that
+                // would reset the app.
+                row("Reset alert configuration") {
+                    Button("Reset", action: preferences.resetZonesAndAlerts)
+                        .buttonStyle(.plain)
+                        .font(Typography.sans(11.5))
+                        .foregroundStyle(
+                            preferences.hasDefaults ? .white.opacity(0.25) : Tokens.amber
+                        )
+                        .disabled(preferences.hasDefaults)
+                        .tooltip("The marks and the two alert switches, back to their defaults")
+                        .fixedSize()
+                }
+            }
+
+            divider
+
+            group("Alerts") {
+                row(
+                    "Tell me at watch and over",
+                    note: AttributedString(
+                        localized: "The pill opens and waits there until you look at it"
+                    )
+                ) {
+                    Toggle("Tell me at watch and over", isOn: $preferences.notifiesOnZone)
+                        .labelsHidden()
+                }
+                row("Play a sound with it") {
+                    Toggle("Play a sound with it", isOn: $preferences.soundOnThreshold)
+                        .labelsHidden()
+                        // A sound with nothing on screen to explain it is a noise.
+                        .disabled(!preferences.notifiesOnZone)
                 }
             }
 
@@ -224,9 +296,8 @@ private struct GeneralPane: View {
                 if Language.isOffered {
                     row("Language", note: AttributedString(localized: "Takes effect on restart")) {
                         Picker("Language", selection: $preferences.language) {
-                            Text("System").tag(String?.none)
                             ForEach(Language.available, id: \.self) { code in
-                                Text(Language.name(code)).tag(String?.some(code))
+                                Text(Language.name(code)).tag(code)
                             }
                         }
                         .labelsHidden()
@@ -257,46 +328,14 @@ private struct GeneralPane: View {
                         // nothing behind the switch to set.
                         .disabled(updater == nil)
                 }
-                row("Restore defaults") {
-                    Button("Reset", action: preferences.restoreDefaults)
-                        .buttonStyle(.plain)
-                        .font(Typography.sans(11.5))
-                        .foregroundStyle(
-                            preferences.hasDefaults ? .white.opacity(0.25) : Tokens.amber
-                        )
-                        .disabled(preferences.hasDefaults)
-                        .help("Back to the board's own settings, both panes")
-                        .fixedSize()
-                }
             }
         }
         .onAppear {
             installed = Set(SourceID.allCases.filter(\.cliIsInstalled))
+            preferences.refreshTracked()
             launchEnabled = launchAtLogin.isEnabled
             updatesAutomatically = updater?.updatesAutomatically ?? true
         }
-    }
-
-    private var divider: some View {
-        Rectangle().fill(.white.opacity(0.06)).frame(height: 1)
-    }
-
-    /// Clamped here rather than in `Preferences`: the stepper cannot leave the
-    /// range, and a typed figure should not be able to either.
-    private var quietMinutes: Binding<Int> {
-        Binding(
-            get: { preferences.hidesAfterQuietMinutes },
-            set: { preferences.hidesAfterQuietMinutes = min(60, max(0, $0)) }
-        )
-    }
-
-    /// The thresholds are the app's whole opinion, so say what they do rather
-    /// than leaving two handles to be guessed at.
-    private var footnote: String {
-        "Safe to \(Int(preferences.warnAt))%, watch from \(Int(preferences.warnAt))%, "
-            + "over from \(Int(preferences.criticalAt))% — for the session window, the "
-            + "weekly cap and the history alike. The same two boundaries colour every "
-            + "mark and every border in Appearance."
     }
 
     private func group(
@@ -320,14 +359,82 @@ private struct GeneralPane: View {
         }
     }
 
-    /// The provider's line: what it gives the pill, or — the moment tracking it
-    /// turns one up — the poller's own complaint, "Claude Code CLI not found",
-    /// "sign in to Codex". The link rides at the end of that same sentence,
-    /// because a missing CLI is exactly when somewhere to get it is the point.
+    private var divider: some View {
+        Rectangle().fill(.white.opacity(0.06)).frame(height: 1)
+    }
+
+    /// Clamped here rather than in `Preferences`: the stepper cannot leave the
+    /// range, and a typed figure should not be able to either.
+    private var quietMinutes: Binding<Int> {
+        Binding(
+            get: { preferences.hidesAfterQuietMinutes },
+            set: { preferences.hidesAfterQuietMinutes = min(60, max(0, $0)) }
+        )
+    }
+
+    /// The thresholds are the app's whole opinion, so say what they do rather
+    /// than leaving two handles to be guessed at.
+    /// Under the rows: the two things the line above does not cover — where the
+    /// colours turn up, and what the tick box is for. It used to repeat the
+    /// handles, which the line above had already explained.
+    private var zoneFootnote: LocalizedStringKey {
+        "The same colours show on the pill and in the card. Untick a provider to leave it off the card."
+    }
+
+    /// The two bindings a provider's own scale writes through.
+    private func warnBinding(_ source: SourceID) -> Binding<Double> {
+        Binding(
+            get: { preferences.zone(for: source).warnAt },
+            set: { preferences.setZone(
+                ToneScale(warnAt: $0, critAt: preferences.zone(for: source).critAt), for: source
+            ) }
+        )
+    }
+
+    private func criticalBinding(_ source: SourceID) -> Binding<Double> {
+        Binding(
+            get: { preferences.zone(for: source).critAt },
+            set: { preferences.setZone(
+                ToneScale(warnAt: preferences.zone(for: source).warnAt, critAt: $0), for: source
+            ) }
+        )
+    }
+
+    /// The row's second line: what the provider gives the pill, and where to get
+    /// it when it is missing.
     private func note(for source: SourceID) -> AttributedString {
         let lead = complaint(for: source) ?? source.blurb
         let markdown = "\(lead) [\(source.installLabel)](\(source.docs.absoluteString))"
         return (try? AttributedString(markdown: markdown)) ?? AttributedString(lead)
+    }
+
+    /// Whether this provider's pair is worth offering to the others.
+    private func sharesMarks(_ source: SourceID) -> Bool {
+        SourceID.allCases.contains {
+            preferences.tracks($0) && preferences.zone(for: $0) != preferences.zone(for: source)
+        }
+    }
+
+    /// Give every provider this one's marks. The common case is one rule for the
+    /// machine; keeping three sets in step by hand is the cost of allowing three.
+    private func applyMarks(of source: SourceID) {
+        let zone = preferences.zone(for: source)
+        for other in SourceID.allCases where other != source {
+            preferences.setZone(zone, for: other)
+        }
+    }
+
+    /// One of the two marks, beside the track it is dragged on.
+    private func mark(_ name: LocalizedStringKey, _ value: Double, _ tone: Color) -> some View {
+        HStack(spacing: 4) {
+            Text(name)
+                .font(Typography.sans(11))
+                .foregroundStyle(.white.opacity(0.35))
+            Text(verbatim: "\(Int(value))")
+                .font(Typography.mono(11, .semibold))
+                .foregroundStyle(tone)
+        }
+        .fixedSize()
     }
 
     /// A row is a label and its control. `note` is the board's second line — the
@@ -376,42 +483,30 @@ private struct GeneralPane: View {
     }
 }
 
-/// Which provider the menu bar itself carries.
-///
-/// A radio, not a switch: the strip has room for one reading, so this is a
-/// choice between providers rather than a setting each of them has. The switch
-/// on the other side of the row is a different question — whether the CLI is
-/// asked anything at all — and the pin cannot land on one that is off.
-private struct PillPin: View {
-    let isPinned: Bool
-    let isEnabled: Bool
-    let name: String
-    let onPin: () -> Void
-
-    var body: some View {
-        Button(action: onPin) {
-            Image(systemName: isPinned ? "largecircle.fill.circle" : "circle")
-                .font(.system(size: 13))
-                .foregroundStyle(pinColour)
-                .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled || isPinned)
-        .help("Show \(name) on the pill")
-        .accessibilityLabel("Show \(name) on the pill")
-    }
-
-    private var pinColour: Color {
-        if !isEnabled { return .white.opacity(0.12) }
-        return isPinned ? Tokens.green : .white.opacity(0.3)
-    }
-}
-
 /// What the Providers header says when every tracked CLI is answering.
 ///
 /// A state, not a control: there is nothing to press when nothing is wrong, and
 /// a live "Check again" invited a click that could only confirm what was already
 /// true.
+/// What the Providers header says when every tracked CLI is answering.
+///
+/// A state, not a control: there is nothing to press when nothing is wrong, and
+/// a live "Check again" invited a click that could only confirm what was already
+/// true.
+/// A provider row's own state, in the two marks this pane already speaks in.
+private struct ProviderState: View {
+    let isInstalled: Bool
+
+    var body: some View {
+        Image(systemName: isInstalled ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+            .font(.system(size: 12))
+            .foregroundStyle(isInstalled ? Tokens.green : Tokens.amber)
+            .frame(width: 20)
+            .accessibilityLabel(isInstalled ? Text("Tracking") : Text("No CLI found"))
+            .help(isInstalled ? "Tracking this provider" : "No CLI found on this Mac")
+    }
+}
+
 private struct ProvidersReady: View {
     var body: some View {
         HStack(spacing: 5) {
@@ -462,6 +557,10 @@ private struct QuietField: View {
 private struct ThresholdScale: View {
     @Binding var warn: Double
     @Binding var critical: Double
+    /// Inside a provider's row rather than alone in a section: the two figures
+    /// move to the end of the track and the 0/100 ticks go, because the row
+    /// above already says whose marks these are.
+    var isCompact = false
 
     /// One point apart at the closest: a zero-width amber band is a rule with a
     /// step in it that nobody can see.
@@ -473,11 +572,13 @@ private struct ThresholdScale: View {
     @State private var dragging: Handle?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            HStack(spacing: 0) {
-                legend("Watch starts at", warn, Tokens.amber)
-                Spacer(minLength: 12)
-                legend("Over starts at", critical, Tokens.red)
+        VStack(alignment: .leading, spacing: isCompact ? 0 : 11) {
+            if !isCompact {
+                HStack(spacing: 0) {
+                    legend("Watch starts at", warn, Tokens.amber)
+                    Spacer(minLength: 12)
+                    legend("Over starts at", critical, Tokens.red)
+                }
             }
 
             GeometryReader { geometry in
@@ -501,13 +602,15 @@ private struct ThresholdScale: View {
             }
             .frame(height: knob)
 
-            HStack {
-                Text("0%")
-                Spacer()
-                Text("100%")
+            if !isCompact {
+                HStack {
+                    Text("0%")
+                    Spacer()
+                    Text("100%")
+                }
+                .font(Typography.mono(9.5))
+                .foregroundStyle(.white.opacity(0.3))
             }
-            .font(Typography.mono(9.5))
-            .foregroundStyle(.white.opacity(0.3))
         }
         // VoiceOver gets two ordinary sliders; the painted track is for the eye.
         .accessibilityRepresentation {

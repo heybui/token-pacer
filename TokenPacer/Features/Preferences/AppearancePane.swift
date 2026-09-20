@@ -49,10 +49,7 @@ struct AppearancePane: View {
                         Text("Percentage beside the mark")
                             .font(Typography.sans(12.5))
                             .foregroundStyle(.white.opacity(0.85))
-                        Text("""
-                            Off leaves the mark on its own and gives the menu bar \
-                            back about 30pt. Every figure is still in the card.
-                            """)
+                        Text("Off makes the pill smaller. Hover it to see every number.")
                         .font(Typography.sans(11))
                         .foregroundStyle(.white.opacity(0.28))
                         .fixedSize(horizontal: false, vertical: true)
@@ -71,10 +68,8 @@ struct AppearancePane: View {
                             .font(Typography.sans(12.5))
                             .foregroundStyle(.white.opacity(0.85))
                         Text("""
-                            How many sessions have a model answering, anywhere on \
-                            the machine. Off keeps the row still while jobs come \
-                            and go; a source that cannot be read still raises its \
-                            badge there.
+                            A small badge counting what is running on the provider \
+                            the pill shows.
                             """)
                         .font(Typography.sans(11))
                         .foregroundStyle(.white.opacity(0.28))
@@ -97,7 +92,7 @@ struct AppearancePane: View {
                     // The figure the grid is drawing, in the zone's own colour.
                     // Without it the tiles are twelve animations of nothing in
                     // particular.
-                    LapReadout(lap: lap, scale: preferences.thresholds)
+                    LapReadout(lap: lap, scale: preferences.zone(for: preferences.pillSource))
                 }
 
                 LazyVGrid(columns: columns, spacing: 10) {
@@ -150,9 +145,8 @@ struct AppearancePane: View {
                     .foregroundStyle(.white.opacity(0.4))
 
                 Text("""
-                    The light runs the shell's outline while a model is answering, \
-                    and takes its colour from the zone you are in. It never runs \
-                    along the top edge: that one lies against the notch.
+                    Glows around the pill whenever any of your providers is \
+                    working, in the colour of how much you have used.
                     """)
                 .font(Typography.sans(11))
                 .foregroundStyle(.white.opacity(0.28))
@@ -163,7 +157,7 @@ struct AppearancePane: View {
         .scrollIndicators(.never)
         // The user's own thresholds, so the tiles are coloured by the rule the
         // pill will apply rather than by the default one.
-        .environment(\.tone, preferences.thresholds)
+        .environment(\.tone, preferences.zone(for: preferences.pillSource))
         // The lap moves the figure itself; a mark easing towards each step as
         // well is sixty layout passes a second for a window full of drawings
         // that are already moving.
@@ -182,7 +176,7 @@ struct AppearancePane: View {
     /// open while somebody is choosing, and at 100ms the walk is continuous to
     /// the eye.
     private func run() async {
-        let scale = preferences.thresholds
+        let scale = preferences.zone(for: preferences.pillSource)
         let zones = [(0.0, scale.warnAt), (scale.warnAt, scale.critAt), (scale.critAt, 100.0)]
         while !Task.isCancelled {
             for (start, end) in zones {

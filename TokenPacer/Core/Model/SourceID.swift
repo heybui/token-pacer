@@ -14,23 +14,26 @@ enum SourceID: String, CaseIterable, Sendable, Codable {
     }
 
     /// What this provider gives the pill, in the words of someone deciding
-    /// whether to turn it on. One line each, and each one different: three rows
-    /// repeating "needs the CLI" say nothing about which of the three to keep.
+    /// whether to turn it on.
+    ///
+    /// Deliberately vague about the shape of the limit. These lines used to name
+    /// one — "5-hour and weekly" — and then an Enterprise Codex workspace turned
+    /// up with a monthly credit budget and no five-hour window at all. The app
+    /// reads whatever the account has; the row should promise exactly that much.
     var blurb: String {
         switch self {
-        case .claude: String(localized: "Your 5-hour window and weekly cap, read from ~/.claude.")
-        case .codex: String(localized: "The 5-hour and weekly figures Codex prints, from ~/.codex.")
-        case .copilot: String(localized: "The monthly credit budget Copilot reports, from ~/.copilot.")
+        case .claude: String(localized: "Whatever your Claude plan allows, from ~/.claude.")
+        case .codex: String(localized: "Your ChatGPT plan or credits, from ~/.codex.")
+        case .copilot: String(localized: "Your Copilot credits, from ~/.copilot.")
         }
     }
 
-    /// The words that open the install page. Named for the tool, so three rows
-    /// of links are three different offers rather than one word three times.
+    /// The words that open the install page. One word, not the tool's name
+    /// again: the row is already titled with it, and repeating it was what put
+    /// every one of these lines onto a second line.
     var installLabel: String {
         switch self {
-        case .claude: String(localized: "Get Claude Code")
-        case .codex: String(localized: "Get the Codex CLI")
-        case .copilot: String(localized: "Get Copilot CLI")
+        case .claude, .codex, .copilot: String(localized: "Install")
         }
     }
 
