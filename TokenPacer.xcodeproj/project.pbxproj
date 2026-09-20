@@ -267,8 +267,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = TokenPacer/TokenPacer.entitlements;
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGN_STYLE = Automatic;
+/* Not ad-hoc. An ad-hoc signature has no designated requirement, so TCC keys
+   its grant to the exact cdhash: every rebuild is a new app to macOS, and the
+   "access files in your Documents folder" prompt — which a usage read needs,
+   because every trusted project lives there — comes back each time. Signing
+   debug builds with the identity the release uses gives them one identity, so
+   the grant is answered once and survives rebuilds. */
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = B2WR56QVT7;
 				ENABLE_HARDENED_RUNTIME = YES;
