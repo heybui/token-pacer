@@ -45,11 +45,11 @@ enum PanelError: Error, Equatable {
     func message(for cli: String) -> String {
         switch self {
         case .cliNotFound: "\(cli) CLI not found"
-        case .noTrustedDirectory: "no trusted \(cli) project to read from"
-        case .spawnFailed(let code): "could not start \(cli) (\(code))"
+        case .noTrustedDirectory: "No trusted \(cli) project to read from"
+        case .spawnFailed(let code): "Could not start \(cli) (\(code))"
         case .timedOut: "\(cli) did not answer in time"
-        case .notSignedIn: "sign in to \(cli)"
-        case .unreadable: "could not read \(cli)'s usage panel"
+        case .notSignedIn: "Sign in to \(cli)"
+        case .unreadable: "Could not read \(cli)'s usage panel"
         }
     }
 }
