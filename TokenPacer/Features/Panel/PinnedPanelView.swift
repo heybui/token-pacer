@@ -3,9 +3,23 @@ import SwiftUI
 /// The 752×540 panel: everything stacked, no tabs, read-only. Settings live in
 /// Preferences; this only ever reports.
 struct PinnedPanelView: View {
+    /// The provider the menu bar is carrying. What the panel opens on, and what
+    /// it falls back to.
     let snapshot: UsageSnapshot?
+    /// Every tracked provider, so the panel can be read about one at a time
+    /// without the pill changing what it reports.
+    var providers: [UsageSnapshot] = []
+    var errors: [SourceID: String] = [:]
+    var zones: [SourceID: ToneScale] = [:]
+
+    /// Which provider is being read about, when it is not the pinned one.
+    ///
+    /// A view of the panel, not a setting: the pill goes on reporting whatever
+    /// it was pinned to and nothing is written down. Held by the shell rather
+    /// than here, because the control that changes it lives in the band around
+    /// the notch, which is the shell's own row.
+    @Binding var viewing: SourceID?
     /// Cross-source split — the only figure the per-source snapshot cannot hold.
-    let bySource: [UsageSplit]
     /// The mark the menu bar is wearing. Every expanded state leads with it.
     var mark: Mark = .capsuleBar
     var attention: String?
@@ -19,12 +33,29 @@ struct PinnedPanelView: View {
 
     @Environment(\.tone) private var toneScale
 
-    private var tone: Color { toneScale(snapshot?.sessionPercent) }
-    private var panel: PanelData { snapshot?.panel ?? .empty }
+
+    /// The provider every figure below belongs to.
+    private var shown: UsageSnapshot? {
+        providers.first { $0.source == viewing } ?? snapshot
+    }
+
+    /// The marks of the provider on screen, not of the pinned one: switching
+    /// tabs switches the rule the figures are read by, as well as the figures.
+    private var scale: ToneScale { shown.flatMap { zones[$0.source] } ?? toneScale }
+    private var tone: Color { scale(shown?.sessionPercent) }
+    private var panel: PanelData { shown?.panel ?? .empty }
+
+    /// The complaint of the provider on screen, which is not always the pinned
+    /// one any more.
+    private var complaint: String? {
+        shown.flatMap { errors[$0.source] } ?? (viewing == nil ? attention : nil)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if showsHeader { header }
+            if showsHeader {
+                header
+            }
             summary
             divider
             splits
@@ -47,29 +78,44 @@ struct PinnedPanelView: View {
 
     private var header: some View {
         HStack(spacing: 7) {
-            Text(headerLabel)
-                .font(Typography.mono(9.5))
-                .tracking(1.4)
-                .foregroundStyle(.white.opacity(0.38))
-            if let attention {
-                AttentionBadge(message: attention, size: 10)
+            // Where the status line was. Three tabs spelled out took a row of
+            // their own for a choice made once and then read: the name of the
+            // provider on screen is the useful half, and the list only has to
+            // exist while it is being changed.
+            ProviderPicker(
+                providers: providers, shown: shown?.source, zones: zones,
+                onPick: { viewing = $0 == snapshot?.source ? nil : $0 }
+            )
+            if let complaint {
+                AttentionBadge(message: complaint, size: 10)
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 12)
+            // Collapse, not close: the panel goes back to the pill, which never
+            // left. A cross says the thing is gone, and the arrows are the same
+            // pair the card wears to open it, pointing the other way.
             Button(action: onClose) {
-                Text("✕")
-                    .font(.system(size: 13))
+                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(.white.opacity(0.42))
-                    .padding(.horizontal, 4)
+                    .frame(width: 18, height: 14)
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Close panel")
+            .hoverChip()
+            .accessibilityLabel("Collapse the panel")
+            .help("Collapse the panel")
         }
-        .frame(height: 20)
+        // Tall enough for the tabs that now ride in it, rather than the 20pt a
+        // line of 9.5pt type needed on its own.
+        .frame(height: 26)
+        // The provider list drops out of this row over the sections below it.
+        .zIndex(1)
     }
 
-    private var headerLabel: String { PillView.pinnedLabel(for: snapshot) }
 
+// MARK: - which provider is being read
+
+    
     // MARK: - ring, weekly cap, sparkline
 
     private var summary: some View {
@@ -79,16 +125,16 @@ struct PinnedPanelView: View {
                 // rather than inside it: only one of the twelve has a hole in the
                 // middle to put a number in.
                 MarkHero(
-                    mark: mark, percent: snapshot?.sessionPercent,
-                    isBurning: snapshot?.isBurning == true, scale: 3
+                    mark: mark, percent: shown?.sessionPercent,
+                    isBurning: shown?.isBurning == true, scale: 3
                 )
                 .frame(height: 60)
-                OdometerText(text: Format.percent(snapshot?.sessionPercent), size: 30, color: tone)
-                Text("5-HOUR")
+                OdometerText(text: Format.percent(shown?.sessionPercent), size: 30, color: tone)
+                Text(verbatim: Format.windowTag(shown?.windowMinutes))
                     .font(Typography.sans(8.5))
                     .tracking(0.34)
                     .foregroundStyle(.white.opacity(0.36))
-                Text("Resets in \(Format.countdown(to: snapshot?.resetsAt))")
+                Text("Resets in \(Format.countdown(to: shown?.resetsAt))")
                     .font(Typography.sans(11.5))
                     .foregroundStyle(.white.opacity(0.6))
             }
@@ -96,10 +142,10 @@ struct PinnedPanelView: View {
 
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 7) {
-                    captionRow("Weekly cap", weeklyCaption)
+                    captionRow(capLabel, weeklyCaption)
                     CapBar(
-                        percent: snapshot?.weeklyPercent,
-                        tone: toneScale(snapshot?.weeklyPercent),
+                        percent: shown?.weeklyPercent,
+                        tone: toneScale(shown?.weeklyPercent),
                         height: 7, trackOpacity: 0.12
                     )
                 }
@@ -111,22 +157,44 @@ struct PinnedPanelView: View {
         }
     }
 
+    /// The longer window is a week on every plan but one: a workspace metered in
+    /// credits has a month there, and calling it a weekly cap names the wrong
+    /// fact about the figure beside it.
+    private var capLabel: LocalizedStringKey {
+        switch shown?.weeklyWindowMinutes {
+        case 1_440: "Daily cap"
+        case 43_200: "Monthly cap"
+        case 525_600: "Annual cap"
+        default: "Weekly cap"
+        }
+    }
+
     private var weeklyCaption: String {
-        let percent = Format.percent(snapshot?.weeklyPercent)
-        guard let resetsAt = snapshot?.weeklyResetsAt else { return percent }
+        let percent = Format.percent(shown?.weeklyPercent)
+        guard let resetsAt = shown?.weeklyResetsAt else { return percent }
+        // A weekday says everything about a reset inside the week and nothing
+        // about one three weeks out, which wants a date.
+        let stamp = (shown?.weeklyWindowMinutes ?? 0) > 10_080
+            ? Format.day(resetsAt)
+            : Format.weekday(resetsAt)
         return String(
-            localized: "\(percent) · resets \(Format.weekday(resetsAt))",
-            comment: "Weekly cap caption. Second value is a localized weekday and time."
+            localized: "\(percent) · resets \(stamp)",
+            comment: "Longer cap's caption. Second value is a localized weekday or date."
         )
     }
 
     /// The sparkline's own span, not a figure derived from it: 26 five-minute
     /// buckets. A rate in tokens an hour used to sit here and said nothing a
     /// person could act on — the shape is the whole point of this row.
+    ///
+    /// Read off the buckets themselves rather than off `isActive`, which asks
+    /// whether a five-hour window is open. A provider metered by the month never
+    /// has one, so this row said "window empty" beside a month that was 42%
+    /// spent — about the only thing it could not have meant.
     private var activityCaption: String {
-        snapshot?.isActive == true
+        panel.sparkline.contains { $0 > 0 }
             ? String(localized: "last 2 hours")
-            : String(localized: "window empty")
+            : String(localized: "nothing in 2 hours")
     }
 
     private func captionRow(_ label: LocalizedStringKey, _ value: String, tone: Color? = nil) -> some View {
@@ -148,7 +216,7 @@ struct PinnedPanelView: View {
         HStack(alignment: .top, spacing: 22) {
             SplitColumn(title: "By model", rows: panel.byModel)
             SplitColumn(title: "By project", rows: panel.byProject)
-            SplitColumn(title: "By source", rows: bySource)
+            SplitColumn(title: "By kind", rows: panel.byKind)
         }
     }
 
@@ -159,7 +227,7 @@ struct PinnedPanelView: View {
     private var footer: some View {
         HStack(alignment: .top, spacing: 26) {
             history.frame(maxWidth: .infinity, alignment: .leading)
-            if let spend = snapshot?.spend {
+            if let spend = shown?.spend {
                 SpendCell(spend: spend).frame(width: 260)
             }
         }
@@ -233,7 +301,7 @@ private struct SplitColumn: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(row.name)
                             .font(Typography.sans(11.5))
-                            .foregroundStyle(.white.opacity(0.82))
+                            .foregroundStyle(.white.opacity(0.6))
                             .lineLimit(1)
                             .truncationMode(.middle)
                         CapBar(
@@ -362,15 +430,22 @@ private struct HistoryHeatmap: View {
     }
 }
 
-/// Only drawn for accounts that buy usage past the plan. The budget is the
-/// account's own monthly limit, not a preference we invented.
+/// Only drawn for accounts that meter something beyond their windows: money
+/// bought past the plan, or a workspace's monthly credit budget. The budget is
+/// the account's own monthly limit, not a preference we invented.
 private struct SpendCell: View {
     @Environment(\.tone) private var toneScale
     let spend: Spend
 
+    /// Credits are the plan, not an overage bought on top of it, so calling them
+    /// extra usage would be a straight lie about what the number is.
+    private var title: LocalizedStringKey {
+        spend.used.isCredits ? "Plan credits · month to date" : "Extra usage · month to date"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Extra usage · month to date")
+            Text(title)
                 .font(Typography.sans(11))
                 .foregroundStyle(.white.opacity(0.4))
             HStack(alignment: .firstTextBaseline, spacing: 7) {
@@ -385,8 +460,8 @@ private struct SpendCell: View {
                     .foregroundStyle(.white.opacity(0.44))
             }
             CapBar(
-                percent: spend.percent,
-                tone: toneScale(spend.percent),
+                percent: spend.share,
+                tone: toneScale(spend.share),
                 height: 7, trackOpacity: 0.12
             )
             Text(Format.projection(used: spend.used))
