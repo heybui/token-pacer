@@ -5,10 +5,9 @@ struct PillInputs: Equatable, Sendable {
     var snapshot: UsageSnapshot?
     var pointerInside = false
     var isPinned = false
-    /// Tracking switched off from the menu. Survives relaunch.
-    /// The warning fires once per window, then never again until it resets.
-    var warningAcknowledged = false
-    var criticalAt: Double = 90
+    /// A provider has crossed one of the two marks and nobody has looked yet.
+    /// Whichever provider it was: the pill is one surface for the whole machine.
+    var alert: ZoneAlert?
     /// The ghost is held this long after the pointer leaves, so crossing the
     /// notch on the way somewhere else does not snap it away mid-glance.
     var ghostHeldUntil: Date?
@@ -16,6 +15,10 @@ struct PillInputs: Equatable, Sendable {
     /// sliver. Zero never withdraws: the pill stays on screen through any amount
     /// of silence.
     var hidesAfterQuietMinutes = 5
+    /// The newest activity across every tracked provider, which is what quiet is
+    /// measured against. The pinned provider's own is not enough: a pill pinned
+    /// to an idle one would withdraw while another was mid-turn.
+    var lastActivity: Date?
     /// What the right wing carries at its end, when anything does — a source
     /// complaining, or a count of sessions waiting for an answer. Geometry only;
     /// what either one says lives on the store.
@@ -50,20 +53,23 @@ enum PillStateResolver {
             return .hidden
         }
 
-        // Hovering counts as seeing the warning, so it never fires again this
-        // window. Checked before `.exhausted` so a hover always opens the card.
+        // Hovering is how a crossing is acknowledged, so it is checked first:
+        // a pointer on the notch always opens the card, whatever is being said.
         if inputs.pointerInside { return .hover }
 
-        if let percent = inputs.snapshot?.sessionPercent {
-            if percent >= 100 { return .exhausted }
-            if percent >= inputs.criticalAt && !inputs.warningAcknowledged { return .warning }
-        }
+        // Held until somebody looks. The store clears it on hover and raises
+        // each mark once per window, so this cannot nag.
+        if inputs.alert != nil { return .warning }
+        if let percent = inputs.snapshot?.sessionPercent, percent >= 100 { return .exhausted }
         return .collapsed
     }
 
     private static func nothingRunning(_ inputs: PillInputs, at now: Date) -> Bool {
-        guard let snapshot = inputs.snapshot else { return true }
-        guard let lastActivity = snapshot.lastActivity else { return true }
-        return now.timeIntervalSince(lastActivity) > Double(inputs.hidesAfterQuietMinutes) * 60
+        // Whichever is newer: the figure the store hands down covers every
+        // tracked provider, and the pinned one's own covers a caller that has
+        // not set it.
+        let newest = [inputs.lastActivity, inputs.snapshot?.lastActivity].compactMap(\.self).max()
+        guard let newest else { return true }
+        return now.timeIntervalSince(newest) > Double(inputs.hidesAfterQuietMinutes) * 60
     }
 }

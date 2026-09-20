@@ -78,7 +78,8 @@ enum PillState: String, CaseIterable, Sendable {
     /// that cannot be read makes every figure beside it unverified, so it wins.
     /// Jobs working out of sight are the next thing worth a corner of the notch,
     /// and a count rather than a dot because three running and one running are
-    /// different answers to "can I close the lid".
+    /// different answers to "can I close the lid". The pinned provider's own,
+    /// like every other figure in the row.
     enum Badge: Equatable, Sendable {
         /// A source is complaining. The message lives on the store.
         case alert
@@ -147,7 +148,7 @@ enum PillState: String, CaseIterable, Sendable {
             default: Format.percent(snapshot?.sessionPercent)
             }
             let tail = switch state {
-            case .ghost: "week"
+            case .ghost: Format.windowName(snapshot?.weeklyWindowMinutes)
             default: Format.countdown(to: snapshot?.resetsAt)
             }
             return Wings(
@@ -161,8 +162,12 @@ enum PillState: String, CaseIterable, Sendable {
         @MainActor static let widest = Wings(
             mark: Mark.allCases.max { $0.width < $1.width } ?? .capsuleBar,
             // The widest badge, not merely a badge: a two-digit count of jobs is
-            // wider than the alert triangle it shares the slot with.
-            headline: "1.25M", tail: "12d 07h", badge: .working(99)
+            // wider than the alert triangle it shares the slot with. And the
+            // widest countdown, which is no longer the weekly window's: a
+            // workspace metered in credits resets monthly, an annual limit in
+            // three digits of days. The shell still measures itself from what is
+            // actually drawn — this is only what the host holds open for it.
+            headline: "1.25M", tail: "364d 23h", badge: .working(99)
         ).flank
     }
 

@@ -55,24 +55,16 @@ final class PillModel {
     func update(snapshot: UsageSnapshot?, at now: Date = Date.now) {
         inputs.snapshot = snapshot
         if let preferences {
-            inputs.criticalAt = preferences.criticalAt
             inputs.hidesAfterQuietMinutes = preferences.hidesAfterQuietMinutes
-        }
-        // Seeing the pill expanded counts as acknowledging the warning, so it
-        // fires once per window rather than every poll.
-        if inputs.pointerInside { inputs.warningAcknowledged = true }
-        // A reset clears the acknowledgement: the next window warns again.
-        if let percent = snapshot?.sessionPercent, percent < inputs.criticalAt {
-            inputs.warningAcknowledged = false
         }
         state = PillStateResolver.resolve(inputs, at: now)
     }
 
-    /// Clicking the pill pins the panel; ✕ and Esc let it go. Seeing the panel
+    /// Clicking the pill pins the panel; collapse and Esc let it go. Seeing it
     /// acknowledges a warning, exactly as hovering does.
     func setPinned(_ pinned: Bool, at now: Date = Date.now) {
         inputs.isPinned = pinned
-        if pinned { inputs.warningAcknowledged = true }
+        if pinned { inputs.alert = nil }
         update(snapshot: inputs.snapshot, at: now)
     }
 

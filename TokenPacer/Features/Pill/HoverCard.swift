@@ -16,12 +16,25 @@ struct HoverCard: View {
     /// own line. The badge above follows the active source alone, and a second
     /// provider failing used to raise nothing at all.
     var errors: [SourceID: String] = [:]
+    /// Which provider the menu bar is carrying, and how many sessions each has
+    /// answering. Both are per row, which is why they are here rather than on
+    /// the snapshot: the card is the only place the providers are side by side.
+    var pinned: SourceID?
+    var jobs: [SourceID: Int] = [:]
+    /// Each provider's own two marks. A row read against somebody else's marks
+    /// is a row coloured by a rule that does not apply to it.
+    var zones: [SourceID: ToneScale] = [:]
+    /// Pin the menu bar to a provider. The pane used to own this choice, a
+    /// window away from the rows it is made by comparing.
+    var onPin: (SourceID) -> Void = { _ in }
     /// What is left for the bar once each row's fixed columns are paid for. The
     /// shell measures it: the card is as wide as the state it is drawn in.
     let barWidth: CGFloat
     /// The two gestures the card used to spell out in a hint, as buttons.
     var onExpand: () -> Void = {}
-    var onOpenMenu: () -> Void = {}
+    /// The gear opens Preferences itself. It used to open a four-row menu whose
+    /// first row was Preferences — a click to reach a click.
+    var onOpenSettings: () -> Void = {}
     /// Ask every provider again. Only reachable while something is wrong, which
     /// is the only time there is anything to ask again about.
     var onRecheck: () -> Void = {}
@@ -73,7 +86,10 @@ struct HoverCard: View {
             }
 
             ForEach(scaleLines) { line in
-                ScaleRow(line: line, barWidth: barWidth) { caption = $0 }
+                ScaleRow(line: line, barWidth: barWidth, explain: { caption = $0 }) {
+                    onPin(line.source)
+                }
+                .environment(\.tone, zones[line.source] ?? toneScale)
             }
 
             HStack(spacing: 6) {
@@ -100,7 +116,7 @@ struct HoverCard: View {
                     label: String(localized: "Open the panel"),
                     action: onExpand
                 ) { caption = $0 }
-                CardButton(symbol: "gearshape", label: String(localized: "Settings"), action: onOpenMenu) {
+                CardButton(symbol: "gearshape", label: String(localized: "Settings"), action: onOpenSettings) {
                     caption = $0
                 }
             }
@@ -142,7 +158,10 @@ struct HoverCard: View {
             lines.append(String(localized: "Window resets in \(Format.countdown(to: snapshot.resetsAt))"))
         }
         if let week = snapshot.weeklyPercent {
-            lines.append(String(localized: "Week at \(Format.percent(week))"))
+            lines.append(String(
+                localized: "This \(Format.windowName(snapshot.weeklyWindowMinutes)) at \(Format.percent(week))",
+                comment: "Rotating footer line. First value names a window, second is a percentage."
+            ))
         }
         lines.append(snapshot.isBurning
             ? String(localized: "A model is answering now")
@@ -176,12 +195,17 @@ struct HoverCard: View {
         providers.map { provider in
             ScaleLine(
                 id: provider.source.rawValue,
+                source: provider.source,
                 label: provider.source.wordmark,
                 name: provider.source.displayName,
                 percent: provider.sessionPercent,
                 resetsAt: provider.resetsAt,
+                windowMinutes: provider.windowMinutes,
+                weekWindowMinutes: provider.weeklyWindowMinutes,
                 weekPercent: provider.weeklyPercent,
                 isBurning: provider.isBurning,
+                isPinned: provider.source == pinned,
+                jobs: jobs[provider.source] ?? 0,
                 attention: errors[provider.source]
             )
         }
@@ -227,6 +251,7 @@ private struct CardButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+        .hoverChip()
         .onHover { onCaption($0 ? label : nil) }
     }
 }

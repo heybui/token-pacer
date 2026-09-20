@@ -1,6 +1,9 @@
 import SwiftUI
 
-/// How many sessions are working right now, across every tracked provider.
+/// How many sessions the pill's own provider has working right now.
+///
+/// The pinned one alone. The count used to span the machine, which read as a
+/// figure about the provider it was drawn beside and was not one.
 ///
 /// Neutral grey on purpose, and the board says why: the mark owns the zone
 /// colour, the badge owns the number. A count tinted green or amber would read

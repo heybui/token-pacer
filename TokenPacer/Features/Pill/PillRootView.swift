@@ -15,7 +15,7 @@ struct PillRootView: View {
     var menuItems: [NotchMenuItem] {
         [
             NotchMenuItem(title: String(localized: "Preferences"), key: "⌘,", action: onOpenPreferences),
-            NotchMenuItem(title: String(localized: "Check for updates"), isEnabled: updater?.canCheck ?? false) {
+            NotchMenuItem(title: updateTitle, isEnabled: updater?.canCheck ?? false) {
                 updater?.checkForUpdates()
             },
             NotchMenuItem(title: String(localized: "Send feedback")) {
@@ -28,6 +28,49 @@ struct PillRootView: View {
     /// Jobs in flight, or none when the count is switched off. One answer, so
     /// the badge the view draws and the wing the model measures cannot disagree
     /// about whether the count is there.
+    /// The row says what there is to do: check, or install what a background
+    /// check already found.
+    private var updateTitle: String {
+        guard let version = updater?.pendingVersion else { return String(localized: "Check for updates") }
+        return String(localized: "Update to \(version)")
+    }
+
+    /// The marks each provider is watched at, or none at all when the switch is
+    /// off. Per provider, because the two numbers are.
+    /// Named rather than inlined: two dictionaries built inside the view's own
+    /// body put the type checker over its budget for the whole expression.
+    private var zones: [SourceID: ToneScale] {
+        Dictionary(uniqueKeysWithValues: SourceID.allCases.map { ($0, preferences.zone(for: $0)) })
+    }
+
+    private var jobsBySource: [SourceID: Int] {
+        Dictionary(uniqueKeysWithValues: SourceID.allCases.map { ($0, store.workingSessions(of: $0)) })
+    }
+
+    /// Which provider the border speaks for while several are working: the one
+    /// furthest through its own budget, since that is the one the colour is
+    /// there to warn about.
+    private var running: UsageSnapshot? {
+        SourceID.allCases
+            .filter { store.workingSessions(of: $0) > 0 }
+            .compactMap { store.snapshots[$0] }
+            .max { urgency(of: $0) < urgency(of: $1) }
+    }
+
+    /// How far through its own critical mark a provider is. A provider with no
+    /// figure at all is the least urgent thing on the machine.
+    private func urgency(of snapshot: UsageSnapshot) -> Double {
+        guard let percent = snapshot.sessionPercent else { return 0 }
+        return percent / max(1, preferences.zone(for: snapshot.source).critAt)
+    }
+
+    private var alertMarks: [SourceID: [Double]] {
+        guard preferences.notifiesOnZone else { return [:] }
+        return Dictionary(uniqueKeysWithValues: SourceID.allCases.map {
+            ($0, preferences.alertThresholds(for: $0))
+        })
+    }
+
     private var workingSessions: Int {
         preferences.showsJobCount ? store.workingSessions : 0
     }
@@ -39,12 +82,15 @@ struct PillRootView: View {
         return workingSessions > 0 ? .working(workingSessions) : nil
     }
 
-    var body: some View {
+    /// The pill itself, lifted out of `body`: with every input the shell now
+    /// takes, one expression carrying both the call and its modifiers went past
+    /// what the type checker will sit through.
+    private var pill: some View {
         PillView(
             state: model.state,
             snapshot: store.snapshot,
             providers: SourceID.allCases
-                .filter(preferences.tracks)
+                .filter { preferences.tracks($0) && preferences.showsOnCard($0) }
                 .compactMap { store.snapshots[$0] },
             mark: preferences.mark,
             showsPercentage: preferences.showsPercentage,
@@ -52,21 +98,39 @@ struct PillRootView: View {
             bordersOn: preferences.bordersOn,
             attention: store.errors[store.activeSource],
             errors: store.errors,
+            isAnyoneWorking: store.anyoneWorking,
+            running: running,
+            alert: store.alert,
+            alerting: store.alert.flatMap { store.snapshots[$0.source] },
+            pinned: preferences.pillSource,
+            jobsBySource: jobsBySource,
+            zones: zones,
+            onPin: { preferences.pillSource = $0 },
             workingSessions: workingSessions,
-            bySource: store.bySource,
             onTogglePinned: { model.togglePinned() },
             onClose: { model.setPinned(false) },
             onContentHeight: { model.contentHeight = $0 },
-            onOpenMenu: { model.toggleMenu() },
+            onOpenSettings: onOpenPreferences,
             onRecheck: { store.recheck() },
             isMenuOpen: model.isMenuOpen,
             menuItems: menuItems,
             onCloseMenu: { model.closeMenu() },
             band: model.band
         )
+    }
+
+    var body: some View {
+        pill
             .onAppear { model.menuHeight = PillState.menuHeight(items: menuItems.count) }
             .onChange(of: store.snapshot) { _, snapshot in
                 model.update(snapshot: snapshot)
+            }
+            // Quiet is measured across every tracked provider, and a provider
+            // that is not the pinned one waking up changes nothing about the
+            // pinned one's snapshot.
+            .onChange(of: store.lastActivity, initial: true) { _, activity in
+                model.inputs.lastActivity = activity
+                model.update(snapshot: store.snapshot)
             }
             // Geometry inputs: both change how wide the wings have to be.
             .onChange(of: preferences.mark, initial: true) { _, mark in
@@ -92,13 +156,24 @@ struct PillRootView: View {
             }
             // Both feed one slot in the right wing, and either appearing changes
             // how wide that wing has to be.
+            // The marks the store watches: the user's own, and none at all when
+            // the switch is off.
+            .onChange(of: alertMarks, initial: true) { _, marks in
+                store.alertThresholds = marks
+            }
+            // The crossing the pill is carrying, from any provider. Cleared by
+            // the hover that reads it, which the controller hands to the store.
+            .onChange(of: store.alert, initial: true) { _, alert in
+                model.inputs.alert = alert
+                model.update(snapshot: store.snapshot)
+            }
             .onChange(of: badge, initial: true) { _, badge in
                 model.inputs.badge = badge
                 model.update(snapshot: store.snapshot)
             }
             // The tone rule reaches every bar, ring and square from one place.
-            .environment(\.tone, preferences.thresholds)
-            .onChange(of: preferences.criticalAt) { _, _ in model.update(snapshot: store.snapshot) }
+            .environment(\.tone, preferences.zone(for: preferences.pillSource))
+            .onChange(of: preferences.zones) { _, _ in model.update(snapshot: store.snapshot) }
             .onChange(of: preferences.hidesAfterQuietMinutes) { _, _ in
                 model.update(snapshot: store.snapshot)
             }

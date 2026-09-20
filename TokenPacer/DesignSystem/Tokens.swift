@@ -32,6 +32,9 @@ enum Tokens {
     /// The count badge's own fill. Deliberately outside the tone scale: the
     /// number says how much is running, never how much is left.
     static let badgeFill = Color(hex: 0x4a4b53)
+    /// The app's own tooltip: darker than the panel it floats over, so it reads
+    /// as something laid on top rather than a row that grew.
+    static let tooltipFill = Color(hex: 0x1c1d21)
 
     static let shellRingIdle = Color.white.opacity(0.06)
     static let shellRingOpen = Color.white.opacity(0.13)

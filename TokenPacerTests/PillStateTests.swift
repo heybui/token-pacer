@@ -34,6 +34,17 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(resolve(PillInputs(snapshot: quiet)) == .hidden)
 }
 
+/// Quiet means every tracked provider, which is what the setting has always
+/// said it means. Pinned to Codex while Claude answers, the pill withdrew in the
+/// middle of a session — from the one screen that exists to say work is running.
+@MainActor @Test func anotherProvidersWorkKeepsThePillOnScreen() {
+    let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
+    #expect(resolve(PillInputs(snapshot: quiet)) == .hidden)
+    #expect(resolve(PillInputs(
+        snapshot: quiet, lastActivity: now.addingTimeInterval(-30)
+    )) == .collapsed)
+}
+
 @MainActor @Test func nothingReadYetIsAlsoHidden() {
     #expect(resolve(PillInputs(snapshot: nil)) == .hidden)
     #expect(resolve(PillInputs(snapshot: snapshot(lastActivity: nil))) == .hidden)
@@ -50,16 +61,26 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     #expect(resolve(PillInputs(snapshot: snapshot(percent: 100))) == .exhausted)
 }
 
-@MainActor @Test func theWarningFiresOnceThenStandsDown() {
+/// The card is held until somebody looks, and it is the store that decides when
+/// that was: the pill draws whatever crossing it is handed and nothing else.
+@MainActor @Test func aCrossingHoldsTheCardUntilItIsAnswered() {
     let hot = snapshot(percent: 93)
-    #expect(resolve(PillInputs(snapshot: hot)) == .warning)
-    #expect(resolve(PillInputs(snapshot: hot, warningAcknowledged: true)) == .collapsed)
+    let crossing = ZoneAlert(
+        source: .claude, threshold: 90, percent: 93, resetsAt: now, isOver: true
+    )
+    #expect(resolve(PillInputs(snapshot: hot, alert: crossing)) == .warning)
+    // Answered — the store cleared it — and the pill goes back to what it was.
+    #expect(resolve(PillInputs(snapshot: hot)) == .collapsed)
 }
 
-@MainActor @Test func theWarningRespectsItsThreshold() {
-    let inputs = PillInputs(snapshot: snapshot(percent: 80), criticalAt: 75)
-    #expect(resolve(inputs) == .warning)
-    #expect(resolve(PillInputs(snapshot: snapshot(percent: 80), criticalAt: 90)) == .collapsed)
+/// The provider that crossed is not always the one the pill reports: a quiet
+/// figure on screen and a crossing from another provider still raises the card.
+@MainActor @Test func aCrossingFromAnotherProviderStillRaisesTheCard() {
+    let calm = snapshot(percent: 12)
+    let crossing = ZoneAlert(
+        source: .codex, threshold: 75, percent: 80, resetsAt: now, isOver: false
+    )
+    #expect(resolve(PillInputs(snapshot: calm, alert: crossing)) == .warning)
 }
 
 @MainActor @Test func pinningHoldsThePanelOpen() {
@@ -85,35 +106,32 @@ private func resolve(_ inputs: PillInputs) -> PillState {
 
 // MARK: - model
 
-@MainActor @Test func hoveringAcknowledgesTheWarning() {
+/// The pill holds the card, hovering opens it, and the store — not the pill —
+/// decides it has been answered. Here the store's half is played by hand.
+@MainActor @Test func hoveringOpensTheCardAndLeavesItAnswered() {
     let model = PillModel()
+    model.inputs.alert = ZoneAlert(
+        source: .claude, threshold: 90, percent: 95, resetsAt: now, isOver: true
+    )
     model.update(snapshot: snapshot(percent: 95), at: now)
     #expect(model.state == .warning)
 
     model.setPointerInside(true, at: now)
     #expect(model.state == .hover)
 
+    // What the controller does on that hover: the store clears the crossing.
+    model.inputs.alert = nil
     model.setPointerInside(false, at: now)
-    #expect(model.state == .collapsed)   // acknowledged, does not re-fire
-}
-
-/// A reset clears the acknowledgement so the next window warns again.
-@MainActor @Test func theNextWindowWarnsAgain() {
-    let model = PillModel()
-    model.update(snapshot: snapshot(percent: 95), at: now)
-    model.setPointerInside(true, at: now)
-    model.setPointerInside(false, at: now)
-    #expect(model.state == .collapsed)
-
-    model.update(snapshot: snapshot(percent: 5), at: now)     // window reset
-    model.update(snapshot: snapshot(percent: 95), at: now)    // and filled again
-    #expect(model.state == .warning)
+    #expect(model.state == .collapsed)   // answered, does not re-fire
 }
 
 /// "Stays expanded until you mouse over it once" — opening the panel counts too,
-/// otherwise the warning re-fires the moment the panel closes.
-@MainActor @Test func pinningAcknowledgesTheWarningLikeHoverDoes() {
+/// otherwise the card comes back the moment the panel closes.
+@MainActor @Test func pinningAnswersTheCardLikeHoverDoes() {
     let model = PillModel()
+    model.inputs.alert = ZoneAlert(
+        source: .claude, threshold: 90, percent: 95, resetsAt: now, isOver: true
+    )
     model.update(snapshot: snapshot(percent: 95), at: now)
     #expect(model.state == .warning)
 
@@ -383,4 +401,19 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
     let grown = wings(figure: false, badge: .working(3)).flank - wings(figure: false, badge: nil).flank
     #expect(grown >= PillState.badgeDiameter + PillState.badgeGap - 1)
     #expect(grown <= PillState.badgeDiameter + PillState.badgeGap + 1)
+}
+
+/// The border says the machine is busy, so it wears the colours of whatever is
+/// making it busy — not of the provider that happens to be on the pill. Pinned
+/// to a quiet Claude while Codex runs at 95% of its own mark, a green light
+/// would be the wrong news in the right place.
+@MainActor @Test func theBorderTakesTheRunningProvidersColours() {
+    let calm = ToneScale(warnAt: 75, critAt: 90)
+    let strict = ToneScale(warnAt: 30, critAt: 50)
+
+    // Same figure, two providers' marks: the rule is the provider's, not the
+    // pill's, and the two answers differ.
+    #expect(calm(60) != strict(60))
+    #expect(strict(60) == Tokens.red)
+    #expect(calm(60) == Tokens.green)
 }

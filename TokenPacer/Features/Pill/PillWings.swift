@@ -13,34 +13,28 @@ struct LeadingWing: View {
     let headline: String
     let tone: Color
 
-    /// Nil until the first poll lands. On a cold start that reads hundreds of
-    /// megabytes it is several seconds, and a fake 0% would be a lie.
-    private var isLoading: Bool { snapshot == nil }
-
     var body: some View {
         // 12, not the row's usual 8: the bar ends in a capsule whose rounded cap
         // already eats two of those points, so at 8 the over zone sat against the
         // first digit of the percentage.
         HStack(spacing: PillState.markGap) {
-            // The ring waits for a figure to mirror. Drawn while the logs are
-            // still being read it is an empty track next to the word "reading",
-            // and the pair does not fit a flank that holds one or the other.
-            if isLoading {
-                Text("reading…")
-                    .font(Typography.mono(12))
-                    .foregroundStyle(.white.opacity(0.4))
-            } else {
-                // The window alone. A second marker with no room for its number
-                // is a mark nobody can read the meaning of, and the menu bar is
-                // the one place where less is the whole product.
-                MarkView(
-                    mark: mark,
-                    percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
-                    isBurning: snapshot?.isBurning == true
-                )
-                if showsPercentage {
-                    OdometerText(text: headline, size: 12, color: tone)
-                }
+            // The window alone. A second marker with no room for its number is a
+            // mark nobody can read the meaning of, and the menu bar is the one
+            // place where less is the whole product.
+            //
+            // The empty track and `--` are the loading state too. A cold start
+            // reading hundreds of megabytes used to put the word "reading…" here
+            // instead, in a flank the model had measured for a mark and four
+            // characters — so the word wrapped mid-syllable in the notch. `--`
+            // is what every other absent figure in the app says, and the mark
+            // filling in is the whole of the news.
+            MarkView(
+                mark: mark,
+                percent: isGhost ? snapshot?.weeklyPercent : snapshot?.sessionPercent,
+                isBurning: snapshot?.isBurning == true
+            )
+            if showsPercentage {
+                OdometerText(text: headline, size: 12, color: tone)
             }
         }
     }
@@ -65,7 +59,9 @@ struct TrailingWing: View {
                 JobBadge(count: workingSessions)
             }
             if isGhost {
-                Text("week")
+                // Already localised by `Format`, and measured from the same
+                // call in `Wings.of` — the shell is sized from this word.
+                Text(verbatim: Format.windowName(snapshot?.weeklyWindowMinutes))
                     .font(Typography.mono(11.5))
                     .foregroundStyle(.white.opacity(0.4))
             } else {

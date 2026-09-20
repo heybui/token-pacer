@@ -60,15 +60,20 @@ private struct DigitStrip: View {
         .frame(width: width, height: height, alignment: .top)
         .clipped()
         .blur(radius: settled ? 0 : 0.5)
-        .animation(.timingCurve(0.32, 0.72, 0, 1, duration: 0.34), value: value)
+        // 0.48, not the board's 0.34: at a third of a second the roll read as a
+        // number replacing itself rather than a wheel turning, and the blur it is
+        // drawn with had no time to be seen at all.
+        .animation(.timingCurve(0.32, 0.72, 0, 1, duration: 0.48), value: value)
         // Out and back, chained on the completion. Written as two plain writes
         // the blur never rendered at all: both landed before SwiftUI's next
         // pass, so the view was only ever evaluated with `settled` true.
         .onChange(of: value) { _, _ in
-            withAnimation(.easeOut(duration: 0.17)) {
+            // Half the roll out, half of it back, so the blur lives across the
+            // whole turn rather than clearing while the wheel is still moving.
+            withAnimation(.easeOut(duration: 0.24)) {
                 settled = false
             } completion: {
-                withAnimation(.easeOut(duration: 0.17)) { settled = true }
+                withAnimation(.easeOut(duration: 0.24)) { settled = true }
             }
         }
     }

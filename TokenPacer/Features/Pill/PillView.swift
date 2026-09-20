@@ -30,6 +30,30 @@ struct PillView: View {
     var attention: String?
     /// The same, per provider, for the card's rows.
     var errors: [SourceID: String] = [:]
+    /// The card's own controls: which provider the strip carries, what each has
+    /// running, and how the first of those is changed.
+    /// Anything running anywhere, which is what the border answers to — not the
+    /// pinned provider's own figure, the way the mark beside it does.
+    var isAnyoneWorking = false
+    /// And whose figure it takes its colour from: the provider that is actually
+    /// running. A light in the pinned provider's green, running because Codex is
+    /// nearly out, is the wrong news in the right place.
+    var running: UsageSnapshot?
+    /// The crossing on screen, and the provider it belongs to — which is not
+    /// always the one the pill reports.
+    var alert: ZoneAlert?
+    var alerting: UsageSnapshot?
+    /// Which provider the pinned panel is reading about, when it is not the
+    /// pinned one. Held here because the control that changes it sits in the
+    /// band around the notch, which this view owns, while the figures it changes
+    /// are drawn by the panel below.
+    @State private var viewing: SourceID?
+    var pinned: SourceID?
+    var jobsBySource: [SourceID: Int] = [:]
+    /// Every provider's own two marks, for the rows and the panel: the pill's
+    /// own chrome is already drawn in the pinned provider's.
+    var zones: [SourceID: ToneScale] = [:]
+    var onPin: (SourceID) -> Void = { _ in }
     /// Sessions with work in flight — anywhere on the machine, not only in this
     /// project, and across every tracked provider. Their own windows are behind something; the pill is
     /// the one thing always in sight that can say they are running at all.
@@ -41,15 +65,13 @@ struct PillView: View {
         if attention != nil { return .alert }
         return workingSessions > 0 ? .working(workingSessions) : nil
     }
-    /// Cross-source split, drawn only by the pinned panel.
-    var bySource: [UsageSplit] = []
     var onTogglePinned: () -> Void = {}
     var onClose: () -> Void = {}
     /// How tall the content drew. The card sizes to its rows, so only the view
     /// knows the figure the hover rect has to match.
     var onContentHeight: (CGFloat) -> Void = { _ in }
     /// Same menu the right-click opens; the hover card has a button for it.
-    var onOpenMenu: () -> Void = {}
+    var onOpenSettings: () -> Void = {}
     /// Ask every provider again, from the card's own headline.
     var onRecheck: () -> Void = {}
     var isMenuOpen = false
@@ -69,6 +91,17 @@ struct PillView: View {
         spansNotch ? PillState.bandedBodyTop : PillState.boardBodyTop
     }
     @Environment(\.tone) private var toneScale
+
+    /// The running provider's own marks and its own figure, falling back to the
+    /// pinned one while nothing is running — the light is out then anyway, and a
+    /// colour still has to be handed over.
+    private var borderScale: ToneScale {
+        running.flatMap { zones[$0.source] } ?? toneScale
+    }
+
+    private var borderPercent: Double? {
+        (running ?? snapshot)?.sessionPercent
+    }
 
     /// What the figure under the pointer means. The card is the only place with
     /// room to say it, and a system tooltip never appears here: the panel never
@@ -176,22 +209,30 @@ struct PillView: View {
                 // round it is a screensaver, and the panel is for reading.
                 if chasesBorder {
                     ChasingBorder(
-                        cornerRadius: state.cornerRadius, tone: tone,
-                        light: toneScale.light(snapshot?.sessionPercent),
+                        cornerRadius: state.cornerRadius,
+                        tone: borderScale(borderPercent),
+                        light: borderScale.light(borderPercent),
                         effect: border,
-                        isRunning: snapshot?.isBurning == true
+                        isRunning: isAnyoneWorking
                     )
                 }
             }
             .opacity(state.opacity)
             .animation(Tokens.spring, value: state)
-            // The panel has its own controls; a tap anywhere inside it would
-            // fight them. Only the small states pin.
             // Two clicks, not one. The band sits in the menu bar, which is a
             // strip people click at all day; a single click opened the whole
             // panel by accident often enough to be the thing you noticed about
             // the app. The card says so while it is open.
-            .onTapGesture(count: 2) { if state != .pinned { onTogglePinned() } }
+            //
+            // And it closes the same way it opened. The panel's own controls
+            // take single clicks, so a double click inside it is not aimed at
+            // any of them — it is the gesture that got you here, used again.
+            .onTapGesture(count: 2) { onTogglePinned() }
+            // The detour dies with the panel: it used to be state inside the
+            // panel's own view, which SwiftUI threw away when the panel closed.
+            .onChange(of: state) { _, state in
+                if state != .pinned { viewing = nil }
+            }
     }
 
     private var shape: UnevenRoundedRectangle {
@@ -240,6 +281,10 @@ struct PillView: View {
             }
         }
         .frame(height: band.height)
+        // Above the body, not merely before it. The provider list drops out of
+        // this row and the body is the next sibling in the stack, so without
+        // this the panel's own hero mark painted straight over the open list.
+        .zIndex(1)
     }
 
     /// The hardware's own footprint, held open in the middle of the band.
@@ -263,17 +308,21 @@ struct PillView: View {
         case .exhausted: exhaustedPill
         case .warning:
             WarningCard(
-                snapshot: snapshot, mark: mark, headline: headline, topInset: bodyTop
+                alert: alert, snapshot: alerting ?? snapshot, mark: mark, topInset: bodyTop
             )
         case .hover:
             HoverCard(
                 snapshot: snapshot, providers: providers,
-                attention: attention, errors: errors, barWidth: providerBarWidth,
-                onExpand: onTogglePinned, onOpenMenu: onOpenMenu, onRecheck: onRecheck
+                attention: attention, errors: errors,
+                pinned: pinned, jobs: jobsBySource, zones: zones, onPin: onPin,
+                barWidth: providerBarWidth,
+                onExpand: onTogglePinned, onOpenSettings: onOpenSettings, onRecheck: onRecheck
             )
         case .pinned:
             PinnedPanelView(
-                snapshot: snapshot, bySource: bySource, mark: mark, attention: attention,
+                snapshot: snapshot, providers: providers, errors: errors, zones: zones,
+                viewing: $viewing,
+                mark: mark, attention: attention,
                 topInset: bodyTop, showsHeader: !spansNotch, onClose: onClose
             )
         default: collapsed
@@ -289,10 +338,15 @@ struct PillView: View {
     /// starts at its ring.
     private var pinnedBand: some View {
         HStack(spacing: 7) {
-            Text(Self.pinnedLabel(for: snapshot))
-                .font(Typography.mono(9.5))
-                .tracking(1.4)
-                .foregroundStyle(.white.opacity(0.38))
+            // The title is the provider's name, and the name is the control: one
+            // row at the top of the panel rather than a title with a row of tabs
+            // under it.
+            ProviderPicker(
+                providers: providers,
+                shown: viewing ?? snapshot?.source,
+                zones: zones,
+                onPick: { viewing = $0 == snapshot?.source ? nil : $0 }
+            )
             if let attention {
                 AttentionBadge(message: attention, size: 10)
             } else if workingSessions > 0 {
@@ -300,23 +354,26 @@ struct PillView: View {
             }
             notchGap
             Button(action: onClose) {
-                Text("✕")
-                    .font(.system(size: 13))
+                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(.white.opacity(0.42))
-                    .padding(.horizontal, 4)
+                    .frame(width: 18, height: 14)
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Close panel")
+            .hoverChip()
+            .accessibilityLabel("Collapse the panel")
+            .help("Collapse the panel")
         }
         .padding(.leading, 11)
         .padding(.trailing, 13)
     }
 
     /// Shared with the panel, which still draws this row off a notched screen.
-    static func pinnedLabel(for snapshot: UsageSnapshot?) -> String {
-        guard let snapshot else { return "READING LOGS · PINNED" }
-        return snapshot.isActive ? "SESSION ACTIVE · PINNED" : "WINDOW EMPTY · PINNED"
+    /// The provider the panel is reading about, which the band's own title and
+    /// its badge both follow.
+    private var shownSnapshot: UsageSnapshot? {
+        providers.first { $0.source == viewing } ?? snapshot
     }
 
     /// At 100% there is nothing to report but the wait.
