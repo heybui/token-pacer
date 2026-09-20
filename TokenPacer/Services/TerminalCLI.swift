@@ -160,7 +160,15 @@ enum TerminalCLI {
         guard openpty(&master, &slave, nil, nil, &size) == 0 else {
             throw PanelError.spawnFailed(code: errno)
         }
-        guard let terminal = ttyname(slave).map({ String(cString: $0) }) else {
+        // `ttyname` answers out of one static buffer for the whole process, so
+        // three providers read at once — which is what "Check again" asks for —
+        // and two children can be handed the same pty name. Both CLIs then draw
+        // into one terminal and neither render parses, which reads back as
+        // "could not read the usage panel". The _r form writes into our own.
+        var name = [CChar](repeating: 0, count: Int(PATH_MAX))
+        guard ttyname_r(slave, &name, name.count) == 0,
+              let terminal = String(validatingCString: name)
+        else {
             close(master)
             close(slave)
             throw PanelError.spawnFailed(code: errno)
