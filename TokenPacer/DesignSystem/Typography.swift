@@ -73,7 +73,18 @@ enum Typography {
     /// Digits keep the cell, because that is what the odometer draws them in.
     /// Everything else is measured.
     static func monoWidth(_ text: String, size: CGFloat, weight: NSFont.Weight = .medium) -> CGFloat {
-        let font = NSFont.monospacedSystemFont(ofSize: size, weight: weight)
+        // AppKit declares this non-optional and it has come back nil anyway,
+        // once, mid-layout — a nil value in an attributes dictionary aborts the
+        // process from inside CoreText, which is a crash for a figure that is
+        // three points wide. Bridged through an Optional so a font the system
+        // declines to make costs an estimate instead: the digit cell below,
+        // applied to every character. Slightly wide for letters, which errs the
+        // way the wing can survive.
+        let font: NSFont? = NSFont.monospacedSystemFont(ofSize: size, weight: weight)
+        guard let font else {
+            Log.notch.error("no monospaced system font at \(size, privacy: .public)pt; estimating")
+            return CGFloat(text.count) * size * 0.6
+        }
         return text.reduce(0) { total, character in
             guard !character.isNumber else { return total + size * 0.6 }
             return total + (String(character) as NSString)
