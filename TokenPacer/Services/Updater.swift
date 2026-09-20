@@ -10,15 +10,18 @@ import Sparkle
 @MainActor
 // @preconcurrency: Sparkle's delegate protocol predates strict concurrency and
 // is not annotated, but it calls back on the main thread.
+@Observable
 final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
     /// Optional, not implicitly unwrapped: it cannot be built before `super.init()`
     /// because Sparkle takes `self` as its user-driver delegate, and an `!` there is
     /// a force unwrap with the crash moved to first use.
-    private var controller: SPUStandardUpdaterController?
-    private let notifier: Notifier
+    @ObservationIgnored private var controller: SPUStandardUpdaterController?
 
-    init(notifier: Notifier = Notifier()) {
-        self.notifier = notifier
+    /// The version a background check found, until somebody installs it. The
+    /// notch menu says so in its own row; this app asks macOS for nothing.
+    private(set) var pendingVersion: String?
+
+    override init() {
         super.init()
         controller = SPUStandardUpdaterController(
             startingUpdater: true, updaterDelegate: nil, userDriverDelegate: self
@@ -59,17 +62,16 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
     /// nowhere and is missed behind whatever is in front.
     nonisolated var supportsGentleScheduledUpdateReminders: Bool { true }
 
-    /// A scheduled check that found something says so quietly, through the same
-    /// banner the thresholds use. A check the user asked for shows Sparkle's own
-    /// window, because they are looking at it.
+    /// A scheduled check that found something leaves it in the menu. A check the
+    /// user asked for shows Sparkle's own window, because they are looking at it.
+    ///
+    /// It used to raise a macOS banner, which meant asking for notification
+    /// permission — for an app whose whole surface is already on screen, and on a
+    /// Mac where that permission is declined the news simply never arrived.
     func standardUserDriverWillHandleShowingUpdate(
         _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState
     ) {
         guard !state.userInitiated else { return }
-        notifier.alert(
-            title: String(localized: "Token Pacer \(update.displayVersionString) is available"),
-            body: String(localized: "Right-click the notch and choose Check for updates to install it."),
-            sound: false, whenNotchHidden: false
-        )
+        pendingVersion = update.displayVersionString
     }
 }

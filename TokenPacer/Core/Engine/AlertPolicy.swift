@@ -44,3 +44,22 @@ struct AlertPolicy: Sendable {
         return nil
     }
 }
+
+/// A provider that has just crossed one of the two marks and has not been looked
+/// at yet.
+///
+/// The app used to hand this to macOS as a banner, which meant asking for
+/// notification permission for a number the notch was already showing — and on a
+/// Mac where that permission had been declined, the whole feature was silent with
+/// nothing to say so. The pill raises it itself now: it is the one surface that
+/// is always there, and it needs nobody's permission to change shape.
+struct ZoneAlert: Equatable, Sendable {
+    let source: SourceID
+    /// The mark that was crossed, in the user's own numbers.
+    let threshold: Double
+    let percent: Double
+    let resetsAt: Date?
+    /// Over rather than watch — the difference between "keep an eye on this" and
+    /// "finish what you are doing".
+    let isOver: Bool
+}

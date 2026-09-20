@@ -46,9 +46,6 @@ final class UsageStore {
     /// The coarsest thing the panel draws is a day, the finest a sparkline bucket.
     /// A minute is invisible in both and cuts the work by twelve.
     private static let panelInterval: TimeInterval = 60
-    /// Last known state of each source's newest log line. A poll that reads no
-    /// new lines says nothing about activity, so the previous answer stands.
-    private var activities: [SourceID: LogActivity] = [:]
     /// Sources whose limits reading failed in a way retrying cannot fix.
     private var limitsDisabled: Set<SourceID> = []
     /// The last limits failure per source, held until a reading succeeds.
@@ -64,7 +61,6 @@ final class UsageStore {
     /// Which CLI the tokens went through, across every source. The per-source
     /// splits live on the snapshot; this one is the only figure that needs all
     /// of them at once.
-    private(set) var bySource: [UsageSplit] = []
 
     /// Every Claude Code session registered on this machine, newest change first.
     ///
@@ -74,10 +70,122 @@ final class UsageStore {
     /// whichever tick comes next.
     private(set) var sessions: [AgentSession] = []
 
-    /// How many background jobs are working right now — the one figure the pill
-    /// carries. Background, because an interactive session is already on screen
-    /// in the terminal that started it; these have nowhere else to show.
-    var workingSessions: Int { sessions.count(where: \.isWorking) }
+    /// How many jobs the pinned provider has working — the one figure the pill
+    /// carries beside its own.
+    ///
+    /// The provider the pill reports, and no other. A machine-wide count put a
+    /// number next to a row it had nothing to do with: pinned to Codex, with
+    /// Codex idle, the badge was reporting a Claude session and nothing on
+    /// screen said so.
+    ///
+    /// Two books behind it, because the providers keep different ones. Claude
+    /// Code registers each session in a file of its own, with a kind and a live
+    /// pid to check; Codex registers nothing, so its logs are asked instead — a
+    /// session whose turn is open.
+    var workingSessions: Int {
+        Self.working(sessions: sessions, logs: logWorking, for: activeSource, tracked: tracked)
+    }
+
+    /// The same count for a provider that is not the pinned one, which is what
+    /// the card's rows carry: a comparison is only one if every row answers the
+    /// same questions.
+    func workingSessions(of source: SourceID) -> Int {
+        Self.working(sessions: sessions, logs: logWorking, for: source, tracked: tracked)
+    }
+
+    /// Is anything at all running, on any provider being tracked?
+    ///
+    /// The border's own question, and a different one from the badge's. The
+    /// badge is a figure about the provider the pill reports, beside that
+    /// provider's other figures; the border is the pill itself saying the
+    /// machine is busy — and a job running under a provider you are not looking
+    /// at is exactly the one worth a light around the notch.
+    var anyoneWorking: Bool {
+        Self.anyoneWorking(sessions: sessions, logs: logWorking, tracked: tracked)
+    }
+
+    static func anyoneWorking(
+        sessions: [AgentSession], logs: [SourceID: Int], tracked: Set<SourceID>
+    ) -> Bool {
+        SourceID.allCases.contains {
+            working(sessions: sessions, logs: logs, for: $0, tracked: tracked) > 0
+        }
+    }
+
+    static func working(
+        sessions: [AgentSession], logs: [SourceID: Int],
+        for source: SourceID, tracked: Set<SourceID>
+    ) -> Int {
+        // Untracked is not "shown smaller", it is not this app's business.
+        guard tracked.contains(source) else { return 0 }
+        return source == .claude ? sessions.count(where: \.isWorking) : logs[source] ?? 0
+    }
+
+    /// Working sessions each source read out of its own logs.
+    private var logWorking: [SourceID: Int] = [:]
+
+    /// The crossing the pill is still carrying, from whichever provider made it.
+    ///
+    /// Any tracked provider, not the pinned one: a window running out under a
+    /// provider you are not looking at is precisely the one you want told about.
+    /// It stays until somebody looks — `acknowledge()` — and each mark raises it
+    /// once per window, which is `AlertPolicy`'s own rule.
+    private(set) var alert: ZoneAlert?
+
+    /// Raised when a new crossing lands, for the one thing the pill cannot do
+    /// for itself: make a sound.
+    @ObservationIgnored var onAlert: ((ZoneAlert) -> Void)?
+
+    /// One per provider: two providers crossing the same mark are two crossings.
+    private var alertPolicies: [SourceID: AlertPolicy] = [:]
+
+    /// The marks a crossing is raised at, per provider. Held by the caller,
+    /// which is where the user's own numbers live.
+    @ObservationIgnored var alertThresholds: [SourceID: [Double]] = [:]
+
+    /// Somebody looked. The pill goes back to whatever it was doing before.
+    func acknowledge() { alert = nil }
+
+    /// Looks for a crossing in a reading that has just landed.
+    private func considerAlert(_ snapshot: UsageSnapshot, at now: Date) {
+        let marks = alertThresholds[snapshot.source] ?? []
+        guard !marks.isEmpty else { return }
+        var policy = alertPolicies[snapshot.source] ?? AlertPolicy()
+        let crossed = policy.crossing(
+            percent: snapshot.sessionPercent,
+            resetsAt: snapshot.resetsAt,
+            thresholds: marks
+        )
+        alertPolicies[snapshot.source] = policy
+        guard let crossed, let percent = snapshot.sessionPercent else { return }
+
+        let raised = ZoneAlert(
+            source: snapshot.source,
+            threshold: crossed,
+            percent: percent,
+            resetsAt: snapshot.resetsAt,
+            isOver: crossed >= (marks.max() ?? crossed)
+        )
+        // A second crossing replaces the first: the newer one is the worse one,
+        // and two cards cannot both be on screen.
+        alert = raised
+        onAlert?(raised)
+    }
+
+    /// The newest activity across every tracked provider.
+    ///
+    /// The pill withdraws after a quiet spell, and quiet has always meant every
+    /// provider rather than the pinned one — Codex answering is as much activity
+    /// as Claude answering. It was read off the pinned source alone, so a pill
+    /// pinned to an idle provider hid itself in the middle of a session on
+    /// another one.
+    var lastActivity: Date? {
+        snapshots
+            .filter { tracked.contains($0.key) }
+            .values
+            .compactMap(\.lastActivity)
+            .max()
+    }
     private var pump: Task<Void, Never>?
 
     /// Does appending these break the order of what is already held?
@@ -118,7 +226,7 @@ final class UsageStore {
     }
 
     init(
-        sources: [any UsageSource] = [ClaudeCodeSource(), CodexSource()],
+        sources: [any UsageSource] = [ClaudeCodeSource(), CodexSource(), CopilotSource()],
         weights: TokenWeights = .default,
         interval: TimeInterval = 5,
         panels: [SourceID: any UsagePanel] = [:],
@@ -226,7 +334,7 @@ final class UsageStore {
         pump = Task { [weak self] in
             await self?.restoreEvents()
             while !Task.isCancelled {
-                await self?.refresh()
+                await self?.refreshSoon()
                 if let self, !reportedFirstSnapshot {
                     reportedFirstSnapshot = true
                     let ms = Int(Date.now.timeIntervalSince(launchedAt) * 1000)
@@ -251,6 +359,27 @@ final class UsageStore {
             $0 == "1" ? "usage request failed" : $0
         }
     }
+
+    /// A refresh asked for by a write rather than by the clock.
+    ///
+    /// The pump's five seconds is the floor under the reading, not its pace: a
+    /// prompt writes its first line at once, and waiting for the next tick to
+    /// notice was the whole of the delay before the dot lit. The watchers push
+    /// here instead — coalesced twice, once by FSEvents and once here, so a
+    /// burst of writes cannot queue a refresh per write, and a write that lands
+    /// mid-refresh still gets one of its own rather than being swallowed.
+    func refreshSoon() async {
+        guard !isRefreshing else { refreshPending = true; return }
+        isRefreshing = true
+        repeat {
+            refreshPending = false
+            await refresh()
+        } while refreshPending
+        isRefreshing = false
+    }
+
+    private var isRefreshing = false
+    private var refreshPending = false
 
     func refresh(now: Date = Date.now) async {
         // A session that dies without tidying its file leaves the registry
@@ -289,7 +418,7 @@ final class UsageStore {
                     merged.removeAll()
                 }
                 events[source.id] = merged
-                if let activity = fresh.activity { activities[source.id] = activity }
+                logWorking[source.id] = fresh.workingSessions
 
                 let windows = WindowCalculator.windows(from: merged, weights: weights)
 
@@ -313,7 +442,9 @@ final class UsageStore {
                     // rolled forward first if its window has reset.
                     limits: Self.newer(fresh.limits, currentLimits(for: source.id, at: now)),
                     events: merged,
-                    activity: fresh.activity ?? activities[source.id],
+                    working: Self.working(
+                        sessions: sessions, logs: logWorking, for: source.id, tracked: tracked
+                    ),
                     at: now,
                     weights: weights,
                     panelMovedAt: panelMovedAt[source.id],
@@ -323,8 +454,9 @@ final class UsageStore {
                     // for an identical answer.
                     windows: windows
                 )
-                if source.id == activeSource, let snapshot = snapshots[source.id] {
-                    onSnapshot?(snapshot)
+                if let snapshot = snapshots[source.id] {
+                    considerAlert(snapshot, at: now)
+                    if source.id == activeSource { onSnapshot?(snapshot) }
                 }
             } catch {
                 // A missing log directory just means that CLI isn't installed.
@@ -334,23 +466,15 @@ final class UsageStore {
 
         refreshPanelOnlyProviders(now: now)
 
-        // One 5-hour slice across sources: their windows start independently, so
-        // the clock is the only span both can be measured over.
-        let recent = events.values.flatMap { $0 }
-            .filter { $0.timestamp > now.addingTimeInterval(-5 * 3600) }
-        bySource = Aggregator.shares(recent, weights: weights) { $0.source.displayName }
-
         await persistEvents(now: now)
     }
 
-    /// A provider whose figures come only from its CLI's panel.
+    /// A provider with a panel reading and no `UsageSource` behind it.
     ///
-    /// Copilot logs nothing this app can read: its store is a SQLite database of
-    /// sessions with no per-request token rows, and the plan budget it spends
-    /// against was never on disk at all — §0.5. So there is no `UsageSource` to
-    /// poll, and the snapshot is the reading plus nothing: no sparkline, no
-    /// splits, no history. The card says so by having those sections empty, which
-    /// is the truth about what is knowable here.
+    /// Its snapshot is the reading plus nothing — no sparkline, no splits, no
+    /// history — because there is no log to build them from. Every provider
+    /// shipped today has a source, so this runs for none of them; it is what
+    /// keeps the next one from needing a source before it can show a figure.
     private func refreshPanelOnlyProviders(now: Date) {
         for id in panels.keys.sorted(by: { $0.rawValue < $1.rawValue })
         where tracked.contains(id) && !sources.contains(where: { $0.id == id }) {
@@ -365,7 +489,10 @@ final class UsageStore {
                 panelMovedAt: panelMovedAt[id],
                 windows: []
             )
-            if id == activeSource, let snapshot = snapshots[id] { onSnapshot?(snapshot) }
+            if let snapshot = snapshots[id] {
+                considerAlert(snapshot, at: now)
+                if id == activeSource { onSnapshot?(snapshot) }
+            }
         }
     }
 
@@ -388,7 +515,13 @@ final class UsageStore {
         // has just been read is worth exactly what a run would have cost four
         // seconds to fetch. Counting it as a run is what keeps the spawning to
         // the case it is for: work done where nothing is logged here.
-        if let stated, stated.observedAt > (poller.lastRunAt ?? .distantPast) {
+        //
+        // A stated reading with no window in it is not one of those lines: an
+        // account metered in credits has no window to state, and its logs said
+        // so on every poll — which replaced a good panel reading with an empty
+        // one and put the row back to `--` seconds after it was read.
+        if let stated, stated.primary != nil || stated.secondary != nil,
+           stated.observedAt > (poller.lastRunAt ?? .distantPast) {
             liveLimits[id] = stated
             poller.ran(at: stated.observedAt)
         }
