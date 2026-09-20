@@ -22,6 +22,37 @@ enum Format {
         )
     }
 
+    /// The window a figure belongs to, as the captions name it: "this 5-hour
+    /// window", "this week", "this month".
+    ///
+    /// The app used to write "5-hour" into the copy as a constant, because every
+    /// account had one. A workspace metered in credits has a month where a plan
+    /// has five hours, and a caption that insists otherwise is simply wrong
+    /// about the number it is pointing at.
+    static func windowName(_ minutes: Int?) -> String {
+        switch minutes {
+        case 300: String(localized: "5-hour window")
+        case 1_440: String(localized: "day")
+        case 10_080: String(localized: "week")
+        case 43_200: String(localized: "month")
+        case 525_600: String(localized: "year")
+        default: String(localized: "window")
+        }
+    }
+
+    /// The same window as a column tag, where a sentence does not fit: the
+    /// panel's headline and the row labels that sit above a figure.
+    static func windowTag(_ minutes: Int?) -> String {
+        switch minutes {
+        case 300: String(localized: "5-HOUR")
+        case 1_440: String(localized: "DAILY")
+        case 10_080: String(localized: "WEEKLY")
+        case 43_200: String(localized: "MONTHLY")
+        case 525_600: String(localized: "ANNUAL")
+        default: String(localized: "WINDOW")
+        }
+    }
+
     static func percent(_ value: Double?) -> String {
         value.map { "\(Int($0.rounded()))%" } ?? "--"
     }

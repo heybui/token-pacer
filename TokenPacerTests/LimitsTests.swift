@@ -216,3 +216,60 @@ private func clock(_ date: Date) -> String {
     formatter.dateFormat = "MMM d h:mma"
     return formatter.string(from: date)
 }
+
+/// States a fixed reading, so the store has a percentage to cross a mark with.
+private actor StatedSource: UsageSource {
+    nonisolated let id: SourceID
+    private let percent: Double
+    /// Fixed, not computed per poll: a window whose reset moves is a *new*
+    /// window, and the policy is right to let it speak again.
+    private let resetsAt = Date.now.addingTimeInterval(3600)
+
+    init(id: SourceID, percent: Double) {
+        self.id = id
+        self.percent = percent
+    }
+
+    func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {}
+    func cursors() -> [String: JSONLReader.Cursor] { [:] }
+
+    func poll() throws -> SourceSnapshot {
+        SourceSnapshot(
+            source: id, events: [],
+            limits: RateLimits(
+                primary: RateLimitWindow(
+                    usedPercent: percent, windowMinutes: 300, resetsAt: resetsAt
+                ),
+                secondary: nil, planType: nil, observedAt: Date.now
+            )
+        )
+    }
+}
+
+/// The card is raised for whichever provider crossed — the pill may be reporting
+/// another one — it is held until somebody looks, and each mark is raised once
+/// per window however many times the same reading lands.
+@MainActor @Test func aCrossingIsRaisedOncePerWindowAndClearedByLooking() async {
+    let store = UsageStore(sources: [StatedSource(id: .codex, percent: 80)], interval: 3600)
+    store.alertThresholds = [.codex: [75, 90]]
+    store.activeSource = .claude          // the pill is reporting somebody else
+
+    await store.refresh()
+    let alert = store.alert
+    #expect(alert?.source == .codex)
+    #expect(alert?.threshold == 75)
+    #expect(alert?.isOver == false)       // the watch mark, not the far one
+
+    // The same reading again says nothing new.
+    store.acknowledge()
+    await store.refresh()
+    #expect(store.alert == nil)
+}
+
+/// Nothing to say when no marks are being watched: the switch in Preferences is
+/// what empties the list.
+@MainActor @Test func noMarksMeansNoCard() async {
+    let store = UsageStore(sources: [StatedSource(id: .codex, percent: 99)], interval: 3600)
+    await store.refresh()
+    #expect(store.alert == nil)
+}

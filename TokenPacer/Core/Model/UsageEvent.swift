@@ -61,16 +61,35 @@ struct Money: Equatable, Sendable, Codable {
     var exponent: Int
 
     var amount: Decimal { Decimal(amountMinor) / pow(10, exponent) }
+
+    /// Not a currency, and named so nothing tries to convert it. A workspace on
+    /// a credit budget is billed in credits and shown its budget in credits, so
+    /// credits are the unit its figures already come in.
+    static let credits = "credits"
+
+    var isCredits: Bool { currency == Self.credits }
 }
 
-/// Pay-as-you-go spend past the plan's limits. Absent for accounts that never
-/// enabled extra usage, which is most of them.
+/// What the account is drawing down beyond its windows: pay-as-you-go spend past
+/// the plan's limits, or — for a workspace metered in credits — the monthly
+/// credit budget itself. Absent for accounts that have neither, which is most.
 struct Spend: Equatable, Sendable, Codable {
     var used: Money
     var limit: Money?
     /// The endpoint's own figure; it disagrees with used/limit by a rounding step.
     var percent: Double?
     var isEnabled: Bool
+
+    /// What the bar fills to: the stated figure when there is one, the pair's own
+    /// division when there is not. A panel that prints `7,650 / 18,000` has said
+    /// the share as plainly as a percentage would; the bar under it sat empty
+    /// because only one of the three parsers happened to do the arithmetic.
+    var share: Double? {
+        if let percent { return percent }
+        guard let limit, limit.amountMinor > 0, limit.exponent == used.exponent
+        else { return nil }
+        return Double(used.amountMinor) / Double(limit.amountMinor) * 100
+    }
 }
 
 struct RateLimits: Equatable, Sendable, Codable {
@@ -88,6 +107,10 @@ struct SourceSnapshot: Sendable {
     let events: [UsageEvent]
     /// Non-nil only for sources that publish their own limits.
     let limits: RateLimits?
-    /// What the newest log line says about right now — drives the activity dot.
-    var activity: LogActivity?
+    /// Sessions of this source with a turn in flight — the activity dot, the
+    /// running border and the job badge, which are one fact.
+    /// Zero from any source whose sessions are counted somewhere better: Claude
+    /// Code registers its own, with a kind and a live pid, and a log cannot say
+    /// either.
+    var workingSessions: Int = 0
 }

@@ -94,3 +94,65 @@ private let calendar = Calendar.current
     #expect(UsageStore.newer(nil, old)?.planType == "old")
     #expect(UsageStore.newer(nil, nil) == nil)
 }
+
+/// An Enterprise workspace metered in credits, verbatim from a customer's own
+/// `/status` on the same 0.155.1: no `5h limit:` row exists to find, because a
+/// credit budget is the only limit the account has.
+private let creditPanel = """
+\u{1B}[2m│  Account:              someone@example.com (Enterprise)   │\u{1B}[0m\r
+\u{1B}[2m│  Collaboration mode:   Default                            │\u{1B}[0m\r
+\u{1B}[2m│  Credits:              Available                          │\u{1B}[0m\r
+\u{1B}[2m│  Monthly credit limit: \u{1B}[22m[███████████████████░] 97% left\u{1B}[2m (resets 07:00 on 1 Oct)  │\u{1B}[0m\r
+\u{1B}[2m│                        1,181 of 40,000 credits used       │\u{1B}[0m\r
+\u{1B}[2m│  Thread usage:         0 credits · ~$0.00                  │\u{1B}[0m\r
+"""
+
+@Test func aCreditBudgetIsReadAsTheAccountsOnlyWindow() throws {
+    let limits = try #require(CodexStatusPanel.parse(creditPanel, now: now))
+
+    // The ratio, not the rounded `97% left`: 1,181 of 40,000 is 2.95%, and the
+    // whole-percent figure beside it is 400 credits coarser.
+    let used = try #require(limits.primary?.usedPercent)
+    #expect(abs(used - 2.9525) < 0.0001)
+    #expect(limits.primary?.windowMinutes == CodexStatusPanel.monthlyWindowMinutes)
+    #expect(limits.secondary == nil)
+    #expect(limits.planType == "Enterprise")
+}
+
+@Test func theCreditBudgetItselfIsCarriedAsSpend() throws {
+    let spend = try #require(CodexStatusPanel.parse(creditPanel, now: now)?.spend)
+
+    #expect(spend.used.amountMinor == 1_181)
+    #expect(spend.limit?.amountMinor == 40_000)
+    #expect(spend.used.isCredits)
+    #expect(spend.used.exponent == 0)
+    // `Thread usage: 0 credits` sits right underneath and is this session's
+    // share, not a budget. Taking it would zero the figure on every read.
+    #expect(spend.used.amountMinor != 0)
+}
+
+/// `resets 07:00 on 1 Oct`, a month out rather than hours.
+@Test func aMonthlyCreditResetLandsOnTheFirst() throws {
+    let reset = try #require(CodexStatusPanel.parse(creditPanel, now: now)?.primary?.resetsAt)
+
+    #expect(reset > now)
+    #expect(calendar.component(.day, from: reset) == 1)
+    #expect(calendar.component(.month, from: reset) == 10)
+    #expect(calendar.component(.hour, from: reset) == 7)
+}
+
+/// A workspace that has both: the credit line belongs to the credit row alone,
+/// and the 5-hour row keeps its own figure however close together they render.
+@Test func aCreditLineIsNotReadAsTheRowAboveIt() throws {
+    let mixed = """
+    5h limit: [████] 94% left (resets 07:51) \
+    Weekly limit: [███] 80% left (resets 15:23) \
+    Monthly credit limit: [███] 97% left (resets 07:00 on 1 Oct) 1,181 of 40,000 credits used
+    """
+    let limits = try #require(CodexStatusPanel.parse(mixed, now: now))
+
+    #expect(limits.primary?.usedPercent == 6)
+    #expect(limits.primary?.windowMinutes == 300)
+    #expect(limits.secondary?.usedPercent == 20)
+    #expect(limits.spend?.used.amountMinor == 1_181)
+}

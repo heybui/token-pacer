@@ -12,6 +12,10 @@ actor CodexSource: UsageSource {
     /// `session_meta` appears once at the top of a log; later polls of the same
     /// file resume past it, so the working directory has to be remembered.
     private var projectByFile: [URL: String] = [:]
+    /// And the model with it. Codex states it on `turn_context`, at the head of
+    /// each turn, and leaves it off the token records that follow — so every
+    /// Codex event was filed under "unknown" in the panel's own splits.
+    private var modelByFile: [URL: String] = [:]
     private var latestLimits: RateLimits?
 
     private let cutoff: Date?
@@ -45,7 +49,8 @@ actor CodexSource: UsageSource {
         let now = Date.now
         if let changed, !changed(), now.timeIntervalSince(lastScan) < Self.scanAtLeastEvery {
             return SourceSnapshot(
-                source: .codex, events: [], limits: latestLimits, activity: scanner.activity
+                source: .codex, events: [], limits: latestLimits,
+                workingSessions: scanner.working(at: now)
             )
         }
         lastScan = now
@@ -55,10 +60,14 @@ actor CodexSource: UsageSource {
         var local = scanner
         let events = try local.scan(root: root, since: cutoff) { self.decode($0, file: $1) }
         scanner = local
-        // Codex has no equivalent of Claude's `user` line to mark a turn in
-        // flight, so its dot still follows logged tokens alone.
+        // Codex marks its turns outright — `task_started` … `task_complete` —
+        // so the dot follows the turn rather than the last line written, and a
+        // session mid-turn is a job the badge can count. Codex registers its
+        // sessions nowhere: `~/.codex` holds a lock file per thread with nothing
+        // in it, so the log is the only place that knows.
         return SourceSnapshot(
-            source: .codex, events: events, limits: latestLimits, activity: scanner.activity
+            source: .codex, events: events, limits: latestLimits,
+            workingSessions: scanner.working(at: now)
         )
     }
 
@@ -83,6 +92,9 @@ actor CodexSource: UsageSource {
             if projectByFile[file] == nil, let cwd = row.payload?.cwd {
                 projectByFile[file] = URL(fileURLWithPath: cwd).lastPathComponent
             }
+            // Overwritten rather than kept: `/model` mid-session is a new
+            // `turn_context`, and the turns after it are that model's.
+            if let model = row.payload?.model { modelByFile[file] = model }
             return []
 
         case "event_msg":
@@ -117,7 +129,9 @@ actor CodexSource: UsageSource {
                 id: "codex:" + responseID,
                 source: .codex,
                 timestamp: stamp,
-                model: row.payload?.model,
+                // From the turn's own context line, since the record itself
+                // carries no model at all.
+                model: row.payload?.model ?? modelByFile[file],
                 project: projectByFile[file],
                 sessionID: payload.session_id,
                 counts: counts
