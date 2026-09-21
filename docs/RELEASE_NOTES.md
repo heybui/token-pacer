@@ -20,13 +20,13 @@ no description at all.
 Copy from inside the block, delete what does not apply.
 
 ```markdown
-**One line saying what this release is for.**
+⚡ **One line saying what this release is for.**
 
-### New
-- 
+### ✨ New
+- 🚀 
 
-### Fixed
-- 
+### 🔧 Fixed
+- 🐛 
 ```
 
 ## How to fill it
@@ -41,7 +41,16 @@ Copy from inside the block, delete what does not apply.
 - **Drop the section that is empty.** A "Fixed" heading with nothing under it
   reads as something that failed to load.
 - **Anything that needs a decision goes first**, on its own, as
-  `**Heads up:** …` — a preference that resets, a CLI version now required.
+  `⚠️ **Heads up:** …` — a preference that resets, a CLI version now required.
+- **One emoji per line, and it has to earn its place.** The 1.0 notes set the
+  voice and the dialog is a wall of grey text at that size: a glyph at the head
+  of each bullet is what makes it scannable. Pick one that says what the change
+  is about — 💳 for credits, 📊 for a figure, 🧹 for a sweep of small fixes —
+  never a decorative ✅ or 🎯 on every line. Two in one bullet is noise, and an
+  emoji mid-sentence is worse than none.
+- **Close with the feedback line.** `💬 Tell me what breaks:
+  https://tokenpacer.com/#feedback` — the notes are the only place most people
+  will ever be invited to answer back.
 
 ## What breaks in the dialog
 
@@ -57,16 +66,18 @@ Copy from inside the block, delete what does not apply.
 ## A good one
 
 ```markdown
-**Copilot joins Claude and Codex in the notch.**
+🎉 **Copilot joins Claude and Codex in the notch.**
 
-### New
-- Copilot's usage panel is read alongside the others; pick which provider the
+### ✨ New
+- 📊 Copilot's usage panel is read alongside the others; pick which provider the
   pill shows in Preferences → Providers.
-- The card says how old each reading is, so a frozen number is never mistaken
+- 🕒 The card says how old each reading is, so a frozen number is never mistaken
   for a current one.
 
-### Fixed
-- The notch no longer loses its place when an external display wakes up.
-- A provider that cannot be read says so in its own row instead of blanking the
-  whole card.
+### 🔧 Fixed
+- 🖥️ The notch no longer loses its place when an external display wakes up.
+- ⚠️ A provider that cannot be read says so in its own row instead of blanking
+  the whole card.
+
+💬 Tell me what breaks: https://tokenpacer.com/#feedback
 ```
