@@ -336,43 +336,89 @@ private actor SlowSource: UsageSource {
     #expect(events.first?.project == "thing")
 }
 
-/// The one file that says which sessions are working, read for that flag alone:
-/// the app's own `/usage` run opens a session and writes an entry, and an entry
-/// is not work.
-@Test func copilotCountsOnlyTheSessionsItSaysAreWorking() async throws {
+/// A schema-faithful `data.db`: what Copilot writes, in the columns it writes
+/// it in.
+private func copilotStore(_ rows: String) throws -> URL {
     let root = FileManager.default.temporaryDirectory
         .appending(path: "token-pacer-tests/\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    let file = root.appending(path: "open-sessions-state.json")
-    let now = Date()
-    func entry(_ working: Bool, minutesAgo: Double) -> String {
-        let stamp = now.addingTimeInterval(-minutesAgo * 60).ISO8601Format()
-        return #"{"schemaVersion":1,"openedAt":"\#(stamp)","refreshedAt":"\#(stamp)","working":\#(working)}"#
-    }
-    try """
-    {"a": \(entry(true, minutesAgo: 1)),
-     "b": \(entry(false, minutesAgo: 0)),
-     "c": \(entry(true, minutesAgo: 60))}
-    """.write(to: file, atomically: true, encoding: .utf8)
+    let store = root.appending(path: "data.db")
 
-    let snapshot = try await CopilotSource(
-        file: file, store: root.appending(path: "session-store.db")
-    ).poll()
-    // One working and recent. The idle one does not count, and neither does the
-    // hour-old "working" left behind by a session that never tidied up.
+    var db: OpaquePointer?
+    #expect(sqlite3_open(store.path, &db) == SQLITE_OK)
+    let schema = """
+        CREATE TABLE sessions (
+            id TEXT PRIMARY KEY, model TEXT, is_running INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            total_input_tokens INTEGER NOT NULL DEFAULT 0,
+            total_output_tokens INTEGER NOT NULL DEFAULT 0,
+            total_cached_tokens INTEGER NOT NULL DEFAULT 0,
+            total_reasoning_tokens INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT, github_owner TEXT, github_repo TEXT);
+        CREATE TABLE workspaces (id TEXT PRIMARY KEY, session_id TEXT, project_id TEXT);
+        INSERT INTO projects VALUES ('p1', 'thing', 'CoverGo', 'thing');
+        INSERT INTO projects VALUES ('p2', 'loose-folder', '', '');
+        \(rows)
+        """
+    #expect(sqlite3_exec(db, schema, nil, nil, nil) == SQLITE_OK)
+    sqlite3_close(db)
+    return store
+}
+
+private func copilotSession(
+    _ id: String, running: Bool = false, minutesAgo: Double = 0, project: String? = nil,
+    input: Int = 0, output: Int = 0, cached: Int = 0, reasoning: Int = 0
+) -> String {
+    let stamp = Date().addingTimeInterval(-minutesAgo * 60).ISO8601Format()
+    var sql = """
+        INSERT INTO sessions VALUES ('\(id)', 'gpt-6-astra', \(running ? 1 : 0), '\(stamp)',
+            \(input), \(output), \(cached), \(reasoning));
+        """
+    if let project {
+        sql += "INSERT INTO workspaces VALUES ('w-\(id)', '\(id)', '\(project)');"
+    }
+    return sql
+}
+
+/// Bumps a session's totals and its `updated_at`, the way Copilot does.
+private func bump(
+    _ store: URL, _ id: String, input: Int = 0, output: Int = 0,
+    cached: Int = 0, reasoning: Int = 0
+) throws {
+    var db: OpaquePointer?
+    #expect(sqlite3_open(store.path, &db) == SQLITE_OK)
+    defer { sqlite3_close(db) }
+    let sql = """
+        UPDATE sessions SET total_input_tokens = \(input), total_output_tokens = \(output),
+            total_cached_tokens = \(cached), total_reasoning_tokens = \(reasoning),
+            updated_at = '\(Date().ISO8601Format())' WHERE id = '\(id)';
+        """
+    #expect(sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK)
+}
+
+/// The dot follows `is_running`, and only while the row is still moving: the
+/// flag outlives a session killed mid-turn, exactly as the `working` flag in
+/// the file this replaced did.
+@Test func copilotCountsOnlyTheSessionsItSaysAreRunning() async throws {
+    let store = try copilotStore("""
+        \(copilotSession("a", running: true, minutesAgo: 1))
+        \(copilotSession("b", running: false, minutesAgo: 0))
+        \(copilotSession("c", running: true, minutesAgo: 60))
+        """)
+
+    let snapshot = try await CopilotSource(store: store).poll()
     #expect(snapshot.workingSessions == 1)
+    // Every session is met for the first time, so every one is baselined.
     #expect(snapshot.events.isEmpty)
     #expect(snapshot.limits == nil)
 }
 
-/// A machine that has never run Copilot has no such file, which is not an error:
-/// the panel is what says whether the CLI is there.
-@Test func aMissingCopilotStateFileIsQuiet() async throws {
-    let snapshot = try await CopilotSource(
-        file: URL(filePath: "/nope/open-sessions-state.json"),
-        store: URL(filePath: "/nope/session-store.db")
-    ).poll()
+/// A machine that has never run Copilot has no such database, which is not an
+/// error: the panel is what says whether the CLI is there.
+@Test func aMissingCopilotStoreIsQuiet() async throws {
+    let snapshot = try await CopilotSource(store: URL(filePath: "/nope/data.db")).poll()
     #expect(snapshot.workingSessions == 0)
+    #expect(snapshot.events.isEmpty)
 }
 
 /// The border is the pill saying the machine is busy, so it answers to every
@@ -397,63 +443,83 @@ private actor SlowSource: UsageSource {
 }
 
 
-// MARK: - Copilot's request log
+// MARK: - Copilot's running totals
 
-/// Copilot keeps the same facts the other two do, in SQLite rather than JSONL:
-/// `assistant_usage_events`, one row per request, joined to `sessions` for where
-/// it ran. Without it the panel had three empty columns and no history for a
-/// provider that had been used all week.
-@Test func copilotReadsItsRequestLog() async throws {
-    let root = FileManager.default.temporaryDirectory
-        .appending(path: "token-pacer-tests/\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    let store = root.appending(path: "session-store.db")
+/// Copilot states a session's spend as running totals, rewritten in place. The
+/// growth between two reads is the event; the totals themselves never are, or a
+/// week of tokens would land on the day the app first saw the row.
+@Test func copilotCountsGrowthRatherThanTotals() async throws {
+    let store = try copilotStore(copilotSession(
+        "s1", project: "p1", input: 103_398, output: 63, cached: 101_734
+    ))
+    let source = CopilotSource(store: store)
 
-    var db: OpaquePointer?
-    #expect(sqlite3_open(store.path, &db) == SQLITE_OK)
-    let schema = """
-        CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT, repository TEXT);
-        CREATE TABLE assistant_usage_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, model TEXT NOT NULL,
-            input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
-            cache_write_tokens INTEGER, reasoning_tokens INTEGER, created_at TEXT);
-        INSERT INTO sessions VALUES ('s1', '/Users/me/thing', 'CoverGo/thing');
-        INSERT INTO sessions VALUES ('s2', '/Users/me/other', '');
-        INSERT INTO assistant_usage_events
-            (session_id, model, input_tokens, output_tokens, cache_read_tokens,
-             cache_write_tokens, reasoning_tokens, created_at)
-        VALUES
-            ('s1', 'gpt-6-astra', 103398, 63, 101734, 1661, 0, '\(Date().ISO8601Format())'),
-            ('s2', 'gpt-5.4-mini', 500, 40, 0, 0, 10, '2000-01-01 08:23:38');
-        """
-    #expect(sqlite3_exec(db, schema, nil, nil, nil) == SQLITE_OK)
-    sqlite3_close(db)
+    // First sight of the session is a baseline, not 103,398 tokens today.
+    #expect(try await source.poll().events.isEmpty)
 
-    let source = CopilotSource(
-        file: URL(filePath: "/nope/open-sessions-state.json"), store: store
-    )
+    try bump(store, "s1", input: 203_398, output: 163, cached: 201_734, reasoning: 40)
     let events = try await source.poll().events
-
-    // The ancient row is past retention and never leaves the database.
     #expect(events.count == 1)
     let event = try #require(events.first)
     #expect(event.model == "gpt-6-astra")
-    // `owner/name` where the session has one — better than the last path
-    // component every other source has to settle for.
+    // `owner/name` where the session has one — better than the folder name.
     #expect(event.project == "CoverGo/thing")
-    // `input_tokens` is the whole prompt, cache included. Three tokens of it
-    // were fresh, and only those may be charged as input here.
-    #expect(event.counts.input == 3)
-    #expect(event.counts.cacheRead == 101_734)
-    #expect(event.counts.cacheWrite == 1_661)
+    // The delta, and cache is part of input upstream: 100,000 more input of
+    // which 100,000 was cached leaves nothing fresh to charge.
+    #expect(event.counts.input == 0)
+    #expect(event.counts.cacheRead == 100_000)
+    #expect(event.counts.output == 100)
+    #expect(event.counts.reasoning == 40)
 
-    // Nothing has been written since, so the file is never opened again...
+    // Nothing has been written since, so the database is never opened again.
     #expect(try await source.poll().events.isEmpty)
-    // ...and a relaunch resumes past the row it already read rather than
-    // replaying the table.
-    let resumed = CopilotSource(
-        file: URL(filePath: "/nope/open-sessions-state.json"), store: store
+}
+
+/// A session with no repository behind it falls back to the project's own name,
+/// and one with no project at all has none.
+@Test func copilotNamesAProjectOnlyWhenItHasOne() async throws {
+    let store = try copilotStore("""
+        \(copilotSession("s1", project: "p2", output: 1))
+        \(copilotSession("s2", output: 1))
+        """)
+    let source = CopilotSource(store: store)
+    _ = try await source.poll()
+
+    try bump(store, "s1", output: 11)
+    try bump(store, "s2", output: 11)
+    let byID = Dictionary(
+        uniqueKeysWithValues: try await source.poll().events.map { ($0.sessionID, $0.project) }
     )
-    await resumed.restore(cursors: await source.cursors(), seen: [])
+    #expect(byID["s1"] == "loose-folder")
+    #expect(byID["s2"] == .some(nil))
+}
+
+/// A relaunch has no memory of the watermark and no cursor to keep one in — the
+/// archived event ids carry it, because an id *is* the totals it moved to.
+@Test func copilotResumesFromTheWatermarkInItsEventIds() async throws {
+    let store = try copilotStore(copilotSession("s1", project: "p1", output: 100))
+    let source = CopilotSource(store: store)
+    _ = try await source.poll()
+    try bump(store, "s1", input: 10, output: 200, cached: 4, reasoning: 1)
+    let first = try await source.poll().events
+    #expect(first.count == 1)
+
+    let resumed = CopilotSource(store: store)
+    await resumed.restore(cursors: [:], seen: Set(first.map(\.id)))
+    // Same totals as the id already claims: no growth, so no event — and no
+    // replay of the 100 output tokens the first pass already counted.
     #expect(try await resumed.poll().events.isEmpty)
+
+    try bump(store, "s1", input: 10, output: 250, cached: 4, reasoning: 1)
+    #expect(try await resumed.poll().events.first?.counts.output == 50)
+}
+
+/// Copilot rewrites the row, so a fork or a rollback can leave a total lower
+/// than the one already counted. A negative delta is not usage.
+@Test func copilotNeverCountsARowThatWentBackwards() async throws {
+    let store = try copilotStore(copilotSession("s1", output: 100))
+    let source = CopilotSource(store: store)
+    _ = try await source.poll()
+    try bump(store, "s1", output: 20)
+    #expect(try await source.poll().events.isEmpty)
 }
