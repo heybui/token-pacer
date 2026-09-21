@@ -280,28 +280,34 @@ Nothing else in `~/.codex` is opened: not `auth.json`, not the sqlite stores
 
 | # | Flow | Reads | Mechanism | Cadence |
 |---|---|---|---|---|
-| 1 | Plan budget | the `copilot` binary's `/usage` screen | pty + `posix_spawn` | idle floor only, ≥ 30 min |
+| 1 | Plan quota | the `copilot` binary's `account.getQuota` | `--headless --stdio` JSON-RPC | idle floor only, ≥ 30 min |
 | 2 | Volume, models, projects, sessions running now | `~/.copilot/data.db` | SQLite, read-only | a `stat` per tick, queried only when it moved |
 
-### The `/usage` panel
+### The quota call
 
-`TokenPacer/Services/TerminalCLI.swift` → `TokenPacer/Core/Ingest/CopilotUsagePanel.swift`
+`TokenPacer/Services/CopilotAppServer.swift` → `TokenPacer/Core/Ingest/CopilotUsagePanel.swift`
 
-Same driver again, started in Copilot's own store (`COPILOT_HOME`, else
-`~/.copilot`) with `--disable-builtin-mcps --no-auto-update`: the first halves a
-23-second boot, the second keeps a background read from downloading a new CLI
-behind your back. Nothing here ever sends a prompt, so no model call is made and
-no tool runs. What it parses is one row:
+`copilot --headless --stdio --no-auto-update --log-level none`: no TUI, no
+terminal to fake, no folder-trust dialog to answer, and no log file left behind
+per run. Two `Content-Length` frames go in — `connect`, then
+`account.getQuota` — and the reply states the quota as numbers:
 
+```json
+{"quotaSnapshots":{"chat":{"entitlementRequests":200,"usedRequests":0,
+  "remainingPercentage":100,"hasQuota":true,"tokenBasedBilling":true}, …}}
 ```
-   Plan ████████████████████ 39% used  7,074 / 18,000 AIC
-```
 
-The percentage, and the credits as a used-of-limit pair. `AI Credits 0 (24s)` on
-the line above is what *that* conversation spent and is deliberately not read.
-Copilot has no five-hour or weekly window, so this is the only figure, and the
-reset is inferred as the month boundary — the panel never prints the billing
-anniversary.
+Whichever of `premium_interactions`, `chat`, `completions` is the metered one is
+the plan figure: an account on AI credits carries it on `chat`, a
+premium-request plan on `premium_interactions`, and an unlimited entitlement is
+no budget at all. Nothing here ever sends a prompt, so no model call is made and
+no tool runs. Copilot has no five-hour or weekly window, so this is the only
+figure, and the reset is the month boundary — `resetDate` states the moment the
+quota was *read*, not the moment it refills.
+
+This is the interface `@github/copilot-sdk` drives. It is undocumented and
+absent from `--help`, and it replaced reading the `/usage` screen, which 1.0.86
+made unreadable: a folder-trust dialog at boot swallows the typed command.
 
 ### The sessions table
 

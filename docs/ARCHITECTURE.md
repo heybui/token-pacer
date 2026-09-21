@@ -33,18 +33,20 @@ openpty → posix_spawn(cli, POSIX_SPAWN_SETSID) → wait for the screen to go q
 ```
 
 Measured on this machine: **~4s and 4.2KB for Claude's `/usage`**, **$0.0000** —
-no model call. Copilot boots in ~12s with `--disable-builtin-mcps` and takes a
-60s budget where Claude takes 30.
+no model call.
 
-Codex does not go through any of this. It ships a JSON-RPC server in the same
-binary — `codex app-server`, newline-delimited JSON on a pipe — so its limits
-are asked for and answered as numbers: **~1s**, no terminal, no trusted project,
-no composer a stray keystroke can be typed into. `CodexAppServer` owns the
-process; `CodexUsagePanel` owns the decode.
+Codex and Copilot do not go through any of this. Both ship a JSON-RPC server in
+the same binary — `codex app-server` on newline-delimited JSON, `copilot
+--headless --stdio` on `Content-Length` frames — so their limits are asked for
+and answered as numbers: **~1s each**, no terminal, no trusted project, no
+composer a stray keystroke can be typed into, and for Copilot no folder-trust
+dialog in front of the answer. `CodexAppServer` and `CopilotAppServer` own the
+processes; `CodexUsagePanel` and `CopilotUsagePanel` own the decodes. Claude
+Code is the last CLI here that only states its quota on a screen.
 
-`TerminalCLI` owns the pty and holds one `Spec` per CLI it drives: where the
-binary lives, what to type, what says the panel arrived, how a trusted directory
-is found. `ClaudeUsagePanel`, `CodexUsagePanel` and `CopilotUsagePanel` own the
+`TerminalCLI` owns the pty and holds one `Spec` per CLI it drives — Claude's,
+today: where the binary lives, what to type, what says the panel arrived, how a
+trusted directory is found. `ClaudeUsagePanel`, `CodexUsagePanel` and `CopilotUsagePanel` own the
 parsing, import Foundation only and share `PanelText` — so the hard part is
 testable without spawning anything.
 
@@ -71,8 +73,8 @@ no undocumented endpoint to be a good guest at.
 - **An untrusted directory blocks it.** Claude draws "is this a project you
   trust?" where the panel should be, so the working directory is one already
   answered for: the first project in `~/.claude.json` with
-  `hasTrustDialogAccepted`. Copilot asks per tool and needs none; Codex starts
-  no session, so it needs none either.
+  `hasTrustDialogAccepted`. Codex and Copilot start no session and draw no
+  screen, so neither needs one.
 - **A GUI app has no PATH.** launchd gives it `/usr/bin:/bin:/usr/sbin:/sbin`, so
   each binary is found by full path in the known install locations, or via
   `TOKENPACER_CLAUDE_BIN` / `TOKENPACER_CODEX_BIN` / `TOKENPACER_COPILOT_BIN`.
@@ -109,7 +111,7 @@ is simply empty.
 | Value | Source |
 |---|---|
 | 5-hour %, 7-day %, reset times | Claude: the `/usage` panel. Codex: rollout logs, and `account/rateLimits/read` once those go quiet |
-| Copilot's plan budget | its CLI's `/usage` panel — `39% used 7,074 / 18,000 AIC` |
+| Copilot's plan quota | its CLI's `account.getQuota` — used, entitlement and the percentage remaining |
 | Copilot's volume and sessions in flight | `~/.copilot/data.db`'s `sessions` row per session, read as growth |
 | Monthly credit spend | Claude's `Usage credits` row — free, no Console admin key. Codex's `individualLimit` |
 | The plan name | Codex's `planType`. Claude's panel never states one |
@@ -612,8 +614,8 @@ Bundle id: `com.redevify.token-pacer`.
    silently reads zero. The panels have no compatibility promise at all. Decode
    defensively, and never a confident `0%`.
 2. **A panel-only provider has no second opinion.** Claude and Codex still leave
-   volume, activity and a shape behind a broken panel. Copilot leaves nothing: if
-   its `/usage` screen changes, that row goes to `--`.
+   volume, activity and a shape behind a broken reading. Copilot leaves nothing:
+   if `account.getQuota` moves, that row goes to `--`.
 3. **A provider can go quiet**, and `--` has to read as "not reported" rather
    than "no usage". The attention badge carries that difference.
 4. **The Sparkle private key is a single point of failure.** It lives only in one
