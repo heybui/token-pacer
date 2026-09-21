@@ -1,11 +1,14 @@
 import Foundation
 
-/// Reads Copilot's plan usage out of the CLI's own `/usage` panel.
+/// Reads Copilot's plan quota out of `account.getQuota`, the CLI's own JSON-RPC
+/// face.
 ///
-/// This is what §0.5 of the plan said would reopen it: the desktop app's daemon
-/// holds the allowance and will not hand it over, but `copilot` ships a TUI that
-/// prints it — `Plan ████ 39% used 7,074 / 18,000 AIC`. The numerator was always
-/// readable; the denominator is what the CLI added.
+/// This replaces parsing the `/usage` TUI — `Plan ████ 39% used 7,074 / 18,000
+/// AIC` read back off a pseudo-terminal. The screen was never the fact; it was a
+/// picture of one, and 1.0.86 put a folder-trust dialog in front of it that ate
+/// the typed command. `CopilotAppServer` asks the same binary the same question
+/// in a second and gets numbers: used of entitlement, the percentage remaining,
+/// whether the entitlement is unlimited at all.
 ///
 /// **One window, not two.** Copilot has no five-hour limit and no weekly one:
 /// there is a plan budget, spent down over a billing month. So `primary` carries
@@ -25,67 +28,36 @@ struct CopilotUsagePanel: UsagePanel {
 
     // MARK: - Parsing
 
-    /// A billing month. Nothing in the panel says which day the budget renews on
-    /// — that is the account's billing anniversary, which only GitHub knows.
-    ///
-    /// ponytail: month boundary as the reset, 30 days as the window. Both are
-    /// approximations of a date this app cannot see; swap them the day the panel
-    /// prints one.
+    /// A billing month. The reply states no window length — a quota that refills
+    /// monthly has nothing shorter to declare.
     static let planWindowMinutes = 43_200
 
+    /// Nil when no quota in the reply has one: an error object where a result
+    /// should be, a release that moved the field, or an account whose every
+    /// quota is unmetered. The first two are failures; the third has no figure
+    /// to show either way.
     static func parse(_ raw: String, now: Date, calendar: Calendar = .current) -> RateLimits? {
-        let text = PanelText.normalize(raw)
-        // Anchored on `Plan`: the same screen carries a session figure
-        // (`AI Credits 0`, or `Requests 0 Premium` on legacy billing) that is
-        // spend for this conversation, not against the budget.
-        guard let section = PanelText.tail(after: #"Plan\b"#, in: text),
-              let percent = PanelText.firstCapture(#"([0-9]+(?:\.[0-9]+)?)\s*%\s*used"#, in: section)
-                .flatMap(Double.init)
+        guard let message = try? JSONDecoder().decode(Message.self, from: Data(raw.utf8)),
+              let metered = message.result?.metered
         else { return nil }
 
         return RateLimits(
-            primary: RateLimitWindow(
-                usedPercent: min(100, max(0, percent)),
-                windowMinutes: planWindowMinutes,
-                resetsAt: monthBoundary(after: now, in: calendar)
-            ),
+            primary: metered.window(now: now, calendar: calendar),
             secondary: nil,
             planType: nil,
             observedAt: now,
-            spend: budget(in: section)
-        )
-    }
-
-    /// `39% used7,074 / 18,000 AIC` — the panel puts a cursor jump where the
-    /// space between the label and the figure should be, so the pair is matched
-    /// on its digits and its slash, never on whitespace.
-    ///
-    /// The unit is carried through as it is printed: `AIC` today, `premium
-    /// requests` on the legacy billing platform. Credits are not money, but they
-    /// are a used-of-limit pair with a name, which is exactly what `Spend` holds.
-    private static func budget(in section: String) -> Spend? {
-        let figure = #"([0-9][0-9,]*(?:\.[0-9]+)?)"#
-        guard let parts = PanelText.groups(
-            figure + #"\s*/\s*"# + figure + #"\s*([A-Za-z][A-Za-z ]{0,19})?"#, in: section
-        ), let used = credits(parts[0], unit: parts[2]) else { return nil }
-
-        return Spend(
-            used: used, limit: credits(parts[1], unit: parts[2]),
-            percent: nil, isEnabled: true
-        )
-    }
-
-    private static func credits(_ digits: String, unit: String) -> Money? {
-        guard let value = Double(digits.replacing(",", with: "")) else { return nil }
-        let name = unit.trimmingCharacters(in: .whitespaces).uppercased()
-        return Money(
-            amountMinor: Int(value.rounded()),
-            currency: name.isEmpty ? "AIC" : String(name.prefix(12)),
-            exponent: 0
+            spend: metered.spend
         )
     }
 
     /// Midnight on the first of next month, local.
+    ///
+    /// ponytail: month boundary as the reset. Nothing in the reply gives the
+    /// account's billing anniversary — `resetDate` states the moment the quota
+    /// was *read*, not the moment it refills, and was within a second of `now`
+    /// on every reply this was written against. Swap this the day that field
+    /// starts pointing forward; `window(now:calendar:)` already prefers it when
+    /// it does.
     static func monthBoundary(after now: Date, in calendar: Calendar) -> Date {
         var components = calendar.dateComponents([.year, .month], from: now)
         components.day = 1
@@ -96,5 +68,92 @@ struct CopilotUsagePanel: UsagePanel {
               let next = calendar.date(byAdding: .month, value: 1, to: start)
         else { return now.addingTimeInterval(TimeInterval(planWindowMinutes * 60)) }
         return next
+    }
+
+    /// One `account.getQuota` reply, result envelope and all.
+    private struct Message: Decodable {
+        let result: Result?
+
+        struct Result: Decodable {
+            /// Keyed by quota type: `premium_interactions`, `chat`,
+            /// `completions`.
+            let quotaSnapshots: [String: Quota]
+
+            /// The one quota that is actually metered.
+            ///
+            /// Which key that is depends on how the account is billed, and both
+            /// shapes are live: an account on AI credits carries its allowance
+            /// on `chat` (200 AIC, with `premium_interactions` flagged
+            /// `hasQuota: false`), while a premium-request plan carries it on
+            /// `premium_interactions`. Asking each in turn is what keeps one
+            /// parser for both, and an unlimited entitlement is not a budget —
+            /// it has nothing to fill a bar with.
+            var metered: Quota? {
+                ["premium_interactions", "chat", "completions"]
+                    .lazy
+                    .compactMap { quotaSnapshots[$0] }
+                    .first { $0.hasQuota == true && $0.isUnlimitedEntitlement != true }
+            }
+        }
+
+        /// One quota's snapshot. `overage` and `usageAllowedWithExhaustedQuota`
+        /// are not decoded: the app has no row for what happens past the cap.
+        struct Quota: Decodable {
+            let entitlementRequests: Double?
+            let usedRequests: Double?
+            let remainingPercentage: Double?
+            let isUnlimitedEntitlement: Bool?
+            let hasQuota: Bool?
+            /// True on an account metered in AI credits rather than in requests,
+            /// which is the only thing that names the unit.
+            let tokenBasedBilling: Bool?
+            /// Documented as the reset; see `monthBoundary(after:in:)`.
+            let resetDate: String?
+
+            /// How far through the entitlement the account is.
+            ///
+            /// The wire's own `remainingPercentage` wins over the pair's
+            /// division: it is the figure Copilot reports to itself, and being
+            /// right about 89.6 against a source that says 90 is not worth
+            /// showing a different tone for.
+            private var usedPercent: Double? {
+                if let remaining = remainingPercentage {
+                    return 100 - min(100, max(0, remaining))
+                }
+                guard let entitlementRequests, entitlementRequests > 0, let usedRequests
+                else { return nil }
+                return min(100, max(0, usedRequests / entitlementRequests * 100))
+            }
+
+            func window(now: Date, calendar: Calendar) -> RateLimitWindow? {
+                guard let usedPercent else { return nil }
+                // Only a reset that is still ahead is a reset. Today's reading
+                // states one a second in the past, and a window that closed
+                // before it was read counts down from nothing.
+                let stated = resetDate.flatMap(ISO8601.parse).flatMap { $0 > now ? $0 : nil }
+                return RateLimitWindow(
+                    usedPercent: usedPercent,
+                    windowMinutes: planWindowMinutes,
+                    resetsAt: stated ?? CopilotUsagePanel.monthBoundary(after: now, in: calendar)
+                )
+            }
+
+            /// The entitlement as a budget drawn down: requests used out of
+            /// requests granted. Credits are not money, but they are a
+            /// used-of-limit pair with a name, which is exactly what `Spend`
+            /// holds.
+            var spend: Spend? {
+                guard let usedRequests else { return nil }
+                let unit = tokenBasedBilling == true ? "AIC" : "REQUESTS"
+                return Spend(
+                    used: Money(amountMinor: Int(usedRequests.rounded()), currency: unit, exponent: 0),
+                    limit: entitlementRequests.map {
+                        Money(amountMinor: Int($0.rounded()), currency: unit, exponent: 0)
+                    },
+                    percent: usedPercent,
+                    isEnabled: true
+                )
+            }
+        }
     }
 }

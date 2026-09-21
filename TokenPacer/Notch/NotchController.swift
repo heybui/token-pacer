@@ -44,7 +44,7 @@ final class NotchController {
             panels: [
                 .claude: ClaudeUsagePanel(read: TerminalCLI.reader(.claude)),
                 .codex: CodexUsagePanel(read: CodexAppServer.reader()),
-                .copilot: CopilotUsagePanel(read: TerminalCLI.reader(.copilot)),
+                .copilot: CopilotUsagePanel(read: CopilotAppServer.reader()),
             ]
         )
 

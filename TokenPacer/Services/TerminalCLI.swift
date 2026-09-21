@@ -3,11 +3,12 @@ import Foundation
 
 /// Drives a coding CLI through a pseudo-terminal to read its own usage screen.
 ///
-/// Claude Code and Copilot both render one on `/usage`, and both only render it
-/// when they believe they are talking to a terminal, so a pipe will not do.
-/// Everything either of them needs beyond that is a `Spec`. Codex is read
-/// through `CodexAppServer` instead — it answers JSON-RPC, and a machine that
-/// can answer a question does not need its screen read.
+/// Claude Code renders one on `/usage`, and only when it believes it is talking
+/// to a terminal, so a pipe will not do. Everything it needs beyond that is a
+/// `Spec`. Codex and Copilot are read through `CodexAppServer` and
+/// `CopilotAppServer` instead — both answer JSON-RPC, and a CLI that can answer
+/// a question does not need its screen read. Claude Code is the last one that
+/// cannot.
 ///
 /// Lives outside `Core/` for the same reason the Keychain reader did: this one
 /// spawns processes and talks to a tty, neither of which belongs in an engine
@@ -24,12 +25,10 @@ enum TerminalCLI {
         var searchPaths: [String]
         /// Typed at the prompt, without the newline — the driver sends that.
         var command: String
-        /// Arguments the CLI is started with. Copilot loads MCP servers at boot
-        /// and takes twice as long for it; nothing here ever sends a prompt, so
-        /// there is nothing for a tool server to serve.
+        /// Arguments the CLI is started with; nothing here ever sends a prompt,
+        /// so anything a turn would need can be left off.
         var arguments: [String] = []
-        /// Hard ceiling on a run. Copilot needs the larger one: ~12s to boot and
-        /// the plan row only lands once it has asked GitHub for the budget.
+        /// Hard ceiling on a run, boot included.
         var budget: TimeInterval = 30
         /// Text that only appears once the panel has been drawn. Searched for
         /// in what arrives *after* the command was typed: a CLI's boot status
@@ -37,9 +36,7 @@ enum TerminalCLI {
         var marker: String
         /// Where to run it. For Claude this has to be a directory the user
         /// already answered the trust dialog for — it draws that prompt where
-        /// the panel should be. Copilot asks per tool instead of per directory,
-        /// and nothing here ever runs a tool, so it runs in Copilot's own
-        /// store.
+        /// the panel should be.
         var workingDirectory: @Sendable () -> String?
     }
 
@@ -83,9 +80,6 @@ enum TerminalCLI {
         }
         return nil
     }
-
-    /// Copilot runs in its own store — `AgentHome` is what follows a moved one.
-    static func copilotHome() -> String? { firstExisting([AgentHome.copilot.path]) }
 
     /// Sorted, so the choice is the same from one run to the next, and checked,
     /// because a trusted project that has since been deleted is not a directory
@@ -309,10 +303,10 @@ enum TerminalCLI {
     /// The second `DispatchQueue` in the app, and the one the rule in CLAUDE.md
     /// does not describe: it wraps no C callback. It is here because
     /// `readUsagePanel` **blocks** — `poll(2)` and `read(2)` in a loop, for up to
-    /// the spec's whole budget, 60s for Copilot. Swift's cooperative pool has one
-    /// thread per core, so parking one there for a minute (which `Task.detached`
-    /// would also do) starves everything else; a blocking syscall loop wants a
-    /// thread of its own. Three providers could hold three at once.
+    /// the spec's whole budget. Swift's cooperative pool has one thread per core,
+    /// so parking one there for half a minute (which `Task.detached` would also
+    /// do) starves everything else; a blocking syscall loop wants a thread of its
+    /// own.
     static func reader(_ spec: Spec) -> PanelReader {
         { @Sendable in
             try await withCheckedThrowingContinuation { continuation in
@@ -335,7 +329,7 @@ extension SourceID {
         switch self {
         case .claude: TerminalCLI.locate(.claude) != nil
         case .codex: CodexAppServer.locate() != nil
-        case .copilot: TerminalCLI.locate(.copilot) != nil
+        case .copilot: CopilotAppServer.locate() != nil
         }
     }
 }
@@ -353,22 +347,4 @@ extension TerminalCLI.Spec {
         )
     }
 
-    /// Copilot's own `/usage` screen: `Plan ████ 39% used 7,074 / 18,000 AIC`.
-    ///
-    /// `--disable-builtin-mcps` halves the boot (23s → 12s) and costs nothing a
-    /// screen-read needs; `--no-auto-update` keeps a background read from
-    /// downloading a new CLI behind the user's back.
-    static var copilot: Self {
-        Self(
-            name: "Copilot",
-            searchPaths: TerminalCLI.paths(binary: "copilot", override: "TOKENPACER_COPILOT_BIN", extra: []),
-            command: "/usage",
-            arguments: ["--disable-builtin-mcps", "--no-auto-update"],
-            budget: 60,
-            // Only the plan row prints a percentage. The footer's running
-            // "Session: 0 AIC used" would otherwise match on every redraw.
-            marker: "% used",
-            workingDirectory: TerminalCLI.copilotHome
-        )
-    }
 }
