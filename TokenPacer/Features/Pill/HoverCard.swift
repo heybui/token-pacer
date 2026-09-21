@@ -24,6 +24,8 @@ struct HoverCard: View {
     /// Each provider's own two marks. A row read against somebody else's marks
     /// is a row coloured by a rule that does not apply to it.
     var zones: [SourceID: ToneScale] = [:]
+    /// The version a background check downloaded, when one is waiting.
+    var updateVersion: String?
     /// Pin the menu bar to a provider. The pane used to own this choice, a
     /// window away from the rows it is made by comparing.
     var onPin: (SourceID) -> Void = { _ in }
@@ -38,6 +40,8 @@ struct HoverCard: View {
     /// Ask every provider again. Only reachable while something is wrong, which
     /// is the only time there is anything to ask again about.
     var onRecheck: () -> Void = {}
+    /// Bring Sparkle's own window forward, which is where installing happens.
+    var onInstallUpdate: () -> Void = {}
 
     @Environment(\.tone) private var toneScale
 
@@ -90,6 +94,10 @@ struct HoverCard: View {
                     onPin(line.source)
                 }
                 .environment(\.tone, zones[line.source] ?? toneScale)
+            }
+
+            if let updateVersion {
+                UpdateRow(version: updateVersion, action: onInstallUpdate) { caption = $0 }
             }
 
             HStack(spacing: 6) {
@@ -219,6 +227,40 @@ struct HoverCard: View {
         return minutes < 1
             ? String(localized: "reported")
             : String(localized: "reported \(minutes)m ago")
+    }
+}
+
+/// A build that is downloaded and waiting, on a row of its own under the
+/// providers.
+///
+/// The badge in the menu bar says there is one; this is the only place that
+/// says which and can act on it without opening a menu. Pressing it brings
+/// Sparkle's own window forward, because installing is Sparkle's job and
+/// reimplementing the progress, the signature check and the relaunch here
+/// would be three ways to get it wrong.
+private struct UpdateRow: View {
+    let version: String
+    let action: () -> Void
+    let onCaption: (String?) -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Tokens.blue)
+                // Product name, never a key.
+                Text(verbatim: "Token Pacer \(version)")
+                    .font(Typography.sans(11.5))
+                    .foregroundStyle(.white.opacity(0.66))
+                Spacer(minLength: 8)
+                Text("Install")
+                    .font(Typography.mono(9.5))
+                    .foregroundStyle(Tokens.blue)
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { onCaption($0 ? String(localized: "Install the update and relaunch") : nil) }
     }
 }
 

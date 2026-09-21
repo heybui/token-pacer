@@ -78,8 +78,11 @@ struct PillRootView: View {
     /// What the right wing's badge slot holds, if anything. The view draws from
     /// the same answer the model measures the wing with.
     private var badge: PillState.Badge? {
-        if store.errors[store.activeSource] != nil { return .alert }
-        return workingSessions > 0 ? .working(workingSessions) : nil
+        .of(
+            attention: store.errors[store.activeSource],
+            workingSessions: workingSessions,
+            updateVersion: updater?.pendingVersion
+        )
     }
 
     /// The pill itself, lifted out of `body`: with every input the shell now
@@ -107,6 +110,8 @@ struct PillRootView: View {
             zones: zones,
             onPin: { preferences.pillSource = $0 },
             workingSessions: workingSessions,
+            updateVersion: updater?.pendingVersion,
+            onInstallUpdate: { updater?.checkForUpdates() },
             onTogglePinned: { model.togglePinned() },
             onClose: { model.setPinned(false) },
             onContentHeight: { model.contentHeight = $0 },

@@ -58,12 +58,16 @@ struct PillView: View {
     /// project, and across every tracked provider. Their own windows are behind something; the pill is
     /// the one thing always in sight that can say they are running at all.
     var workingSessions = 0
+    /// The version a background check downloaded, when one is waiting. Last in
+    /// the slot: see `PillState.Badge.update`.
+    var updateVersion: String?
+    /// Bring Sparkle's own window forward, which is where installing happens.
+    var onInstallUpdate: () -> Void = {}
 
-    /// One slot, and a source that cannot be read takes it first: an unverified
-    /// figure is worse news than a job running.
+    /// One slot; the order lives on `Badge` so the wing is measured for
+    /// whatever this draws.
     private var badge: PillState.Badge? {
-        if attention != nil { return .alert }
-        return workingSessions > 0 ? .working(workingSessions) : nil
+        .of(attention: attention, workingSessions: workingSessions, updateVersion: updateVersion)
     }
     var onTogglePinned: () -> Void = {}
     var onClose: () -> Void = {}
@@ -314,9 +318,11 @@ struct PillView: View {
             HoverCard(
                 snapshot: snapshot, providers: providers,
                 attention: attention, errors: errors,
-                pinned: pinned, jobs: jobsBySource, zones: zones, onPin: onPin,
+                pinned: pinned, jobs: jobsBySource, zones: zones,
+                updateVersion: updateVersion, onPin: onPin,
                 barWidth: providerBarWidth,
-                onExpand: onTogglePinned, onOpenSettings: onOpenSettings, onRecheck: onRecheck
+                onExpand: onTogglePinned, onOpenSettings: onOpenSettings, onRecheck: onRecheck,
+                onInstallUpdate: onInstallUpdate
             )
         case .pinned:
             PinnedPanelView(
@@ -422,7 +428,7 @@ struct PillView: View {
 
             TrailingWing(
                 snapshot: snapshot, isGhost: isGhost, attention: attention,
-                workingSessions: workingSessions, badge: badge
+                workingSessions: workingSessions, updateVersion: updateVersion, badge: badge
             )
             .padding(.leading, PillState.notchClearance)
             .padding(.trailing, PillState.trailingGutter)
