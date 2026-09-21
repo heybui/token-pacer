@@ -160,11 +160,19 @@ struct PinnedPanelView: View {
     /// The longer window is a week on every plan but one: a workspace metered in
     /// credits has a month there, and calling it a weekly cap names the wrong
     /// fact about the figure beside it.
+    ///
+    /// Some accounts have no second window at all — an Enterprise workspace on a
+    /// credit budget reports one limit and nothing else — and for those the row
+    /// stays, so the panel keeps its height across providers, but it stops
+    /// naming a cap the account does not have.
     private var capLabel: LocalizedStringKey {
         switch shown?.weeklyWindowMinutes {
         case 1_440: "Daily cap"
         case 43_200: "Monthly cap"
         case 525_600: "Annual cap"
+        // Only once a reading has arrived. Before the first one every window is
+        // absent, and that is "not known yet", not "does not exist".
+        case nil where shown?.sessionPercent != nil: "No weekly cap"
         default: "Weekly cap"
         }
     }
