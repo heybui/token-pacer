@@ -32,6 +32,17 @@
 	<key>SUPublicEDKey</key><string>upjF7oD8vW9TXGxqDlR4XSQ5AQNojCkT8Xi87J0DZWc=</string>
 	<key>SUEnableAutomaticChecks</key><true/>
 	<key>SUAutomaticallyUpdate</key><true/>
+	<!-- Both are Sparkle's, and the second is the one that matters here. An
+	     update downloaded in the background is not announced: Sparkle sits on
+	     it and installs it silently on quit. `SUScheduledImpatientCheckInterval`
+	     is how long it waits before giving up on that and telling the user —
+	     one week by default, which for an accessory app nobody ever quits is a
+	     week of running an old build without knowing. A day instead.
+	     Sparkle requires the impatient interval to be the larger of the two, so
+	     the feed poll comes down to an hour; it is a few hundred bytes of XML
+	     and discovery is not what we are rationing. -->
+	<key>SUScheduledCheckInterval</key><integer>3600</integer>
+	<key>SUScheduledImpatientCheckInterval</key><integer>86400</integer>
 	<key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>

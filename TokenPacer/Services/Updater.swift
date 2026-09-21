@@ -22,6 +22,11 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
     private(set) var pendingVersion: String?
 
     override init() {
+        // Debug hook: `TOKENPACER_SIMULATE_UPDATE=1.2.0` puts the badge and the
+        // card's row on screen. The real state needs a signed appcast, and the
+        // key that signs one is not something a review should have to reach
+        // for. A sibling of `TOKENPACER_SIMULATE_ERROR`.
+        pendingVersion = ProcessInfo.processInfo.environment["TOKENPACER_SIMULATE_UPDATE"]
         super.init()
         controller = SPUStandardUpdaterController(
             startingUpdater: true, updaterDelegate: nil, userDriverDelegate: self
@@ -73,5 +78,15 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
     ) {
         guard !state.userInitiated else { return }
         pendingVersion = update.displayVersionString
+    }
+
+    /// Put the row back once the update is no longer waiting on anybody.
+    ///
+    /// Sparkle names this as the place to take down whatever the line above put
+    /// up, and without it the menu kept offering a version the user had already
+    /// skipped — for the rest of the session, since nothing else clears it.
+    /// A dismissed update is not a pending one.
+    func standardUserDriverWillFinishUpdateSession() {
+        pendingVersion = nil
     }
 }
