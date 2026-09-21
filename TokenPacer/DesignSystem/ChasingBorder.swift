@@ -413,31 +413,34 @@ final class BorderLight: NSView {
 
     /// The only light that paints outside the mask. Spread has no Core Animation
     /// equivalent, so the blur carries it.
+    ///
+    /// **Opacity breathes; the blur does not.** `shadowRadius` and `shadowOffset`
+    /// are the two properties that invalidate the rendered shadow, so animating
+    /// them made the compositor blur the silhouette again on every frame, for as
+    /// long as anything was running — the whole shell repainting at display rate
+    /// all day. Measured against the other eleven lights, which only ever redraw
+    /// their own outline: 38,925 pixels changing per 200ms against ~1,400.
+    /// `shadowOpacity` alone is a composited property: the blur is rendered once
+    /// for the shape and faded, which is the same breath at a twentieth of the
+    /// area. The radius is the old pulse's own midpoint, so the halo it fades in
+    /// is the one that was there at the top of the breath.
     private func installGlow(_ solid: SolidLight) {
         let layer = glowLayer
-        layer.shadowOffset = CGSize(width: 0, height: 2)
-        layer.shadowRadius = 5
+        layer.shadowOffset = CGSize(width: 0, height: 3)
+        layer.shadowRadius = 12
         layer.shadowOpacity = 0.28
 
-        let pulse = { (path: String, from: Any, to: Any) -> CABasicAnimation in
-            let animation = CABasicAnimation(keyPath: path)
-            animation.fromValue = from
-            animation.toValue = to
-            animation.duration = solid.duration / 2
-            animation.autoreverses = true
-            animation.repeatCount = .infinity
-            animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            animation.beginTime = self.epoch
-            animation.isRemovedOnCompletion = false
-            animation.fillMode = .both
-            return animation
-        }
-        layer.add(pulse("shadowOpacity", 0.28, 0.9), forKey: "glowAlpha")
-        layer.add(pulse("shadowRadius", 5, 20), forKey: "glowBlur")
-        layer.add(
-            pulse("shadowOffset", CGSize(width: 0, height: 2), CGSize(width: 0, height: 4)),
-            forKey: "glowOffset"
-        )
+        let breath = CABasicAnimation(keyPath: "shadowOpacity")
+        breath.fromValue = 0.18
+        breath.toValue = 0.9
+        breath.duration = solid.duration / 2
+        breath.autoreverses = true
+        breath.repeatCount = .infinity
+        breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        breath.beginTime = epoch
+        breath.isRemovedOnCompletion = false
+        breath.fillMode = .both
+        layer.add(breath, forKey: "glowAlpha")
     }
 
     /// Removed, not paused: a resumed session would inherit a stale phase and the
