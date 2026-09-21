@@ -16,7 +16,8 @@ different clock, and the only way to see any of them is to stop what you are
 doing and ask the CLI. So you find out you are at 94% by being told you are at
 100% — usually mid-task, usually on the one afternoon it matters.
 
-The figures exist. Claude Code draws them on `/usage`, Codex on `/status`,
+The figures exist. Claude Code draws them on `/usage`, Codex answers them over
+its own JSON-RPC,
 Copilot on `/usage`. Nothing keeps them in front of you.
 
 ## The product, in one line
@@ -48,7 +49,7 @@ them.
    lives in the card instead.
 3. **Ask for nothing.** No account, no API key, no token of our own, no
    Accessibility, no Screen Recording, no Automation, no network call. The app
-   spawns the CLI you already trust and reads the screen it already draws.
+   asks the CLI you already trust, and reads the answer it already has.
 4. **The state is in the notch; the moment is in the banner.** The notch always
    carries where you are. A banner fires only for the one transition that
    changes what you should do: going over.

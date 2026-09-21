@@ -150,53 +150,112 @@ fatal: unlike a timeout or a login prompt, it cannot resolve on its own.
 
 ## Codex
 
-The same pattern, bought for a different gain. Codex states its limits in its
-own rollout logs, so the `/status` panel is not how the figure is normally
-learned — it is how the figure stays true when the work happened somewhere that
-writes no log here: the Codex desktop app, the web app, a cloud task.
+Not the same pattern. Codex ships a JSON-RPC server in the same binary as the
+TUI, so nothing here drives a terminal: the limits are asked for and answered as
+numbers. Codex also states them in its own rollout logs, so the RPC read is not
+how the figure is normally learned — it is how the figure stays true when the
+work happened somewhere that writes no log here (the Codex desktop app, the web
+app, a cloud task), and it is the only place the credit budget appears at all.
 
 | # | Flow | Reads | Mechanism | Cadence |
 |---|---|---|---|---|
-| 1 | Percentages, plan | the `codex` binary's `/status` screen | pty + `posix_spawn` | only once the logs go quiet, ≥ 30 min |
+| 1 | Percentages, plan, credit budget | `codex app-server` | `Process` + JSON-RPC on a pipe | only once the logs go quiet, ≥ 30 min |
 | 2 | Percentages, volume, models, projects | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | incremental byte cursors + FSEvents | 5 s tick, gated |
-| 3 | Where to run the CLI | `~/.codex/config.toml` | one regex per `/status` run | per run |
 
-### 1. The `/status` panel
+Nothing in `~/.codex/config.toml` is read any more: an RPC read needs no trusted
+project to start in, because it starts no session.
 
-`TokenPacer/Services/TerminalCLI.swift` → `TokenPacer/Core/Ingest/CodexStatusPanel.swift`
+### 1. `codex app-server`
 
-Same driver as Claude's, with a different `Spec`: binary `codex` (found under
-`$TOKENPACER_CODEX_BIN`, `~/.codex/packages/standalone/current/bin`,
-`~/.local/bin`, Homebrew, `/usr/local/bin`, `~/.bun/bin`, `~/.volta/bin`),
-command `/status`, marker `limit:`.
+`TokenPacer/Services/CodexAppServer.swift` → `TokenPacer/Core/Ingest/CodexUsagePanel.swift`
 
-Two things the shared driver had to learn for it:
-
-- **The command and the newline are two writes.** Typing `/status` opens a
-  completion popup that swallows a newline arriving in the same read, and the
-  command then sits in the composer until the budget runs out. Measured on Codex
-  0.155; the driver now waits for the popup to finish drawing before submitting.
-- **The marker is searched only in what arrives after the ask.** The TUI's status
-  line already carries `5h 100% left · weekly 43…` at boot, so a marker matched
-  against the whole stream would fire before the panel exists.
-
-What it renders, and what is parsed:
+`codex -s read-only -a never app-server`, newline-delimited JSON on stdin and
+stdout. Three lines go in and one matters:
 
 ```
- Account:      someone@example.com (Plus)
- 5h limit:     [████████████████████] 100% left (resets 03:59 on 19 Sep)
- Weekly limit: [█████████░░░░░░░░░░░] 43% left (resets 15:23 on 19 Sep)
+{"id":1,"method":"initialize","params":{"clientInfo":{"name":"Token Pacer","version":"1"}}}
+{"method":"initialized","params":{}}
+{"id":2,"method":"account/rateLimits/read","params":{}}
 ```
 
-The plan, never the address. Note it counts what is **left**, not what is used,
-and its reset stamps are local, 24-hour and often dateless — the CLI has already
-converted them, so no timezone is printed. No credit row: the panel points at
-chatgpt.com for that.
+The binary is found under `$TOKENPACER_CODEX_BIN`,
+`~/.codex/packages/standalone/current/bin`, `~/.local/bin`, Homebrew,
+`/usr/local/bin`, `~/.bun/bin`, `~/.volta/bin` — the same search as before.
+`-s read-only -a never` is belt and braces: nothing here asks the server to run
+a turn, and a background usage read must not be able to.
+
+Three things the transport has to get right:
+
+- **Replies come back out of order.** An unauthenticated server answered the
+  rate-limit read *before* the initialize sent ahead of it, and notifications
+  like `remoteControl/status/changed` carry no id at all. The id is how the
+  right line is found.
+- **stdin stays open until the answer is in hand.** The server exits the moment
+  it reads EOF, and it does that well before the round trip to OpenAI comes
+  back. Closing the handle is how the child is told to stop — which is also what
+  unblocks the reader when the budget runs out, since a `read(2)` in flight on a
+  pipe does not notice a cancelled `Task`.
+- **`CODEX_*` is left alone.** A TUI run strips it so the child behaves like any
+  other session; here `CODEX_HOME` is *which account is being asked about*, and
+  `AgentHome` reads that same one's logs.
+
+What comes back, and what is taken from it:
+
+```json
+{"id":2,"result":{"rateLimits":{
+  "primary":   {"usedPercent":0,"windowDurationMins":300,  "resetsAt":1789981987},
+  "secondary": {"usedPercent":4,"windowDurationMins":10080,"resetsAt":1790428515},
+  "credits":{"hasCredits":false,"unlimited":false,"balance":"0"},
+  "individualLimit":null,
+  "planType":"plus"}}}
+```
+
+Used percent, not left. The window states its own length, the reset is a Unix
+stamp, and the plan is lowercase on the wire and capitalised for display. Not
+decoded: `credits.balance` (a remaining balance with no cap, which nothing here
+has a row for), `rateLimitsByLimitId`, `rateLimitResetCredits`, `accountId`.
+
+#### The credit budget
+
+`individualLimit` is the account's monthly credit budget — an Enterprise
+workspace metered in credits reports one and no windows at all. It is carried
+as `Spend`, and for an account with no five-hour window it also stands in as
+the headline window.
+
+Both sides of the ratio arrive and they need not agree, so each fact takes the
+field that states it:
+
+| Shown | Comes from | Why |
+| --- | --- | --- |
+| the amount, `33,140 of 40,000` | `used`, then `limit` | derived from `remainingPercent` only when absent |
+| the percentage | `100 - remainingPercent` | derived from `used / limit` only when absent |
+
+The percentage is the server's, not a ratio worked out here. A ratio would
+disagree with the figure Codex itself reports, and at a tone threshold that is
+the difference between amber and red — being right about 89.6 against a source
+that says 90 is not worth showing a different colour for. The `/status` parser
+this replaced preferred the ratio and was right to: the panel printed a rounded
+whole number, so the pair was strictly finer. That was an artefact of rendering
+a screen, and the RPC field is a `Double`.
+
+**Thirty days is claimed, not stated.** The reply gives the budget no length,
+and a calendar month is 28 to 31 days. `windowMinutes` is set to 43,200 anyway
+because the span is load-bearing — `SnapshotBuilder` measures the panel's
+splits back from the reset by exactly it, and without one they fall back to a
+five-hour window the account does not have and read "no open window" for days.
+CodexBar, which has no such span to feed, leaves it nil and labels the lane
+"Monthly credit limit" instead of "Monthly". Here the headline tag reads
+`MONTHLY` and the cell beside it reads `Plan credits · month to date`, so the
+approximation never has to carry the meaning on its own.
+
+Not signed in, the reply is an error object reading `codex account
+authentication required to read rate limits` — surfaced as
+`PanelError.notSignedIn`, the same as a `/login` prompt on a TUI.
 
 **When it runs.** `PanelPoller` is shared with Claude, and a log-stated reading
 counts as a run: while Codex is working, its rollout logs keep the reading fresh
 and nothing is ever spawned. Only once those have been quiet for the idle floor
-(30 min) does a `/status` run happen, and a reading that then comes back *higher*
+(30 min) does an RPC read happen, and a reading that then comes back *higher*
 with no local tokens to explain it puts the poller back on the 5-minute floor —
 that is what tracking a desktop-app or cloud session looks like from here.
 
@@ -206,27 +265,12 @@ that is what tracking a desktop-app or cloud session looks like from here.
 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` with the same cursors, prefilter
 and FSEvents gate as Claude's transcripts, and decodes four line types:
 `session_meta` and `turn_context` for the working directory, `token_usage_record`
-for the counts, and `event_msg`'s `token_count` for `rate_limits` — the figures
-`/status` draws, stated verbatim.
+for the counts, and `event_msg`'s `token_count` for `rate_limits` — the same
+windows `account/rateLimits/read` answers with, stated verbatim.
 
 Nothing else in `~/.codex` is opened: not `auth.json`, not the sqlite stores
 (`thread_history_1`, `state_5`, `logs_2`), not `history.jsonl`, not
 `session_index.jsonl`.
-
-### 3. `~/.codex/config.toml` — picking a working directory
-
-Codex refuses to start in a directory it has not been trusted in, exactly as
-Claude does. The file is TOML:
-
-```toml
-[projects."/Users/me/code/thing"]
-trust_level = "trusted"
-```
-
-Matched with a regex rather than decoded — a TOML parser is a dependency for one
-key of one table, and everything else in that file (models, hooks, MCP servers,
-sandbox policy) is none of this app's business. First still-existing trusted
-path, sorted, so the choice is stable between runs.
 
 ---
 
@@ -237,8 +281,7 @@ path, sorted, so the choice is stable between runs.
 | # | Flow | Reads | Mechanism | Cadence |
 |---|---|---|---|---|
 | 1 | Plan budget | the `copilot` binary's `/usage` screen | pty + `posix_spawn` | idle floor only, ≥ 30 min |
-| 2 | Sessions working now | `~/.copilot/open-sessions-state.json` | `Data(contentsOf:)` | a `stat` per tick, decoded only when it moved |
-| 3 | Request log | `~/.copilot/session-store.db` | SQLite, read-only | a `stat` per tick, queried only when it moved |
+| 2 | Volume, models, projects, sessions running now | `~/.copilot/data.db` | SQLite, read-only | a `stat` per tick, queried only when it moved |
 
 ### The `/usage` panel
 
@@ -260,30 +303,70 @@ Copilot has no five-hour or weekly window, so this is the only figure, and the
 reset is inferred as the month boundary — the panel never prints the billing
 anniversary.
 
-### The request log
+### The sessions table
 
 `TokenPacer/Core/Ingest/CopilotSource.swift`
 
-`session-store.db` keeps one row per request in `assistant_usage_events` — the
-model, the four token counts, the reasoning subset and the AIU it cost — joined
-to `sessions` for the repository or working directory it ran in. It is opened
+`data.db` keeps one row per session, rewritten in place:
+
+```
+sessions(id, model, updated_at, is_running,
+         total_input_tokens, total_output_tokens,
+         total_cached_tokens, total_reasoning_tokens)
+```
+
+joined through `workspaces.session_id` → `projects` for the repository it was
+opened in, which gives `owner/name` rather than a folder. It is opened
 read-only with `SQLITE_OPEN_READONLY` and never written to, not even to
 checkpoint; the connection is opened only when the store or its `-wal` has
-moved, and the query resumes from the last row id rather than reading the table
-again.
+moved.
 
-`input_tokens` is the whole prompt there — cache reads and writes included, as
-the row's own `token_details_json` spells out — so those are subtracted, exactly
-as Codex needs, and only the fresh remainder is charged as input.
+`total_cached_tokens` is part of `total_input_tokens`, so it is subtracted and
+only the fresh remainder is charged as input — exactly as Codex needs. There is
+no cache-write column, so a write is counted as plain input rather than
+invented.
 
-The same file holds `turns`, with the prompts and the replies in full. Nothing
-here reads that table.
+**Totals, not requests.** The row states what the session has spent since it
+opened, so the *growth* between two reads is the event and the totals
+themselves never are. Two consequences, both deliberate:
+
+- A session met for the first time is **baselined, not counted**. Its totals are
+  however long it has been running, and landing a week of tokens on today is
+  worse than missing them.
+- Copilot's sparkline and splits are as fine as the poll, where Claude's and
+  Codex's are as fine as the request. Nothing finer is left on disk.
+
+The watermark — how much of each session is already spent as events — rides in
+the event id (`copilot:<session>:<in>-<out>-<cached>-<reasoning>`), because
+`UsageSource` persists byte offsets and a running total is not one. `restore`
+hands back the archived ids, and an id *is* the watermark. A session whose
+events have all aged out of retention comes back unknown and is baselined again.
+
+`is_running` is the live flag behind the activity dot, believed only while the
+row is still moving: it outlives a session killed mid-turn, so the same 15-minute
+in-flight cap every other provider uses applies to `updated_at`.
+
+### What moved, and when
+
+Both of Copilot's older surfaces went quiet under CLI 1.0.8x, and the app read
+them until this was rewritten:
+
+- `session-store.db` → `assistant_usage_events`, a row per request, **last
+  written 11 Sep 2026**. The table is still there; nothing appends to it.
+- `open-sessions-state.json` is still written, but only once, at session open.
+  `refreshedAt` never advances past `openedAt`, and `working` was `false` in all
+  109 entries on the machine this was rewritten against — so a dot waiting for
+  that flag could never light.
+
+Neither is read any more. History already ingested from `assistant_usage_events`
+survives in this app's own event archive until retention drops it.
 
 ### Not read
 
-`~/.copilot/data.db` is opened by nothing here: in CLI 1.0.86 it holds accounts,
-activity items and workspace state, none of which is usage. The desktop app's local
-daemon (`~/.copilot/run/ws.port`, `ws.token`) is not spoken to at all: it serves
+`~/.copilot/session-store.db` and `open-sessions-state.json` — see above.
+Within `data.db`, only `sessions`, `workspaces` and `projects` are read;
+accounts, activity items, review threads and workspace state are not. The
+desktop app's local daemon (`~/.copilot/run/ws.port`, `ws.token`) is not spoken to at all: it serves
 only the app it belongs to, and reaching into it would mean reverse engineering a
 private socket whose port and token rotate (ARCHITECTURE.md §1.1).
 
@@ -295,4 +378,4 @@ private socket whose port and token rotate (ARCHITECTURE.md §1.1).
 - No network traffic of this app's own at all, except Sparkle's update feed.
 - No prompt or response text, ever — and no token is logged (`Log`, `os.Logger`, `.public` on safe values only).
 - Codex: `auth.json`, the sqlite stores, `history.jsonl`, `session_index.jsonl` — and `codex exec`, which would cost a model call.
-- Copilot: `data.db`, `config.json`, the chat store, the logs, and the desktop app's daemon socket.
+- Copilot: `session-store.db` (prompts and replies in full live in its `turns` table), `open-sessions-state.json`, `config.json`, the chat store, the logs, and the desktop app's daemon socket.

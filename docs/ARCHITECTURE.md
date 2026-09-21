@@ -32,16 +32,21 @@ openpty → posix_spawn(cli, POSIX_SPAWN_SETSID) → wait for the screen to go q
         → write "/usage" ⏎ → read until the marker and the screen settles → kill the group
 ```
 
-Measured on this machine: **~4s and 4.2KB for Claude's `/usage`**, ~6s and 11KB
-for Codex's `/status`, **$0.0000** — neither makes a model call. Copilot boots in
-~12s with `--disable-builtin-mcps` and takes a 60s budget where the others take
-30.
+Measured on this machine: **~4s and 4.2KB for Claude's `/usage`**, **$0.0000** —
+no model call. Copilot boots in ~12s with `--disable-builtin-mcps` and takes a
+60s budget where Claude takes 30.
 
-`TerminalCLI` owns the pty and holds one `Spec` per CLI: where the binary lives,
-what to type, what says the panel arrived, how a trusted directory is found.
-`ClaudeUsagePanel`, `CodexStatusPanel` and `CopilotUsagePanel` own the parsing,
-import Foundation only and share `PanelText` — so the hard part is testable
-without spawning anything.
+Codex does not go through any of this. It ships a JSON-RPC server in the same
+binary — `codex app-server`, newline-delimited JSON on a pipe — so its limits
+are asked for and answered as numbers: **~1s**, no terminal, no trusted project,
+no composer a stray keystroke can be typed into. `CodexAppServer` owns the
+process; `CodexUsagePanel` owns the decode.
+
+`TerminalCLI` owns the pty and holds one `Spec` per CLI it drives: where the
+binary lives, what to type, what says the panel arrived, how a trusted directory
+is found. `ClaudeUsagePanel`, `CodexUsagePanel` and `CopilotUsagePanel` own the
+parsing, import Foundation only and share `PanelText` — so the hard part is
+testable without spawning anything.
 
 **What it buys:** no Keychain prompt, no token of our own, no `setup-token` step,
 no undocumented endpoint to be a good guest at.
@@ -52,8 +57,9 @@ no undocumented endpoint to be a good guest at.
 - **No typed failures.** 401, 403 and 429 are one absent regex match. What
   survives is what is visible from outside the process: no binary, no trusted
   directory, a timeout, a login prompt, an unparseable screen.
-- **A UI is the contract.** Both CLIs ship weekly and no panel has a
-  compatibility promise. Two quirks are already handled: the CLI positions the
+- **A UI is the contract.** The CLIs ship weekly and no panel has a
+  compatibility promise. (Codex's RPC is a wire format rather than a screen, and
+  carries the one real promise here.) Two quirks are already handled: the CLI positions the
   cursor rather than emitting padding, so stripping escapes welds `Current
   session` into `Currentsession` and `Resets Sep 22 at 1am` into
   `ResetsSep22at1am` — every pattern treats whitespace as optional and re-spaces
@@ -62,12 +68,11 @@ no undocumented endpoint to be a good guest at.
 - **Cached first, fresh second.** The panel paints a cached figure then repaints,
   and nothing says which is which. The reader waits for the screen to stop
   changing; the parser takes the *last* match.
-- **An untrusted directory blocks it.** Both CLIs draw "is this a project you
+- **An untrusted directory blocks it.** Claude draws "is this a project you
   trust?" where the panel should be, so the working directory is one already
   answered for: the first project in `~/.claude.json` with
-  `hasTrustDialogAccepted`, or the first `trust_level = "trusted"` in
-  `~/.codex/config.toml` — matched with a regex, because a TOML parser is a
-  dependency for one key of one table. Copilot asks per tool and needs none.
+  `hasTrustDialogAccepted`. Copilot asks per tool and needs none; Codex starts
+  no session, so it needs none either.
 - **A GUI app has no PATH.** launchd gives it `/usr/bin:/bin:/usr/sbin:/sbin`, so
   each binary is found by full path in the known install locations, or via
   `TOKENPACER_CLAUDE_BIN` / `TOKENPACER_CODEX_BIN` / `TOKENPACER_COPILOT_BIN`.
@@ -75,8 +80,8 @@ no undocumented endpoint to be a good guest at.
   debugger is, so `TOKENPACER_PANEL_DUMP=<dir>` writes every run's raw screen.
 
 One thing the driver had to learn: **the command and its newline are two
-writes.** Codex's completion popup swallows a newline arriving in the same read,
-and `/status` then sits in the composer until the budget runs out.
+writes.** A completion popup drawn over the composer swallows a newline arriving
+in the same read, and the command then sits there until the budget runs out.
 
 ### 1.2 Never an inferred number
 
@@ -103,10 +108,11 @@ is simply empty.
 
 | Value | Source |
 |---|---|
-| 5-hour %, 7-day %, reset times | Claude: the `/usage` panel. Codex: rollout logs, and `/status` once those go quiet |
+| 5-hour %, 7-day %, reset times | Claude: the `/usage` panel. Codex: rollout logs, and `account/rateLimits/read` once those go quiet |
 | Copilot's plan budget | its CLI's `/usage` panel — `39% used 7,074 / 18,000 AIC` |
-| Monthly credit spend | Claude's `Usage credits` row — free, no Console admin key |
-| The plan name | Codex's `Account:` row. Claude's panel never states one |
+| Copilot's volume and sessions in flight | `~/.copilot/data.db`'s `sessions` row per session, read as growth |
+| Monthly credit spend | Claude's `Usage credits` row — free, no Console admin key. Codex's `individualLimit` |
+| The plan name | Codex's `planType`. Claude's panel never states one |
 | Sparkline, splits by model/project, 30-day history | local log token counts |
 
 Log parsing answers everything the panel cannot, and is never the headline.
@@ -115,17 +121,23 @@ Log parsing answers everything the panel cannot, and is never the headline.
 
 | | Claude Code | Codex | Copilot |
 |---|---|---|---|
-| Store | `~/.claude/projects/<slug>/<uuid>.jsonl` | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | `~/.copilot/data.db` — not read |
-| Usage record | `type:"assistant"` → `message.usage` | `type:"token_usage_record"` → `payload.usage` | — |
-| Dedupe key | `message.id` + `requestId` | `response_id` | — |
-| Context | `cwd`, `sessionId`, `message.model`, `timestamp` | `session_meta.payload.cwd`, `turn_context.cwd` | — |
-| Nesting trap | cache counts are **separate from** `input_tokens` | `cached_input_tokens` is **inside** `input_tokens`; `reasoning_output_tokens` inside `output_tokens` | — |
+| Store | `~/.claude/projects/<slug>/<uuid>.jsonl` | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | `~/.copilot/data.db` (SQLite) |
+| Usage record | `type:"assistant"` → `message.usage` | `type:"token_usage_record"` → `payload.usage` | `sessions.total_*_tokens` — a running total, not a record |
+| Dedupe key | `message.id` + `requestId` | `response_id` | the totals themselves, written into the event id |
+| Context | `cwd`, `sessionId`, `message.model`, `timestamp` | `session_meta.payload.cwd`, `turn_context.cwd` | `sessions.model`, `updated_at`, `workspaces` → `projects` |
+| Nesting trap | cache counts are **separate from** `input_tokens` | `cached_input_tokens` is **inside** `input_tokens`; `reasoning_output_tokens` inside `output_tokens` | `total_cached_tokens` is **inside** `total_input_tokens`; there is no cache-write column |
 
-Copilot 1.0.86 dropped `assistant_usage_events`, so there is nothing local left
-to read: it is the one **panel-only provider** — no `UsageSource`, no sparkline,
-no splits, no history, and the poller's activity gate has nothing to open it.
-Only the idle floor runs it, every 30 minutes.
-`UsageStore.refreshPanelOnlyProviders` is the whole seam.
+Copilot 1.0.8x dropped `assistant_usage_events`, the row-per-request table this
+used to read, and stopped refreshing `open-sessions-state.json` after opening a
+session. Both facts moved into one rewritten-in-place row per session in
+`data.db`, so Copilot is still an ordinary `UsageSource` — but the unit is a
+**running total**, and what becomes an event is the growth between two reads. A
+session met for the first time is baselined rather than counted, and the
+sparkline is as fine as the poll rather than as fine as the request. See
+ACCESS.md for the watermark and why it lives in the event id.
+
+`UsageStore.refreshPanelOnlyProviders` remains the seam for a provider that has
+a panel and no source. Every provider shipped today has one.
 
 ### 1.5 Homes, cadence, activity
 

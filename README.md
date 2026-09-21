@@ -2,11 +2,12 @@
 
 Claude Code, Codex and Copilot usage, live in the notch.
 
-The figures already exist — each CLI draws them on `/usage` or `/status` — but
+The figures already exist — each CLI draws them on `/usage`, or answers for them
+over its own JSON-RPC — but
 you have to stop and ask. Token Pacer keeps them in front of you: a mark, the
 percentage and the time to your next reset, in the menu bar, all day. It asks for
 no account, no API key and no system permission; it spawns the CLI you already
-trust and reads the screen it already draws.
+trust and reads the answer it already has.
 
 - **What it is and why it's built this way** — [docs/PRD.md](docs/PRD.md)
 - **How it's built** — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
