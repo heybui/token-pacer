@@ -496,14 +496,16 @@ final class UsageStore {
         }
     }
 
-    /// Reads a CLI's own usage panel — Claude's `/usage`, Codex's `/status` —
-    /// but only when the poller says it is worth spawning a process for.
+    /// Reads a CLI's own account figures — Claude's and Copilot's `/usage`
+    /// screens, Codex's `account/rateLimits/read` — but only when the poller
+    /// says it is worth spawning a process for.
     ///
-    /// The read is launched, never awaited here. It costs about four seconds — an
-    /// HTTP call cost milliseconds — and awaiting it inline held up the snapshot
-    /// for *both* sources while a CLI booted, so the pill froze every five minutes
-    /// and again at launch. The result lands on a later tick, which is at most 5s
-    /// behind a figure that only moves every five minutes anyway.
+    /// The read is launched, never awaited here. A screen read costs about four
+    /// seconds — an HTTP call cost milliseconds — and awaiting it inline held up
+    /// the snapshot for *every* source while a CLI booted, so the pill froze
+    /// every five minutes and again at launch. The result lands on a later tick,
+    /// which is at most 5s behind a figure that only moves every five minutes
+    /// anyway.
     private func refreshLimits(
         for id: SourceID, events: [UsageEvent], stated: RateLimits?, now: Date
     ) {

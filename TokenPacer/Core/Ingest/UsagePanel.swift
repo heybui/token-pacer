@@ -1,14 +1,16 @@
 import Foundation
 
-/// One CLI's own usage screen, already fetched and rendered by the client that
-/// holds the credentials. Two conformances: Claude Code's `/usage` panel and
-/// Codex's `/status` panel.
+/// One CLI's own account reading, already fetched by the client that holds the
+/// credentials. Claude Code and Copilot render theirs on `/usage` and are read
+/// back off a terminal; Codex answers `account/rateLimits/read` over JSON-RPC
+/// and is read as numbers. Either way the app never holds a token.
 protocol UsagePanel: Sendable {
     func fetch(now: Date) async throws -> RateLimits
 }
 
-/// Returns one run's raw terminal output, escape sequences and all. Injected so
-/// every parser is testable without spawning anything.
+/// Returns one run's raw output — a terminal render, escape sequences and all,
+/// or a line of JSON. Injected so every parser is testable without spawning
+/// anything.
 typealias PanelReader = @Sendable () async throws -> String
 
 /// What can go wrong driving a CLI.
@@ -56,7 +58,7 @@ enum PanelError: Error, Equatable {
 
 /// Turning a terminal render back into text, and finding things in it.
 ///
-/// Shared because both panels are drawn by TUIs with the same two habits: they
+/// Shared because the TUI panels are drawn with the same two habits: they
 /// position the cursor instead of emitting padding, and they wedge bars and
 /// glyphs between a label and its number.
 enum PanelText {
@@ -149,6 +151,9 @@ enum PanelText {
         for pattern in [
             #"/login"#, #"Sign\s*in\s*to"#, #"Log\s*in\s*with"#,
             #"session\s*has\s*expired"#, #"Not\s*signed\s*in"#,
+            // How `codex app-server` says it: an error object reading
+            // `codex account authentication required to read rate limits`.
+            #"authentication\s*required"#,
         ] where text.range(of: pattern, options: .regularExpression) != nil {
             return true
         }

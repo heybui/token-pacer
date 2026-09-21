@@ -3,10 +3,11 @@ import Foundation
 
 /// Drives a coding CLI through a pseudo-terminal to read its own usage screen.
 ///
-/// Claude Code and Codex both render one on a slash command — `/usage` and
-/// `/status` — and both only render it when they believe they are talking to a
-/// terminal, so a pipe will not do. Everything either of them needs beyond that
-/// is a `Spec`.
+/// Claude Code and Copilot both render one on `/usage`, and both only render it
+/// when they believe they are talking to a terminal, so a pipe will not do.
+/// Everything either of them needs beyond that is a `Spec`. Codex is read
+/// through `CodexAppServer` instead — it answers JSON-RPC, and a machine that
+/// can answer a question does not need its screen read.
 ///
 /// Lives outside `Core/` for the same reason the Keychain reader did: this one
 /// spawns processes and talks to a tty, neither of which belongs in an engine
@@ -30,34 +31,15 @@ enum TerminalCLI {
         /// Hard ceiling on a run. Copilot needs the larger one: ~12s to boot and
         /// the plan row only lands once it has asked GitHub for the budget.
         var budget: TimeInterval = 30
-        /// Text that proves the composer exists, when the CLI prints one.
-        ///
-        /// Boot is otherwise judged by the screen going quiet, and that is a
-        /// guess: on a machine that has just woken, with three CLIs spawning at
-        /// once, Codex paused for over a second *mid-paint* and the command was
-        /// typed into a TUI that had no composer yet. The fragments that left
-        /// behind were eventually submitted as a prompt — a real model turn, in
-        /// the user's own quota, from a background usage read. Positive proof
-        /// instead of a pause.
-        var ready: String?
-        /// Typed after the command and before the newline, to get the
-        /// completion popup out of the way.
-        ///
-        /// Codex 0.155.1 treats Enter with the popup open as *accept the
-        /// completion*: `/status` came back as `/statusstatus` and the CLI
-        /// answered "Unrecognized command" for every run this app ever made. A
-        /// space ends the token, so the popup closes and the newline submits
-        /// what was typed.
-        var dismissCompletion: String?
-        /// Text that only appears once the panel has been drawn. Searched for in
-        /// what arrives *after* the command was typed: both CLIs draw a status
-        /// line at boot that carries some of the same words.
+        /// Text that only appears once the panel has been drawn. Searched for
+        /// in what arrives *after* the command was typed: a CLI's boot status
+        /// line can carry some of the same words.
         var marker: String
-        /// Where to run it. For Claude and Codex this has to be a directory the
-        /// user already answered the trust dialog for — both draw that prompt
-        /// where the panel should be. Copilot asks per tool instead of per
-        /// directory, and nothing here ever runs a tool, so it runs in Copilot's
-        /// own store.
+        /// Where to run it. For Claude this has to be a directory the user
+        /// already answered the trust dialog for — it draws that prompt where
+        /// the panel should be. Copilot asks per tool instead of per directory,
+        /// and nothing here ever runs a tool, so it runs in Copilot's own
+        /// store.
         var workingDirectory: @Sendable () -> String?
     }
 
@@ -65,7 +47,7 @@ enum TerminalCLI {
         FileManager.default.homeDirectoryForCurrentUser.path
     }
 
-    fileprivate static func paths(binary: String, override: String, extra: [String]) -> [String] {
+    static func paths(binary: String, override: String, extra: [String]) -> [String] {
         ([ProcessInfo.processInfo.environment[override]].compactMap { $0 } + extra + [
             "\(home)/.local/bin/\(binary)",
             "/opt/homebrew/bin/\(binary)",
@@ -100,30 +82,6 @@ enum TerminalCLI {
             return directory
         }
         return nil
-    }
-
-    /// Codex keeps its own in `~/.codex/config.toml`:
-    ///
-    /// ```toml
-    /// [projects."/Users/me/code/thing"]
-    /// trust_level = "trusted"
-    /// ```
-    ///
-    /// Matched with a regex rather than decoded. A TOML parser is a dependency
-    /// for one key of one table, and everything else in that file — models,
-    /// hooks, MCP servers, sandbox policy — is none of this app's business.
-    static func codexTrustedDirectory() -> String? {
-        let url = AgentHome.codex.appending(path: "config.toml")
-        guard let text = try? String(contentsOf: url, encoding: .utf8),
-              let regex = try? NSRegularExpression(
-                  pattern: #"\[projects\."([^"]+)"\][^\[]*?trust_level\s*=\s*"trusted""#,
-                  options: .dotMatchesLineSeparators
-              )
-        else { return nil }
-
-        let paths = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-            .compactMap { Range($0.range(at: 1), in: text).map { String(text[$0]) } }
-        return firstExisting(paths.sorted())
     }
 
     /// Copilot runs in its own store — `AgentHome` is what follows a moved one.
@@ -240,10 +198,10 @@ enum TerminalCLI {
     /// quiet for long enough to look ready, so the ask is repeated once if no
     /// panel follows it.
     ///
-    /// The command and the newline are two writes with a pause between them.
-    /// Typing `/status` opens a completion popup that swallows a newline arriving
-    /// in the same read, and the command is then left sitting in the composer
-    /// until the budget runs out — measured, on Codex 0.155.
+    /// The command and the newline are two writes with a pause between them: a
+    /// completion popup drawn over the composer swallows a newline that arrives
+    /// in the same read, and the command is then left sitting there until the
+    /// budget runs out.
     ///
     /// Whatever was drawn comes back even when no panel did. The text is the only
     /// evidence of *why* — a login prompt reads nothing like a layout change —
@@ -261,12 +219,8 @@ enum TerminalCLI {
         /// in what was drawn after the command was typed.
         var askedAtOffset = 0
         var submitted = false
-        var submittedAt = Date.now
-        var dismissed = false
-        // Asking twice is for a boot pause that fooled the quiet heuristic. A
-        // spec that proves its composer has no such pause to recover from, and a
-        // second ask is what turned two mistimed fragments into one prompt.
-        var asksLeft = spec.ready == nil ? 2 : 1
+        // Asking twice is for a boot pause that fooled the quiet heuristic.
+        var asksLeft = 2
         var sawPanel = false
         var buffer = [UInt8](repeating: 0, count: 8192)
 
@@ -283,7 +237,6 @@ enum TerminalCLI {
             try write(spec.command)
             askedAt = Date.now
             submitted = false
-            dismissed = false
             asksLeft -= 1
         }
 
@@ -312,40 +265,17 @@ enum TerminalCLI {
 
             let quiet = Date.now.timeIntervalSince(lastByteAt)
             if askedAt == nil {
-                // Boot is done when it stops drawing — or, better, when the CLI
-                // says the composer is there. Only then does a prompt exist to
-                // type into.
-                let composerDrawn = spec.ready.map {
-                    String(decoding: output, as: UTF8.self).contains($0)
-                } ?? true
-                if quiet >= 0.8, !output.isEmpty, composerDrawn { try ask() }
+                // Boot is done when it stops drawing. Only then does a prompt
+                // exist to type into.
+                if quiet >= 0.8, !output.isEmpty { try ask() }
             } else if !submitted {
-                // The popup has finished drawing. One step at a time, each after
-                // its own pause: dismissing it is a keystroke the CLI has to
-                // redraw for, and a newline arriving in that same read is read
-                // as a key press on the popup rather than on the composer.
+                // The composer has finished redrawing around what was typed.
                 if quiet >= 0.4 {
-                    if let dismiss = spec.dismissCompletion, !dismissed {
-                        try write(dismiss)
-                        dismissed = true
-                    } else {
-                        try write("\r")
-                        submitted = true
-                        submittedAt = Date.now
-                    }
+                    try write("\r")
+                    submitted = true
                 }
             } else if sawPanel {
                 if quiet >= settle { return String(decoding: output, as: UTF8.self) }
-            } else if spec.ready != nil, Date.now.timeIntervalSince(submittedAt) >= 2 {
-                // Press it again, and never retype. A CLI that is still bringing
-                // its session up ignores the newline — Codex draws its composer
-                // placeholder while the model row still reads `loading`, and
-                // says "tab to queue message" instead of taking the command.
-                // The command is already in the composer, so the only thing
-                // missing is a submit the CLI is awake for; an empty composer
-                // makes the extra ones no-ops.
-                try write("\r")
-                submittedAt = Date.now
             } else if asksLeft > 0, let askedAt, Date.now.timeIntervalSince(askedAt) >= 4 {
                 try ask()                       // the boot pause fooled us
             }
@@ -401,18 +331,16 @@ extension SourceID {
     /// without spawning anything: a few `isExecutableFile` calls. So "installed"
     /// here and `cliNotFound` there can never disagree, including about a
     /// `TOKENPACER_*_BIN` override pointing somewhere unusual.
-    var cliIsInstalled: Bool { TerminalCLI.locate(.of(self)) != nil }
+    var cliIsInstalled: Bool {
+        switch self {
+        case .claude: TerminalCLI.locate(.claude) != nil
+        case .codex: CodexAppServer.locate() != nil
+        case .copilot: TerminalCLI.locate(.copilot) != nil
+        }
+    }
 }
 
 extension TerminalCLI.Spec {
-    static func of(_ source: SourceID) -> Self {
-        switch source {
-        case .claude: .claude
-        case .codex: .codex
-        case .copilot: .copilot
-        }
-    }
-
     static var claude: Self {
         Self(
             name: "Claude Code",
@@ -441,29 +369,6 @@ extension TerminalCLI.Spec {
             // "Session: 0 AIC used" would otherwise match on every redraw.
             marker: "% used",
             workingDirectory: TerminalCLI.copilotHome
-        )
-    }
-
-    static var codex: Self {
-        Self(
-            name: "Codex",
-            searchPaths: TerminalCLI.paths(binary: "codex", override: "TOKENPACER_CODEX_BIN", extra: [
-                AgentHome.codex.appending(path: "packages/standalone/current/bin/codex").path,
-            ]),
-            command: "/status",
-            // A cold boot after the machine has slept spends most of this on
-            // bringing the session up: the model row alone read `loading` for
-            // 20s of a 30s budget, and the panel never got its turn.
-            budget: 45,
-            // The composer's own placeholder, drawn before the session is up:
-            // a floor on when to type, not proof that a submit will land. The
-            // resubmit covers the rest.
-            ready: "Ask Codex to do anything",
-            // `/status` and `/statusline` share a prefix, so the popup stays open
-            // on the exact command and Enter completes it instead of sending it.
-            dismissCompletion: " ",
-            marker: "limit:",
-            workingDirectory: TerminalCLI.codexTrustedDirectory
         )
     }
 }

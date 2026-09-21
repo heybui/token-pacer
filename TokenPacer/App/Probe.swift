@@ -9,7 +9,7 @@ enum Probe {
         let store = await UsageStore(
             panels: [
                 .claude: ClaudeUsagePanel(read: TerminalCLI.reader(.claude)),
-                .codex: CodexStatusPanel(read: TerminalCLI.reader(.codex)),
+                .codex: CodexUsagePanel(read: CodexAppServer.reader()),
                 .copilot: CopilotUsagePanel(read: TerminalCLI.reader(.copilot)),
             ]
         )
