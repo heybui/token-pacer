@@ -48,8 +48,6 @@ struct TrailingWing: View {
     /// unverified rather than hidden.
     let attention: String?
     let workingSessions: Int
-    /// The version a background check downloaded, when one is waiting.
-    var updateVersion: String?
     /// The slot's own spacing, measured by the model from the same badge.
     let badge: PillState.Badge?
 
@@ -59,8 +57,6 @@ struct TrailingWing: View {
                 AttentionBadge(message: attention, size: 10)
             } else if workingSessions > 0 {
                 JobBadge(count: workingSessions)
-            } else if let updateVersion {
-                UpdateBadge(version: updateVersion, size: 10)
             }
             if isGhost {
                 // Already localised by `Format`, and measured from the same

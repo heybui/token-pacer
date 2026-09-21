@@ -58,8 +58,8 @@ struct PillView: View {
     /// project, and across every tracked provider. Their own windows are behind something; the pill is
     /// the one thing always in sight that can say they are running at all.
     var workingSessions = 0
-    /// The version a background check downloaded, when one is waiting. Last in
-    /// the slot: see `PillState.Badge.update`.
+    /// The version a background check downloaded, when one is waiting. The
+    /// card's footer carries it; the menu bar says nothing.
     var updateVersion: String?
     /// Bring Sparkle's own window forward, which is where installing happens.
     var onInstallUpdate: () -> Void = {}
@@ -67,7 +67,7 @@ struct PillView: View {
     /// One slot; the order lives on `Badge` so the wing is measured for
     /// whatever this draws.
     private var badge: PillState.Badge? {
-        .of(attention: attention, workingSessions: workingSessions, updateVersion: updateVersion)
+        .of(attention: attention, workingSessions: workingSessions)
     }
     var onTogglePinned: () -> Void = {}
     var onClose: () -> Void = {}
@@ -428,7 +428,7 @@ struct PillView: View {
 
             TrailingWing(
                 snapshot: snapshot, isGhost: isGhost, attention: attention,
-                workingSessions: workingSessions, updateVersion: updateVersion, badge: badge
+                workingSessions: workingSessions, badge: badge
             )
             .padding(.leading, PillState.notchClearance)
             .padding(.trailing, PillState.trailingGutter)

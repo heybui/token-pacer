@@ -419,34 +419,18 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 }
 
 
-/// One slot and three things that want it. The order is the rule, and it is one
-/// function because the view that draws the badge and the model that measures
-/// the wing for it both ask.
+/// One slot and two things that want it. A waiting build is not one of them —
+/// it keeps, so it lives in the card's footer rather than the menu bar.
 @MainActor
 @Test func theBadgeSlotGoesToTheWorstNewsFirst() {
-    func badge(fault: Bool = false, jobs: Int = 0, update: String? = nil) -> PillState.Badge? {
-        .of(
-            attention: fault ? "Sign in to Codex" : nil,
-            workingSessions: jobs,
-            updateVersion: update
-        )
+    func badge(fault: Bool = false, jobs: Int = 0) -> PillState.Badge? {
+        .of(attention: fault ? "Sign in to Codex" : nil, workingSessions: jobs)
     }
 
     #expect(badge() == nil)
-    #expect(badge(update: "1.2.0") == .update)
     #expect(badge(jobs: 2) == .working(2))
     #expect(badge(fault: true) == .alert)
-
-    // A fault outranks both, and a job outranks an update: a build that can be
-    // installed whenever is the only one of the three that keeps.
-    #expect(badge(fault: true, jobs: 2, update: "1.2.0") == .alert)
-    #expect(badge(jobs: 2, update: "1.2.0") == .working(2))
-}
-
-/// The update badge is the same width as the fault it shares a slot with, so a
-/// pill that swaps one for the other does not change size.
-@MainActor
-@Test func theUpdateBadgeCostsTheSameRoomAsAnAlert() {
-    #expect(PillState.Badge.update.width == PillState.Badge.alert.width)
-    #expect(PillState.Badge.update.gap == PillState.Badge.alert.gap)
+    // A fault outranks a job: an unconfirmed figure is worse news than work
+    // in progress.
+    #expect(badge(fault: true, jobs: 2) == .alert)
 }

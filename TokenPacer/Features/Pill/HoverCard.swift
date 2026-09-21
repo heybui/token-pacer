@@ -96,10 +96,6 @@ struct HoverCard: View {
                 .environment(\.tone, zones[line.source] ?? toneScale)
             }
 
-            if let updateVersion {
-                UpdateRow(version: updateVersion, action: onInstallUpdate) { caption = $0 }
-            }
-
             HStack(spacing: 6) {
                 Text(footer)
                     .font(Typography.mono(9.5))
@@ -119,14 +115,25 @@ struct HoverCard: View {
                         }
                     }
                 Spacer(minLength: 8)
+                // Only when there is one, which is the whole of the signal: the
+                // footer is otherwise two buttons wide, and a third appearing
+                // in it is what says a build is waiting. Hovering it spells out
+                // which, in the caption line these buttons already write to.
+                if let updateVersion {
+                    CardButton(
+                        symbol: "arrow.up.circle.fill",
+                        label: String(localized: "Install Token Pacer \(updateVersion)"),
+                        tint: Tokens.blue, action: onInstallUpdate
+                    ) { caption = $0 }
+                }
+                CardButton(symbol: "gearshape", label: String(localized: "Settings"), action: onOpenSettings) {
+                    caption = $0
+                }
                 CardButton(
                     symbol: "arrow.down.left.and.arrow.up.right",
                     label: String(localized: "Open the panel"),
                     action: onExpand
                 ) { caption = $0 }
-                CardButton(symbol: "gearshape", label: String(localized: "Settings"), action: onOpenSettings) {
-                    caption = $0
-                }
             }
         }
         // The band above is already a full menu-bar row of clearance, so the card
@@ -227,40 +234,6 @@ struct HoverCard: View {
         return minutes < 1
             ? String(localized: "reported")
             : String(localized: "reported \(minutes)m ago")
-    }
-}
-
-/// A build that is downloaded and waiting, on a row of its own under the
-/// providers.
-///
-/// The badge in the menu bar says there is one; this is the only place that
-/// says which and can act on it without opening a menu. Pressing it brings
-/// Sparkle's own window forward, because installing is Sparkle's job and
-/// reimplementing the progress, the signature check and the relaunch here
-/// would be three ways to get it wrong.
-private struct UpdateRow: View {
-    let version: String
-    let action: () -> Void
-    let onCaption: (String?) -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Tokens.blue)
-                // Product name, never a key.
-                Text(verbatim: "Token Pacer \(version)")
-                    .font(Typography.sans(11.5))
-                    .foregroundStyle(.white.opacity(0.66))
-                Spacer(minLength: 8)
-                Text("Install")
-                    .font(Typography.mono(9.5))
-                    .foregroundStyle(Tokens.blue)
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { onCaption($0 ? String(localized: "Install the update and relaunch") : nil) }
     }
 }
 

@@ -85,39 +85,32 @@ enum PillState: String, CaseIterable, Sendable {
         case alert
         /// How many background jobs are working.
         case working(Int)
-        /// A newer build is downloaded and waiting. Last of the three: a
-        /// version that can be installed whenever is not news the way an
-        /// unconfirmed figure or a job in flight is.
-        case update
 
         /// The board's own figures: a circle for one digit, widened to a pill for
         /// two. Counted rather than measured, because the shape is specified as a
         /// multiple of its own diameter and not as whatever the font came out to.
         var width: CGFloat {
             switch self {
-            case .alert, .update: PillState.badgeSize
+            case .alert: PillState.badgeSize
             case .working(let count):
                 PillState.badgeDiameter
                     + PillState.badgeDigitWidth * CGFloat(max(0, String(count).count - 1))
             }
         }
 
-        /// What the slot holds, given everything that wants it.
+        /// What the slot holds, given both things that want it.
         ///
-        /// One slot and three contenders, so the order is the whole of the
-        /// rule: a figure that could not be confirmed is worse news than a job
-        /// in flight, and a job in flight is more of the moment than a build
-        /// that can be installed whenever.
+        /// One slot, and a source that cannot be read takes it first: an
+        /// unconfirmed figure is worse news than a job running. A waiting
+        /// build is deliberately not a third contender — it keeps, so it lives
+        /// in the card's footer where it costs the menu bar nothing.
         ///
         /// Here rather than in either view, because the view that *draws* the
         /// badge and the model that *measures the wing for it* have to reach
         /// the same answer, and they used to arrive at it separately.
-        static func of(
-            attention: String?, workingSessions: Int, updateVersion: String?
-        ) -> Badge? {
+        static func of(attention: String?, workingSessions: Int) -> Badge? {
             if attention != nil { return .alert }
-            if workingSessions > 0 { return .working(workingSessions) }
-            return updateVersion == nil ? nil : .update
+            return workingSessions > 0 ? .working(workingSessions) : nil
         }
 
         /// What separates it from the thing beside it. The alert badge keeps the
@@ -125,7 +118,7 @@ enum PillState: String, CaseIterable, Sendable {
         /// qualifies, as the board asks.
         var gap: CGFloat {
             switch self {
-            case .alert, .update: PillState.markGap
+            case .alert: PillState.markGap
             case .working: PillState.badgeGap
             }
         }

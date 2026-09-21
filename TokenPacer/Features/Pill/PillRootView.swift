@@ -78,11 +78,7 @@ struct PillRootView: View {
     /// What the right wing's badge slot holds, if anything. The view draws from
     /// the same answer the model measures the wing with.
     private var badge: PillState.Badge? {
-        .of(
-            attention: store.errors[store.activeSource],
-            workingSessions: workingSessions,
-            updateVersion: updater?.pendingVersion
-        )
+        .of(attention: store.errors[store.activeSource], workingSessions: workingSessions)
     }
 
     /// The pill itself, lifted out of `body`: with every input the shell now
