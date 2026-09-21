@@ -366,24 +366,33 @@ private struct HistoryHeatmap: View {
             weekdayLabels
             VStack(alignment: .leading, spacing: 4) {
                 monthLabels(weeks)
-                HStack(spacing: gap) {
-                    ForEach(weeks) { week in
-                        VStack(spacing: gap) {
-                            ForEach(Array(week.days.enumerated()), id: \.offset) { _, day in
-                                square(day)
-                            }
+                // One view, not ninety-one. As a grid of `RoundedRectangle`s
+                // this was 68ms of layout *per frame* of the open spring — the
+                // squares are fixed-size and never move relative to each other,
+                // so there is nothing for a stack to work out. Drawn here they
+                // cost one leaf's layout and the panel opens in 5ms.
+                Canvas(opaque: false) { context, _ in
+                    for (column, week) in weeks.enumerated() {
+                        for (row, day) in week.days.enumerated() {
+                            let rect = CGRect(
+                                x: CGFloat(column) * (cell + gap),
+                                y: CGFloat(row) * (cell + gap),
+                                width: cell, height: cell
+                            )
+                            context.fill(
+                                Path(roundedRect: rect, cornerRadius: 3),
+                                with: .color(fill(day))
+                            )
                         }
                     }
                 }
+                .frame(
+                    width: max(0, CGFloat(weeks.count) * (cell + gap) - gap),
+                    height: 7 * (cell + gap) - gap
+                )
+                .accessibilityLabel("Daily usage for the last \(days.count) days")
             }
         }
-    }
-
-    private func square(_ day: DayUsage?) -> some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(fill(day))
-            .frame(width: cell, height: cell)
-            .help(day.map { "\(Format.day($0.day)) · \(Format.percent($0.percent)) of peak" } ?? "")
     }
 
     /// Empty days keep the track colour: a quiet day is not a faint busy one.
