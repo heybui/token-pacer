@@ -180,3 +180,35 @@ private let calendar = Calendar.current
     }
     await #expect(throws: PanelError.notSignedIn) { try await panel.fetch(now: .now) }
 }
+
+/// `resetDate` is the moment the quota was read, not the moment it refills —
+/// every live reply carries the current time to the second. Believed because it
+/// happened to land a couple of seconds in our future, it made a 30-day window
+/// that had already expired by the time anything read it back, and the
+/// roll-forward reported a real 42.7% as "0% used, 30 days to go".
+@Test func aResetStatedSecondsFromNowIsTheReadStampAndNotAReset() throws {
+    let now = Date.now
+    let stamp = now.addingTimeInterval(2).formatted(.iso8601)
+    let limits = try #require(
+        CopilotUsagePanel.parse(reply(resetDate: stamp), now: now)
+    )
+    let window = try #require(limits.primary)
+
+    // Far enough ahead to survive being stored and read back.
+    #expect(window.resetsAt > now.addingTimeInterval(CopilotUsagePanel.graceSeconds))
+    #expect(window.resetsAt == CopilotUsagePanel.monthBoundary(after: now, in: .current))
+    #expect(window.usedPercent == 22.5)
+}
+
+/// And a reset that really is one is still preferred, the day GitHub starts
+/// pointing that field forward.
+@Test func aResetWellAheadIsStillBelieved() throws {
+    let now = Date.now
+    let real = now.addingTimeInterval(5 * 24 * 3600)
+    let limits = try #require(
+        CopilotUsagePanel.parse(reply(resetDate: real.formatted(.iso8601)), now: now)
+    )
+    #expect(
+        try #require(limits.primary).resetsAt.timeIntervalSince(real) < 1
+    )
+}

@@ -32,6 +32,11 @@ struct CopilotUsagePanel: UsagePanel {
     /// monthly has nothing shorter to declare.
     static let planWindowMinutes = 43_200
 
+    /// How far ahead a stated reset has to be before it is believed to be one.
+    /// An hour: a monthly quota is never an hour from refilling *and* worth
+    /// reporting to the second, so anything nearer is the read stamp.
+    static let graceSeconds: TimeInterval = 3600
+
     /// Nil when no quota in the reply has one: an error object where a result
     /// should be, a release that moved the field, or an account whose every
     /// quota is unmetered. The first two are failures; the third has no figure
@@ -133,10 +138,17 @@ struct CopilotUsagePanel: UsagePanel {
 
             func window(now: Date, calendar: Calendar) -> RateLimitWindow? {
                 guard let usedPercent else { return nil }
-                // Only a reset that is still ahead is a reset. Today's reading
-                // states one a second in the past, and a window that closed
-                // before it was read counts down from nothing.
-                let stated = resetDate.flatMap(ISO8601.parse).flatMap { $0 > now ? $0 : nil }
+                // Only a reset well clear of now is a reset. `resetDate`
+                // restates the moment the quota was *read* — every reply this
+                // was checked against carried the current time to the second —
+                // and "still ahead" was not a strict enough test for that:
+                // GitHub stamps it server-side, so it lands a second or two in
+                // our future about as often as in our past. Accepted, it made a
+                // 30-day window that expired while it was being stored, and the
+                // roll-forward then reported an honest 42.7% as 0% used with 30
+                // days to go.
+                let stated = resetDate.flatMap(ISO8601.parse)
+                    .flatMap { $0.timeIntervalSince(now) > graceSeconds ? $0 : nil }
                 return RateLimitWindow(
                     usedPercent: usedPercent,
                     windowMinutes: planWindowMinutes,
