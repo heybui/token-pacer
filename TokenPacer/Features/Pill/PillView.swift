@@ -229,6 +229,19 @@ struct PillView: View {
             // it — the shell and its own edge disagreeing for the length of the
             // morph. `state` does not change here, so it cannot carry this.
             .animation(Tokens.spring, value: viewing)
+            // And the card's own way of switching provider: a row in the hover
+            // card is the control that moves the pin. The rows either side of
+            // the move change height — a complaint under one of them appears or
+            // goes — and the card sizes to them, so the same box changes size
+            // for the same reason.
+            .animation(Tokens.spring, value: pinned)
+            // The width, keyed on the width. `wings` is measured from the
+            // snapshot, so every flank-widening change runs through this one
+            // figure — switching provider, a badge appearing, the percentage
+            // being turned off. Keying it on `pinned` instead only caught the
+            // first, and only when the new snapshot happened to arrive on the
+            // same update as the pin did; when it did not, the box jumped.
+            .animation(Tokens.spring, value: wings.flank)
             // Two clicks, not one. The band sits in the menu bar, which is a
             // strip people click at all day; a single click opened the whole
             // panel by accident often enough to be the thing you noticed about
