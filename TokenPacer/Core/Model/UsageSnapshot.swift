@@ -43,6 +43,16 @@ enum SnapshotBuilder {
     /// day on the strength of a file nobody is writing to any more.
     static let inFlightWindow: TimeInterval = 15 * 60
 
+    /// The span the splits cover for a provider that has a five-hour window:
+    /// its own when it states one, and the log's when it does not. A workspace
+    /// on a credit budget has a month up in the headline, so all three columns
+    /// read "no open window" for days at a time under a figure that was plainly
+    /// moving — which is why the provider's own window is preferred.
+    static let defaultSplitSpan: @Sendable (RateLimitWindow?, SessionWindow?) -> DateInterval? = {
+        provider, logged in
+        provider?.span ?? logged.map { DateInterval(start: $0.start, end: $0.end) }
+    }
+
     /// The provider's own limits when they are present and fresh; otherwise the
     /// percentage is simply absent.
     static func build(
@@ -57,7 +67,11 @@ enum SnapshotBuilder {
         weights: TokenWeights = .default,
         panelMovedAt: Date? = nil,
         panel: PanelData? = nil,
-        windows: [SessionWindow]? = nil
+        windows: [SessionWindow]? = nil,
+        /// Which span the splits describe, given the provider's own window and
+        /// the one the logs imply. Supplied by the provider, because the answer
+        /// when there is no provider window is not the same for all of them.
+        splitSpan: @Sendable (RateLimitWindow?, SessionWindow?) -> DateInterval? = Self.defaultSplitSpan
     ) -> UsageSnapshot {
         // Handed in when the caller already has them: walking every retained
         // event twice a tick for the same answer is the poll's largest avoidable
@@ -102,17 +116,7 @@ enum SnapshotBuilder {
             snapshot.weeklyWindowMinutes = secondary.windowMinutes
         }
 
-        // The span the splits cover: the provider's own window when it states
-        // one, and the log's five-hour window when it does not. A workspace on a
-        // credit budget has a month up in the headline and no five-hour window
-        // at all, so all three columns read "no open window" for days at a time
-        // under a figure that was plainly moving.
-        let splitSpan = primary.map {
-            DateInterval(
-                start: $0.resetsAt.addingTimeInterval(-Double($0.windowMinutes) * 60),
-                end: $0.resetsAt
-            )
-        } ?? current.map { DateInterval(start: $0.start, end: $0.end) }
+        let splitSpan = splitSpan(primary, current)
 
         // Handed in when the caller still has a recent one. Aggregating it walks
         // every retained event — thirty days of them — and it feeds the pinned

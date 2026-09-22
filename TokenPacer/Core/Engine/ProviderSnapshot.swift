@@ -38,11 +38,29 @@ struct SnapshotInput {
 protocol ProviderSnapshot {
     /// Which limits this provider's row is drawn from.
     static func limits(_ input: SnapshotInput) -> RateLimits?
+
+    /// The span the detail panel's splits describe, given the provider's own
+    /// window and the one its logs imply.
+    ///
+    /// Its own when it has one. What to do when it does not is the part that is
+    /// not shared: a provider with a five-hour window can fall back to the one
+    /// the logs draw, and a provider without one has nothing to fall back to.
+    static func panelWindow(
+        provider: RateLimitWindow?, logged: SessionWindow?
+    ) -> DateInterval?
 }
 
 extension ProviderSnapshot {
     /// Nothing in the logs, so the panel is the whole truth.
     static func limits(_ input: SnapshotInput) -> RateLimits? { input.panel }
+
+    /// A five-hour window is the shape most providers have, so the logs can
+    /// stand in for one that could not be read.
+    static func panelWindow(
+        provider: RateLimitWindow?, logged: SessionWindow?
+    ) -> DateInterval? {
+        SnapshotBuilder.defaultSplitSpan(provider, logged)
+    }
 
     /// The assembly every provider shares today. It is called rather than
     /// inherited, so a provider whose shape stops fitting it can stop calling it
@@ -57,7 +75,8 @@ extension ProviderSnapshot {
             weights: input.weights,
             panelMovedAt: input.panelMovedAt,
             panel: input.panelData,
-            windows: input.windows
+            windows: input.windows,
+            splitSpan: panelWindow
         )
     }
 }
@@ -68,7 +87,21 @@ enum ClaudeSnapshot: ProviderSnapshot {}
 
 /// Copilot writes none either, and has one window rather than two: a plan budget
 /// spent down over a billing month, with no five-hour window behind it.
-enum CopilotSnapshot: ProviderSnapshot {}
+enum CopilotSnapshot: ProviderSnapshot {
+    /// No plan budget read means no window at all, rather than the log's five
+    /// hours.
+    ///
+    /// The shared fallback exists so a provider whose panel could not be read
+    /// still attributes the window its logs draw. Copilot has no five-hour
+    /// window to draw — the whole row is a month — so falling back to one
+    /// described a period this provider does not have, under a headline that
+    /// had gone blank at the same moment and could not contradict it.
+    static func panelWindow(
+        provider: RateLimitWindow?, logged: SessionWindow?
+    ) -> DateInterval? {
+        provider?.span
+    }
+}
 
 enum CodexSnapshot: ProviderSnapshot {
     /// Codex is the only provider that states its limits in its own rollout

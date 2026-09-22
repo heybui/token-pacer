@@ -212,3 +212,27 @@ private let calendar = Calendar.current
         try #require(limits.primary).resetsAt.timeIntervalSince(real) < 1
     )
 }
+
+/// Copilot has no five-hour window — its whole row is a billing month. So when
+/// the plan budget cannot be read there is nothing left for the splits to
+/// describe, and falling back to the window the logs draw attributed a month's
+/// work to five hours, under a headline that had gone blank at the same moment
+/// and so could not contradict it.
+@Test func copilotSplitsDescribeNoWindowRatherThanTheLogsFiveHours() {
+    let now = Date.now
+    func events(_ source: SourceID) -> [UsageEvent] {
+        [UsageEvent(
+            id: "e1", source: source, timestamp: now.addingTimeInterval(-600),
+            model: "gpt-5.6", project: "thing", sessionID: "s1",
+            counts: TokenCounts(input: 100, output: 50)
+        )]
+    }
+    func unreadable(_ source: SourceID) -> SnapshotInput {
+        SnapshotInput(source: source, stated: nil, panel: nil,
+                      events: events(source), now: now)
+    }
+
+    // Same absent reading, same shape of events: only the provider differs.
+    #expect(CopilotSnapshot.build(unreadable(.copilot)).panel.byModel.isEmpty)
+    #expect(!ClaudeSnapshot.build(unreadable(.claude)).panel.byModel.isEmpty)
+}

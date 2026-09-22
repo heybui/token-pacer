@@ -35,6 +35,13 @@ struct RateLimitWindow: Equatable, Sendable, Codable {
     /// Without this a reading goes stale the instant the window rolls over, and
     /// the app falls back to inference even though it knows the window just
     /// emptied. Skips whole periods, so being away for a day lands on the right one.
+    /// The window itself, as the interval it covers.
+    var span: DateInterval {
+        DateInterval(
+            start: resetsAt.addingTimeInterval(-Double(windowMinutes) * 60), end: resetsAt
+        )
+    }
+
     func rolled(to now: Date, usedPercent: Double) -> RateLimitWindow {
         guard resetsAt <= now, windowMinutes > 0 else {
             return RateLimitWindow(
