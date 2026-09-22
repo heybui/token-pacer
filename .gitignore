@@ -72,3 +72,8 @@ build/
 .claude
 .build
 skills-lock.json
+
+# The disk image background ships as one TIFF with both reps in it. The two
+# PNGs it is built from are intermediates that `make dmg-layout` rewrites.
+packaging/dmg-background.png
+packaging/dmg-background@2x.png

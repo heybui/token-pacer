@@ -20,6 +20,11 @@ endif
 ifeq ($(strip $(SIGN)),)
 SIGN := -
 endif
+## What Finder shows the mounted image as, and — unlike `$(APP)` — it has the
+## space in it. It is also load-bearing: `packaging/dmg-DS_Store` records the
+## window's background as a path through a volume of exactly this name, so the
+## layout target and the release image have to mount under the same one.
+VOLNAME := Token Pacer
 BIN  := .build/release/$(APP)
 DEST := build/$(APP).app
 
@@ -146,14 +151,25 @@ release-app: check-devid
 	            ENTITLE="--entitlements TokenPacer/TokenPacer.entitlements"
 	codesign --verify --strict --deep --verbose=2 $(DEST)
 
-## Drag-to-Applications disk image. No create-dmg dependency: a staging folder
-## and a symlink is the whole feature.
+## Drag-to-Applications disk image. No create-dmg dependency: a staging folder,
+## a symlink, and a window Finder arranged once.
+##
+## `packaging/dmg-DS_Store` is that arrangement — icon positions, window size,
+## the background — written by `make dmg-layout` on a laptop and committed.
+## Copying it in is what lets a GitHub runner, which has no Finder session to
+## drive, build the same image this does.
 dmg: release-app
 	rm -rf build/dmg $(DMG)
-	mkdir -p build/dmg
+	mkdir -p build/dmg/.background
 	cp -R $(DEST) build/dmg/
+	cp packaging/dmg-background.tiff build/dmg/.background/background.tiff
+	cp packaging/dmg-DS_Store build/dmg/.DS_Store
 	ln -s /Applications build/dmg/Applications
-	hdiutil create -volname "$(APP) $(VERSION)" -srcfolder build/dmg \
+	@# The volume name carries no version. A `.DS_Store` records its background
+	@# as a path *through the volume*, so a name that changed every release
+	@# would point the alias at a volume that does not exist and the window
+	@# would open grey.
+	hdiutil create -volname "$(VOLNAME)" -srcfolder build/dmg \
 	               -ov -format UDZO $(DMG)
 	rm -rf build/dmg
 	@# Gatekeeper assesses the image itself, not just the app inside it, so
@@ -161,6 +177,29 @@ dmg: release-app
 	@# the ticket, which leaves that signature intact.
 	codesign --force --sign $(DEVID) --timestamp $(DMG)
 	@echo "→ $(DMG)"
+
+## Re-arrange that window and keep what Finder wrote. A laptop errand: it needs
+## a Finder to talk to, and permission to talk to it. Commit what it changes.
+##
+## The arrow is drawn to the same two coordinates the layout puts icons on, so
+## a move here is a move in `packaging/make-background.swift` too.
+dmg-layout: app
+	swift packaging/make-background.swift
+	cd packaging && tiffutil -cathidpicheck dmg-background.png \
+	  dmg-background@2x.png -out dmg-background.tiff
+	rm -rf build/layout build/layout.dmg
+	mkdir -p build/layout/.background
+	cp -R $(DEST) build/layout/
+	cp packaging/dmg-background.tiff build/layout/.background/background.tiff
+	ln -s /Applications build/layout/Applications
+	hdiutil create -volname "$(VOLNAME)" -srcfolder build/layout -ov \
+	               -format UDRW build/layout.dmg
+	hdiutil attach build/layout.dmg
+	osascript packaging/layout.applescript
+	cp "/Volumes/$(VOLNAME)/.DS_Store" packaging/dmg-DS_Store
+	hdiutil detach "/Volumes/$(VOLNAME)"
+	rm -rf build/layout build/layout.dmg
+	@echo "→ packaging/dmg-DS_Store"
 
 ## `appcast` and `cask` both describe an image that already exists — the one Apple
 ## stapled. Rebuilding it here would hand them a different file from the one that
