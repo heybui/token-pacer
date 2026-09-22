@@ -212,3 +212,33 @@ private func line(id: String, output: Int, at date: Date) -> String {
     #expect(restored?.spend?.used.amountMinor == 1199)
     #expect(restored?.observedAt == t0)                  // still says how old it is
 }
+
+/// The backoff outlives a launch, so the reason has to as well. Restoring "wait
+/// ten minutes" without restoring what went wrong left a row reading "—" with no
+/// message under it and — the refresh button being drawn for a complaint — no
+/// way to ask again either.
+@Test func aRelaunchInsideTheBackoffStillSaysWhatWentWrong() throws {
+    var poller = PanelPoller()
+    poller.ran(at: t0)
+    poller.failed(at: t0)
+
+    let archive = temporaryArchive()
+    archive.save(ArchivedState(
+        pollers: [.claude: poller],
+        limitsErrors: [.claude: "Sign in to Claude Code"]
+    ))
+
+    let state = try #require(archive.load())
+    // Still inside the backoff the failure earned, and still able to say why.
+    #expect(try #require(state.pollers[.claude]).shouldRun(at: t0.addingTimeInterval(60)) == false)
+    #expect(state.limitsErrors?[.claude] == "Sign in to Claude Code")
+}
+
+/// A state file written before that field existed is still a good reading, and a
+/// build that threw it away would spawn every CLI again for nothing.
+@Test func aStateFileWithNoRecordedFailureStillLoads() throws {
+    let archive = temporaryArchive()
+    archive.save(ArchivedState(pollers: [.claude: PanelPoller()]))
+    let state = try #require(archive.load())
+    #expect(state.limitsErrors == nil)
+}

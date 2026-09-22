@@ -241,6 +241,8 @@ final class UsageStore {
         let restored = archive?.load()
         self.pollers = restored?.pollers ?? [:]
         self.liveLimits = restored?.limits ?? [:]
+        self.limitsErrors = restored?.limitsErrors ?? [:]
+        self.errors = limitsErrors
     }
 
     /// Hands every source its byte offsets back and repopulates the events the
@@ -324,7 +326,9 @@ final class UsageStore {
     }
 
     private func persist() {
-        archive?.save(ArchivedState(pollers: pollers, limits: liveLimits))
+        archive?.save(ArchivedState(
+            pollers: pollers, limits: liveLimits, limitsErrors: limitsErrors
+        ))
     }
 
     func start() {

@@ -24,6 +24,15 @@ struct ArchivedState: Codable, Sendable {
     /// at all until the next request is due — ten minutes of a blank, right
     /// after launch, for no reason.
     var limits: [SourceID: RateLimits] = [:]
+    /// Why the last reading failed, if it did.
+    ///
+    /// The backoff outlives a launch and the reason used to not, so a relaunch
+    /// inside the failure window restored "wait ten minutes" without restoring
+    /// anything to show for it: a row reading "—", no message under it, and —
+    /// because the refresh button is drawn for a complaint — nothing to press
+    /// either. Optional so a version-3 file written before this field still
+    /// decodes; it is a new fact about the same reading, not a changed one.
+    var limitsErrors: [SourceID: String]?
     var savedAt = Date.now
 }
 
