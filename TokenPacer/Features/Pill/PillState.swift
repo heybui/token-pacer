@@ -25,10 +25,23 @@ enum PillState: String, CaseIterable, Sendable {
     /// of those there are is a preference. A fixed height is either short of the
     /// longest list or padded out below the shortest — the screenshot that started
     /// this showed a third of the card empty under two rows.
-    var fitsContent: Bool {
+    var fitsContent: Bool { contentFit != .fixed }
+
+    /// What the board's height is to the height the content actually needs.
+    ///
+    /// Not the same answer either way round. The hover card holds a row per
+    /// tracked provider, so its number is a **floor** — fewer rows must not
+    /// shrink it below a card. The panel is the opposite: its number is the
+    /// largest it may ever be, and a provider with nothing to split had a
+    /// hundred points of black between its columns and its heatmap because the
+    /// board's height was spent whether there was anything to put in it or not.
+    enum ContentFit { case fixed, floor, cap }
+
+    var contentFit: ContentFit {
         switch self {
-        case .hover, .warning: true
-        case .hidden, .ghost, .collapsed, .exhausted, .pinned: false
+        case .hover, .warning: .floor
+        case .pinned: .cap
+        case .hidden, .ghost, .collapsed, .exhausted: .fixed
         }
     }
 

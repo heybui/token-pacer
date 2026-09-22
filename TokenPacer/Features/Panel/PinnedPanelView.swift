@@ -67,7 +67,7 @@ struct PinnedPanelView: View {
         .padding(.top, topInset)
         .padding(.horizontal, 22)
         .padding(.bottom, 22)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     private var divider: some View {
@@ -230,8 +230,9 @@ struct PinnedPanelView: View {
 
     // MARK: - history and spend
 
-    /// Takes whatever height the sections above leave, so the 30-day list fills
-    /// the panel instead of scrolling inside a 118pt window with dead space below.
+    /// Its own height, not the panel's leftovers. The panel stops at the bottom
+    /// of this row now (`PillState.ContentFit.cap`), so stretching to fill what
+    /// was left only ever added the dead space it was meant to take up.
     private var footer: some View {
         HStack(alignment: .top, spacing: 26) {
             history.frame(maxWidth: .infinity, alignment: .leading)
@@ -239,7 +240,6 @@ struct PinnedPanelView: View {
                 SpendCell(spend: spend).frame(width: 260)
             }
         }
-        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var history: some View {

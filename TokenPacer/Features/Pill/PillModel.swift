@@ -35,7 +35,15 @@ final class PillModel {
     /// Shell plus menu: what the host must let clicks through to.
     var liveSize: CGSize {
         var shell = state.size(around: band, wings: wings)
-        if state.fitsContent { shell.height = max(shell.height, contentHeight) }
+        if contentHeight > 0 {
+            switch state.contentFit {
+            case .fixed: break
+            case .floor: shell.height = max(shell.height, contentHeight)
+            // Never past the board's height: `hostSize` clips to it, so a panel
+            // that outgrew it would lose the overflow rather than show it.
+            case .cap: shell.height = min(shell.height, contentHeight)
+            }
+        }
         guard isMenuOpen else { return shell }
         return CGSize(
             width: max(shell.width, PillState.menuWidth),

@@ -434,3 +434,26 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
     // in progress.
     #expect(badge(fault: true, jobs: 2) == .alert)
 }
+
+/// The board's height means the opposite thing to the two states that size
+/// themselves. The hover card must not shrink below a card when a provider is
+/// switched off; the panel must not keep a hundred points of black under a
+/// provider that has nothing to split.
+@MainActor
+@Test func theBoardHeightIsAFloorForTheCardAndACapForThePanel() {
+    #expect(PillState.hover.contentFit == .floor)
+    #expect(PillState.pinned.contentFit == .cap)
+    #expect(PillState.collapsed.contentFit == .fixed)
+
+    let model = PillModel()
+    model.inputs.isPinned = true
+    model.update(snapshot: nil)
+    #expect(model.state == .pinned)
+
+    // Shorter content shortens the panel…
+    model.contentHeight = 380
+    #expect(model.liveSize.height == 380)
+    // …and content past the board is clipped by `hostSize`, so it is refused.
+    model.contentHeight = 900
+    #expect(model.liveSize.height == PillState.pinned.size.height)
+}
