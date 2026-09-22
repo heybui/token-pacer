@@ -83,16 +83,22 @@ struct CopilotUsagePanel: UsagePanel {
             ///
             /// Which key that is depends on how the account is billed, and both
             /// shapes are live: an account on AI credits carries its allowance
-            /// on `chat` (200 AIC, with `premium_interactions` flagged
-            /// `hasQuota: false`), while a premium-request plan carries it on
+            /// on `chat` (200 AIC), while a premium-request plan carries it on
             /// `premium_interactions`. Asking each in turn is what keeps one
             /// parser for both, and an unlimited entitlement is not a budget —
             /// it has nothing to fill a bar with.
+            ///
+            /// A granted entitlement is the test, not `hasQuota`. That flag does
+            /// not mean "metered": a business seat comes back with 18,000
+            /// premium requests granted, 7,686 of them spent, and
+            /// `hasQuota: false` — while its `chat` and `completions` are
+            /// unlimited. Believing the flag left that account with no quota to
+            /// read at all and the panel reporting itself unreadable.
             var metered: Quota? {
                 ["premium_interactions", "chat", "completions"]
                     .lazy
                     .compactMap { quotaSnapshots[$0] }
-                    .first { $0.hasQuota == true && $0.isUnlimitedEntitlement != true }
+                    .first { $0.isUnlimitedEntitlement != true && ($0.entitlementRequests ?? 0) > 0 }
             }
         }
 

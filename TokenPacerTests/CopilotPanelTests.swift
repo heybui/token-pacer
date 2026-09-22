@@ -57,6 +57,27 @@ private let calendar = Calendar.current
     #expect(limits.spend?.used == Money(amountMinor: 90, currency: "REQUESTS", exponent: 0))
 }
 
+/// Verbatim from a live business seat: 18,000 premium requests granted, 7,686
+/// spent — and `hasQuota: false` on the only quota that has a budget at all.
+/// The flag is not what makes a quota metered, and reading it that way left this
+/// account with nothing to show but "could not read Copilot's usage panel".
+@Test func aGrantedEntitlementIsReadEvenWhenTheQuotaFlagSaysOtherwise() throws {
+    let business = """
+    {"jsonrpc":"2.0","id":2,"result":{"quotaSnapshots":{
+      "chat":{"isUnlimitedEntitlement":true,"entitlementRequests":0,"usedRequests":0,
+        "remainingPercentage":100,"hasQuota":true,"tokenBasedBilling":true},
+      "completions":{"isUnlimitedEntitlement":true,"entitlementRequests":0,"usedRequests":0,
+        "remainingPercentage":100,"hasQuota":true,"tokenBasedBilling":true},
+      "premium_interactions":{"isUnlimitedEntitlement":false,"entitlementRequests":18000,
+        "usedRequests":7686,"remainingPercentage":57.3,"hasQuota":false,
+        "tokenBasedBilling":true}}}}
+    """
+    let limits = try #require(CopilotUsagePanel.parse(business, now: now))
+    #expect(limits.primary?.usedPercent == 42.7)
+    #expect(limits.spend?.used == Money(amountMinor: 7686, currency: "AIC", exponent: 0))
+    #expect(limits.spend?.limit == Money(amountMinor: 18000, currency: "AIC", exponent: 0))
+}
+
 /// An account with nothing metered has no figure to show, and an unlimited
 /// entitlement is not a budget a bar can fill.
 @Test func anAccountWithNoMeteredQuotaIsNotAReading() {
