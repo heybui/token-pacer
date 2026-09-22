@@ -77,15 +77,12 @@ struct DiagnosticsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Diagnostics")
-                    .font(Typography.sans(14, .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                Text("What each provider answered, with the terminal's escape codes taken out and the account id removed.")
-                    .font(Typography.sans(11.5))
-                    .foregroundStyle(.white.opacity(0.42))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // No heading: the titlebar above it already says Diagnostics, and
+            // the same word twice in 40pt of window reads as a mistake.
+            Text("What each provider reported, ready to paste into a bug report. Your account details and what you are working on are left out.")
+                .font(Typography.sans(11.5))
+                .foregroundStyle(.white.opacity(0.5))
+                .fixedSize(horizontal: false, vertical: true)
 
             DiagnosticsReport(report: report)
 
