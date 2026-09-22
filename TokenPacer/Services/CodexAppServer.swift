@@ -116,9 +116,9 @@ enum CodexAppServer {
     /// already reads the logs of that same one.
     private static func environment(binary: String) -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
-        let directory = (binary as NSString).deletingLastPathComponent
-        environment["PATH"] = [directory, environment["PATH"] ?? "/usr/bin:/bin"]
-            .joined(separator: ":")
+        environment["PATH"] = TerminalCLI.searchPath(
+            for: binary, inheriting: environment["PATH"]
+        )
         return environment
     }
 

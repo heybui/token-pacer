@@ -44,14 +44,37 @@ enum TerminalCLI {
         FileManager.default.homeDirectoryForCurrentUser.path
     }
 
+    /// Where a user-installed CLI ends up, most preferred first.
+    fileprivate static var binDirectories: [String] {
+        [
+            "\(home)/.local/bin",
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "\(home)/.bun/bin",
+            "\(home)/.volta/bin",
+        ]
+    }
+
     static func paths(binary: String, override: String, extra: [String]) -> [String] {
-        ([ProcessInfo.processInfo.environment[override]].compactMap { $0 } + extra + [
-            "\(home)/.local/bin/\(binary)",
-            "/opt/homebrew/bin/\(binary)",
-            "/usr/local/bin/\(binary)",
-            "\(home)/.bun/bin/\(binary)",
-            "\(home)/.volta/bin/\(binary)",
-        ])
+        [ProcessInfo.processInfo.environment[override]].compactMap { $0 }
+            + extra
+            + binDirectories.map { "\($0)/\(binary)" }
+    }
+
+    /// The `PATH` a spawned CLI gets: its own directory, then everywhere else a
+    /// CLI is installed, then whatever we inherited.
+    ///
+    /// Its own directory is not enough. Copilot resolves the account's token by
+    /// running `gh`, and a Finder-launched app inherits
+    /// `PATH=/usr/bin:/bin:/usr/sbin:/sbin` from launchd — no Homebrew, no
+    /// `~/.local/bin`. With `gh` out of reach `account.getQuota` answers "Not
+    /// authenticated", which the panel could only report as an unreadable one.
+    /// The same read from a terminal inherits the user's own `PATH` and works,
+    /// which is why this outlived several rounds of looking for it.
+    static func searchPath(for binary: String, inheriting inherited: String?) -> String {
+        ([(binary as NSString).deletingLastPathComponent]
+            + binDirectories
+            + [inherited ?? "/usr/bin:/bin"]).joined(separator: ":")
     }
 
     static func locate(_ spec: Spec) -> String? {
@@ -291,9 +314,7 @@ enum TerminalCLI {
 
         environment["TERM"] = "xterm-256color"
         environment["CI"] = nil
-        let directory = (binary as NSString).deletingLastPathComponent
-        environment["PATH"] = [directory, environment["PATH"] ?? "/usr/bin:/bin"]
-            .joined(separator: ":")
+        environment["PATH"] = searchPath(for: binary, inheriting: environment["PATH"])
 
         return environment.map { "\($0.key)=\($0.value)" }
     }

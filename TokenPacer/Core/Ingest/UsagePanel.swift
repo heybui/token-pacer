@@ -154,6 +154,9 @@ enum PanelText {
             // How `codex app-server` says it: an error object reading
             // `codex account authentication required to read rate limits`.
             #"authentication\s*required"#,
+            // And how `copilot --headless --stdio` says it: `Not
+            // authenticated. Please authenticate first.`
+            #"Not\s*authenticated"#,
         ] where text.range(of: pattern, options: .regularExpression) != nil {
             return true
         }

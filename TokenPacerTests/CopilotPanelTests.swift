@@ -151,3 +151,32 @@ private let calendar = Calendar.current
     #expect(AgentHome.claudeConfigFiles.count == 2)
     #expect(AgentHome.claudeConfigFiles.allSatisfy { $0.lastPathComponent == ".claude.json" })
 }
+
+/// Copilot resolves the account's token by running `gh`, which lives in
+/// Homebrew's directory and not in the four `PATH` entries launchd hands a
+/// Finder-launched app. Missing, the quota call answers "Not authenticated" and
+/// the panel could only call itself unreadable — a failure that never showed up
+/// from a terminal, where the user's own `PATH` is inherited.
+@Test func aSpawnedCLIReachesEveryDirectoryACLIIsInstalledIn() {
+    let path = TerminalCLI.searchPath(
+        for: "/Users/someone/.local/bin/copilot", inheriting: "/usr/bin:/bin"
+    )
+    let entries = path.split(separator: ":").map(String.init)
+    #expect(entries.first == "/Users/someone/.local/bin")
+    #expect(entries.contains("/opt/homebrew/bin"))
+    #expect(entries.contains("/usr/local/bin"))
+    #expect(entries.last == "/usr/bin:/bin".split(separator: ":").map(String.init).last)
+}
+
+/// And when `gh` really is missing or logged out, the reply says so in words the
+/// app has to recognise, or it reports a parser problem for a sign-in one.
+@Test func copilotSaysNotAuthenticatedWhereEveryOtherProviderSaysSignIn() async {
+    let panel = CopilotUsagePanel {
+        """
+        {"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":\
+        "Request account.getQuota failed with message: Not authenticated. \
+        Please authenticate first."}}
+        """
+    }
+    await #expect(throws: PanelError.notSignedIn) { try await panel.fetch(now: .now) }
+}
