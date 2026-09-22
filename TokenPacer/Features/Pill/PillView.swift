@@ -223,6 +223,12 @@ struct PillView: View {
             }
             .opacity(state.opacity)
             .animation(Tokens.spring, value: state)
+            // The same spring for the same motion. Switching provider changes
+            // the panel's height now that it stops at its content, and without
+            // this the box jumped to the new figure while the window eased to
+            // it — the shell and its own edge disagreeing for the length of the
+            // morph. `state` does not change here, so it cannot carry this.
+            .animation(Tokens.spring, value: viewing)
             // Two clicks, not one. The band sits in the menu bar, which is a
             // strip people click at all day; a single click opened the whole
             // panel by accident often enough to be the thing you noticed about
