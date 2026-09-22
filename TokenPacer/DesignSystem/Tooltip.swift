@@ -12,13 +12,17 @@ struct Tooltip: ViewModifier {
     /// Which side of the control it hangs off, so a tip near the window's edge
     /// does not have to be read half off it.
     var edge: HorizontalAlignment = .trailing
+    /// Above instead of below, for a control on the bottom edge of a window
+    /// that does not resize: under it, the tip is drawn outside the window and
+    /// clipped to nothing.
+    var above = false
 
     @State private var isShowing = false
 
     func body(content: Content) -> some View {
         content
             .onHover { isShowing = $0 }
-            .overlay(alignment: edge == .trailing ? .bottomTrailing : .bottomLeading) {
+            .overlay(alignment: placement) {
                 if isShowing {
                     Text(text)
                         .font(Typography.sans(11))
@@ -31,9 +35,9 @@ struct Tooltip: ViewModifier {
                                 .strokeBorder(.white.opacity(0.12), lineWidth: 1)
                         }
                         .fixedSize()
-                        // Under the control, clear of it: over the top and it
-                        // covers the thing you are pointing at.
-                        .offset(y: 30)
+                        // Clear of the control: over the top of it and the tip
+                        // covers the thing being pointed at.
+                        .offset(y: above ? -30 : 30)
                         // It is something to read, never something to hit: left
                         // hittable it would take the pointer off the control and
                         // hide itself.
@@ -44,10 +48,21 @@ struct Tooltip: ViewModifier {
             }
             .animation(.easeOut(duration: 0.1), value: isShowing)
     }
+
+    private var placement: Alignment {
+        switch (above, edge == .trailing) {
+        case (false, true): .bottomTrailing
+        case (false, false): .bottomLeading
+        case (true, true): .topTrailing
+        case (true, false): .topLeading
+        }
+    }
 }
 
 extension View {
-    func tooltip(_ text: LocalizedStringKey, edge: HorizontalAlignment = .trailing) -> some View {
-        modifier(Tooltip(text: text, edge: edge))
+    func tooltip(
+        _ text: LocalizedStringKey, edge: HorizontalAlignment = .trailing, above: Bool = false
+    ) -> some View {
+        modifier(Tooltip(text: text, edge: edge, above: above))
     }
 }

@@ -10,6 +10,10 @@ struct HoverChip: ViewModifier {
     var cornerRadius: CGFloat = 6
     /// How far the shape is pushed out past the content it sits behind.
     var padding: CGFloat = 4
+    /// False for a control that is disabled. `.disabled()` stops the click but
+    /// not the pointer, so without this a greyed-out button still lit up under
+    /// it and invited the press it was going to ignore.
+    var isActive = true
 
     @State private var isHovering = false
 
@@ -24,12 +28,14 @@ struct HoverChip: ViewModifier {
                     .padding(-padding)
             }
             .animation(.easeOut(duration: 0.12), value: isHovering)
-            .onHover { isHovering = $0 }
+            .onHover { isHovering = $0 && isActive }
     }
 }
 
 extension View {
-    func hoverChip(cornerRadius: CGFloat = 6, padding: CGFloat = 4) -> some View {
-        modifier(HoverChip(cornerRadius: cornerRadius, padding: padding))
+    func hoverChip(
+        cornerRadius: CGFloat = 6, padding: CGFloat = 4, isActive: Bool = true
+    ) -> some View {
+        modifier(HoverChip(cornerRadius: cornerRadius, padding: padding, isActive: isActive))
     }
 }

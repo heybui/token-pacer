@@ -219,6 +219,8 @@ private struct MarkTile: View {
     let isSelected: Bool
     let onSelect: () -> Void
 
+    @State private var isHovering = false
+
     var body: some View {
         Button(action: onSelect) {
             VStack(spacing: 6) {
@@ -234,19 +236,25 @@ private struct MarkTile: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 8)
                             .strokeBorder(
-                                isSelected ? Tokens.amber : .white.opacity(0.08),
+                                isSelected
+                                    ? Tokens.amber
+                                    : .white.opacity(isHovering ? 0.3 : 0.08),
                                 lineWidth: isSelected ? 1.5 : 1
                             )
                     }
                 Text(mark.displayName)
                     .font(Typography.sans(10))
-                    .foregroundStyle(.white.opacity(isSelected ? 0.9 : 0.45))
+                    .foregroundStyle(.white.opacity(
+                        isSelected ? 0.9 : isHovering ? 0.72 : 0.45
+                    ))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
         }
         .buttonStyle(.plain)
         .help(mark.axis)
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .onHover { isHovering = $0 }
     }
 }
 
@@ -262,6 +270,8 @@ private struct BorderTile: View {
     let onSelect: () -> Void
 
     private let radius: CGFloat = 9
+
+    @State private var isHovering = false
 
     var body: some View {
         Button(action: onSelect) {
@@ -283,7 +293,7 @@ private struct BorderTile: View {
                         bottomLeadingRadius: radius, bottomTrailingRadius: radius
                     )
                     .strokeBorder(
-                        isSelected ? Tokens.amber : .white.opacity(0.08),
+                        isSelected ? Tokens.amber : .white.opacity(isHovering ? 0.3 : 0.08),
                         lineWidth: isSelected ? 1.5 : 1
                     )
                 }
@@ -292,13 +302,17 @@ private struct BorderTile: View {
 
                 Text(effect.displayName)
                     .font(Typography.sans(10))
-                    .foregroundStyle(.white.opacity(isSelected ? 0.9 : 0.45))
+                    .foregroundStyle(.white.opacity(
+                        isSelected ? 0.9 : isHovering ? 0.72 : 0.45
+                    ))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
         }
         .buttonStyle(.plain)
         .help(effect.axis)
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .onHover { isHovering = $0 }
     }
 }
 

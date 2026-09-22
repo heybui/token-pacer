@@ -41,6 +41,8 @@ private struct PaneTab: View {
     let isSelected: Bool
     let select: () -> Void
 
+    @State private var isHovering = false
+
     var body: some View {
         Button(action: select) {
             Text(option.title)
@@ -57,8 +59,17 @@ private struct PaneTab: View {
                         .shadow(color: .black.opacity(0.4), radius: 1, y: 1)
                         .opacity(isSelected ? 1 : 0)
                 }
+                // The tab you are *not* on is the one worth answering to: the
+                // raised one already looks pressed, and lifting it again under
+                // the pointer reads as a second selection.
+                .background {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(.white.opacity(isHovering && !isSelected ? 0.07 : 0))
+                }
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .onHover { isHovering = $0 }
     }
 }
