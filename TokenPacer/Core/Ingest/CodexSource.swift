@@ -101,7 +101,14 @@ actor CodexSource: UsageSource {
             // `token_count` carries the authoritative limits. Usage on this line is
             // cumulative, so it is deliberately not turned into an event — that
             // would double count against `token_usage_record`.
-            if let limits = row.payload?.rate_limits {
+            // Newest wins, not last-read wins. `logFiles` walks the tree in
+            // `FileManager.enumerator` order, which is unspecified, so two
+            // sessions writing at once published whichever file the walk
+            // happened to finish on — and a cold start over 90 days of history
+            // could end on a weekly window days old, whose reset is still in
+            // the future and so is shown as current.
+            if let limits = row.payload?.rate_limits,
+               stamp > (latestLimits?.observedAt ?? .distantPast) {
                 latestLimits = limits.normalised(observedAt: stamp)
             }
             return []

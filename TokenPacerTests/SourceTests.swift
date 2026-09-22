@@ -523,3 +523,33 @@ private func bump(
     try bump(store, "s1", output: 20)
     #expect(try await source.poll().events.isEmpty)
 }
+
+/// `logFiles` walks the tree in `FileManager.enumerator` order, which is
+/// unspecified. Two Codex sessions writing at once published whichever file the
+/// walk happened to finish on, so the older of two readings of the same account
+/// could be the one on screen.
+@Test func theNewestCodexReadingWinsWhicheverFileItWasFoundIn() async throws {
+    let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    func line(_ stamp: String, _ percent: Int) -> String {
+        """
+        {"timestamp":"\(stamp)","type":"event_msg","payload":{"type":"token_count",\
+        "rate_limits":{"primary":{"used_percent":\(percent),"window_minutes":300,\
+        "resets_at":\(Date.now.addingTimeInterval(3600).timeIntervalSince1970)}}}}
+        """
+    }
+    // The newer reading in one file, the older in another. Whichever order the
+    // walk yields them in, 80 is the account's figure.
+    // The trailing newline matters: a line without one is a partial write, and
+    // the reader correctly leaves it for the next poll.
+    try (line("2026-09-22T10:00:09.000Z", 80) + "\n")
+        .write(to: root.appending(path: "b.jsonl"), atomically: true, encoding: .utf8)
+    try (line("2026-09-22T10:00:04.000Z", 78) + "\n")
+        .write(to: root.appending(path: "a.jsonl"), atomically: true, encoding: .utf8)
+
+    let source = CodexSource(root: root)
+    let snapshot = try await source.poll()
+    #expect(snapshot.limits?.primary?.usedPercent == 80)
+}

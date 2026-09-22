@@ -150,14 +150,68 @@ private let creditReply = """
 
 /// A reading that came from a rollout log beats one from an RPC read a minute
 /// earlier, and loses to one a minute later. Codex writes both.
-@MainActor
-@Test func theNewerOfTwoReadingsWins() {
-    let old = RateLimits(primary: nil, secondary: nil, planType: "old",
-                         observedAt: now.addingTimeInterval(-60))
-    let new = RateLimits(primary: nil, secondary: nil, planType: "new", observedAt: now)
+@Test func theNewerOfTwoCodexReadingsWins() {
+    let older = reading(at: now.addingTimeInterval(-60), plan: "old")
+    let newer = reading(at: now, plan: "new")
 
-    #expect(UsageStore.newer(old, new)?.planType == "new")
-    #expect(UsageStore.newer(new, old)?.planType == "new")
-    #expect(UsageStore.newer(nil, old)?.planType == "old")
-    #expect(UsageStore.newer(nil, nil) == nil)
+    #expect(input(stated: older, panel: newer).codexLimits?.planType == "new")
+    #expect(input(stated: newer, panel: older).codexLimits?.planType == "new")
+    #expect(input(stated: nil, panel: older).codexLimits?.planType == "old")
+    #expect(input(stated: nil, panel: nil).codexLimits == nil)
+}
+
+/// Codex's logs never carry the credit budget — `CodexSource` has no field for
+/// it. Taking the newer reading whole therefore dropped the spend row on every
+/// turn the user ran, and put it back only in the gaps between turns.
+@Test func aCodexLogReadingCannotTakeTheSpendRowDownWithIt() {
+    let budget = Spend(
+        used: Money(amountMinor: 1181, currency: Money.credits, exponent: 0),
+        limit: Money(amountMinor: 40000, currency: Money.credits, exponent: 0),
+        percent: 3, isEnabled: true
+    )
+    var panel = reading(at: now.addingTimeInterval(-60), plan: "plus")
+    panel.spend = budget
+
+    let merged = input(stated: reading(at: now, plan: "plus"), panel: panel).codexLimits
+    #expect(merged?.observedAt == now)          // the fresher windows won
+    #expect(merged?.spend == budget)            // and the budget survived them
+}
+
+/// An account metered in credits states no window in its logs at all. That empty
+/// reading, merely by being newer, used to replace a good panel one and put the
+/// row back to "—" seconds after it was read.
+@Test func anEmptyCodexLogReadingNeverBlanksAGoodPanelReading() {
+    let windowless = RateLimits(primary: nil, secondary: nil, planType: "credits",
+                                observedAt: now.addingTimeInterval(60))
+    let panel = reading(at: now, plan: "plus")
+    #expect(input(stated: windowless, panel: panel).codexLimits?.planType == "plus")
+}
+
+/// A log line is stamped when it was written, so it always looked newer than a
+/// panel reading rolled past its own reset — and the roll-forward that makes a
+/// closed window read 0% never ran for Codex at all.
+@Test func aClosedCodexWindowLosesToTheRolledPanelReading() {
+    let closed = RateLimits(
+        primary: RateLimitWindow(usedPercent: 87, windowMinutes: 300,
+                                 resetsAt: now.addingTimeInterval(-3600)),
+        secondary: nil, planType: "plus", observedAt: now.addingTimeInterval(60)
+    )
+    let rolled = reading(at: now, plan: "plus", usedPercent: 0)
+    #expect(input(stated: closed, panel: rolled).codexLimits?.primary?.usedPercent == 0)
+}
+
+private func reading(at stamp: Date, plan: String, usedPercent: Double = 42) -> RateLimits {
+    RateLimits(
+        primary: RateLimitWindow(usedPercent: usedPercent, windowMinutes: 300,
+                                 resetsAt: stamp.addingTimeInterval(3600)),
+        secondary: nil, planType: plan, observedAt: stamp
+    )
+}
+
+private func input(stated: RateLimits?, panel: RateLimits?) -> SnapshotInput {
+    SnapshotInput(source: .codex, stated: stated, panel: panel, events: [], now: now)
+}
+
+private extension SnapshotInput {
+    var codexLimits: RateLimits? { CodexSnapshot.limits(self) }
 }

@@ -438,26 +438,26 @@ final class UsageStore {
                 ) >= Self.panelInterval
                 if panelIsStale { panelBuiltAt[source.id] = now }
 
-                snapshots[source.id] = SnapshotBuilder.build(
+                // The two readings are handed over unresolved: which of them
+                // wins, and which fields each may contribute, is the provider's
+                // own rule and lives with the provider.
+                snapshots[source.id] = SnapshotBuilder.build(for: source.id, SnapshotInput(
                     source: source.id,
-                    // Whichever reading is newer: a source that states its own
-                    // limits has the better one while it is working, and the
-                    // panel has it once those logs go quiet. The panel reading is
-                    // rolled forward first if its window has reset.
-                    limits: Self.newer(fresh.limits, currentLimits(for: source.id, at: now)),
+                    stated: fresh.limits,
+                    panel: currentLimits(for: source.id, at: now),
                     events: merged,
                     working: Self.working(
                         sessions: sessions, logs: logWorking, for: source.id, tracked: tracked
                     ),
-                    at: now,
+                    now: now,
                     weights: weights,
                     panelMovedAt: panelMovedAt[source.id],
-                    panel: panelIsStale ? nil : snapshots[source.id]?.panel,
+                    panelData: panelIsStale ? nil : snapshots[source.id]?.panel,
                     // Computed once above. Building them a second time inside the
                     // builder doubled the per-tick walk over every retained event
                     // for an identical answer.
                     windows: windows
-                )
+                ))
                 if let snapshot = snapshots[source.id] {
                     considerAlert(snapshot, at: now)
                     if source.id == activeSource { onSnapshot?(snapshot) }
@@ -484,15 +484,16 @@ final class UsageStore {
         where tracked.contains(id) && !sources.contains(where: { $0.id == id }) {
             refreshLimits(for: id, events: [], stated: nil, now: now)
             errors[id] = Self.simulatedError ?? limitsErrors[id]
-            snapshots[id] = SnapshotBuilder.build(
+            snapshots[id] = SnapshotBuilder.build(for: id, SnapshotInput(
                 source: id,
-                limits: currentLimits(for: id, at: now),
+                stated: nil,
+                panel: currentLimits(for: id, at: now),
                 events: [],
-                at: now,
+                now: now,
                 weights: weights,
                 panelMovedAt: panelMovedAt[id],
                 windows: []
-            )
+            ))
             if let snapshot = snapshots[id] {
                 considerAlert(snapshot, at: now)
                 if id == activeSource { onSnapshot?(snapshot) }
@@ -606,13 +607,6 @@ final class UsageStore {
 
             Log.usage.error("failed \(id.rawValue, privacy: .public) in \(ms, privacy: .public)ms error=\(String(describing: failure), privacy: .public) fatal=\(failure?.isFatal == true, privacy: .public) failures=\(poller.failures, privacy: .public)")
         }
-    }
-
-    /// Whichever of two readings was taken later.
-    static func newer(_ one: RateLimits?, _ other: RateLimits?) -> RateLimits? {
-        guard let one else { return other }
-        guard let other else { return one }
-        return one.observedAt >= other.observedAt ? one : other
     }
 
     /// The last reading, with each window rolled forward past its own reset.
