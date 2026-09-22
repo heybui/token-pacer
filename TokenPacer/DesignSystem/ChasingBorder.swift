@@ -464,7 +464,7 @@ final class BorderLight: NSView {
 
     /// How far the halo is allowed to reach, and therefore how much of the
     /// outside the cut-out has to cover.
-    private static let glowReach: CGFloat = 60
+    private static let glowReach = BorderEffect.glowReach
 
     fileprivate static func resolve(_ tint: BorderTint, alpha: Double, look: Look) -> NSColor {
         let base: NSColor = switch tint {

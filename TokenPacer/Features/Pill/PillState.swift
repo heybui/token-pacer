@@ -72,6 +72,38 @@ enum PillState: String, CaseIterable, Sendable {
         }
     }
 
+    /// What the window has to hold clear around the shell so the blur is not cut
+    /// off by the window it is drawn in.
+    ///
+    /// Zero for every state that does not cast one, which is now all of them but
+    /// `.warning`. The window is what a capture of the app grabs, so holding
+    /// 62pt either side and 84pt underneath for a shadow nothing draws any more
+    /// put a band of empty around every screenshot of the card — and the card
+    /// was the thing being photographed.
+    func windowMargin(glowing: Bool) -> CGSize {
+        let shadow = castsShadow
+            ? CGSize(width: PillState.shadowReach,
+                     height: PillState.shadowOffsetY + PillState.shadowReach)
+            : .zero
+        // Never below the light's own reach. A window cut exactly to the shell
+        // took the running border off with it — and the bottom corners' rounding,
+        // which is drawn at the very edge it clipped. A glowing border reaches
+        // very much further: the halo is cast onto the desktop, sideways and
+        // down, and a window cut to the hairline would erase the whole of it.
+        let light = glowing ? BorderEffect.glowReach : PillState.borderReach
+        return CGSize(
+            width: max(shadow.width, light),
+            height: max(shadow.height, light)
+        )
+    }
+
+    /// How far the running border is drawn outside the shell it traces.
+    ///
+    /// `ChasingBorder` puts its track half a line width proud of the shape, so
+    /// the stroke reaches a whole line width past the edge rather than sitting
+    /// inside it.
+    static let borderReach: CGFloat = 1.5
+
     /// Smallest strip either side of the notch the figures fit in, and no wider.
     ///
     /// What the two wings hold, and therefore how wide they are.

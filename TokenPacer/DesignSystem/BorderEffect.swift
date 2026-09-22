@@ -72,6 +72,22 @@ enum BorderEffect: String, CaseIterable, Sendable {
         }
     }
 
+    /// How far the halo reaches outside the shape it is cast from.
+    ///
+    /// The window has to hold this much clear or the glow is cut off by the
+    /// window it is drawn in — which is why it lives here, where the effect
+    /// that casts it is chosen, rather than inside the layer that draws it.
+    static let glowReach: CGFloat = 60
+
+    /// Whether this effect paints outside the shape at all.
+    ///
+    /// Read off the paint rather than matched against a case name, so an effect
+    /// that starts glowing later does not have to remember to be added here.
+    var castsGlow: Bool {
+        if case .solid(let light) = paint { return light.glow }
+        return false
+    }
+
     /// How the light is painted, in the three kinds the spec names.
     var paint: BorderPaint {
         switch self {

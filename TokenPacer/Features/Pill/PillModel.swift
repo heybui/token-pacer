@@ -32,6 +32,16 @@ final class PillModel {
         didSet { if contentHeight != oldValue, state.fitsContent { publishChrome() } }
     }
 
+    /// What the window has to hold clear around the shell.
+    ///
+    /// The border is a preference and the halo it may cast is 60pt wide, so the
+    /// figure is not the state's alone. `bordersOn` matters too: a border turned
+    /// off casts nothing, however it is set.
+    var windowMargin: CGSize {
+        let glowing = preferences.map { $0.bordersOn && $0.border.castsGlow } ?? false
+        return state.windowMargin(glowing: glowing)
+    }
+
     /// Shell plus menu: what the host must let clicks through to.
     var liveSize: CGSize {
         var shell = state.size(around: band, wings: wings)

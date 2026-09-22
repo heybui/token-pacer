@@ -270,9 +270,10 @@ final class NotchController {
     private func windowSize(for liveSize: CGSize) -> CGSize {
         let full = PillState.hostSize(around: model.band)
         guard liveSize.width > 0, liveSize.height > 0 else { return full }
+        let margin = model.windowMargin
         return CGSize(
-            width: min(full.width, liveSize.width + 2 * PillState.shadowReach),
-            height: min(full.height, liveSize.height + PillState.shadowOffsetY + PillState.shadowReach)
+            width: min(full.width, liveSize.width + 2 * margin.width),
+            height: min(full.height, liveSize.height + margin.height)
         )
     }
 

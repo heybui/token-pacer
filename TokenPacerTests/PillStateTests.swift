@@ -457,3 +457,32 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
     model.contentHeight = 900
     #expect(model.liveSize.height == PillState.pinned.size.height)
 }
+
+/// The window is what a screenshot of the app captures, so it holds clear only
+/// what is actually drawn into it. Every state but the warning card stopped
+/// casting a shadow, and the margin kept for one put a band of empty around
+/// every capture of the panel.
+@Test func onlyAStateThatCastsAShadowKeepsRoomForOne() {
+    // Down to the border's own reach, never to nothing: a window cut exactly to
+    // the shell erased the running border and the bottom corners with it.
+    for state in [PillState.pinned, .hover, .collapsed] {
+        #expect(state.windowMargin(glowing: false)
+            == CGSize(width: PillState.borderReach, height: PillState.borderReach))
+    }
+    let warning = PillState.warning.windowMargin(glowing: false)
+    #expect(warning.width == PillState.shadowReach)
+    #expect(warning.height == PillState.shadowOffsetY + PillState.shadowReach)
+}
+
+
+/// The one border that paints outside the shape throws its halo 60pt sideways
+/// and down, onto the desktop. A window cut to the hairline erased all of it.
+@Test func aGlowingBorderIsGivenTheWholeOfItsHalo() {
+    #expect(BorderEffect.breatheGlow.castsGlow)
+    #expect(!BorderEffect.comet.castsGlow)
+    #expect(!BorderEffect.breathe.castsGlow)
+
+    let glowing = PillState.pinned.windowMargin(glowing: true)
+    #expect(glowing.width == BorderEffect.glowReach)
+    #expect(glowing.height == BorderEffect.glowReach)
+}
