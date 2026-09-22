@@ -18,6 +18,8 @@ struct PreferencesView: View {
     var updater: Updater?
 
     @State private var pane: Pane = .general
+    /// Built on the first open and let go when the window closes.
+    @State private var diagnostics = DiagnosticsWindow()
 
     enum Pane: String, CaseIterable, Identifiable {
         case general, appearance
@@ -94,11 +96,18 @@ private extension PreferencesView {
                     .foregroundStyle(.white.opacity(0.32))
                     .fixedSize()
                 Spacer(minLength: 8)
-                link("Check for updates", enabled: updater?.canCheck ?? false) {
-                    updater?.checkForUpdates()
+                // Glyphs rather than words, and all three rather than two: the
+                // row is 368pt wide and the words came to more than that the
+                // moment a third was added. What each one is lives in its
+                // tooltip, which is also what VoiceOver reads.
+                iconLink(
+                    "arrow.triangle.2.circlepath", help: "Check for updates",
+                    enabled: updater?.canCheck ?? false
+                ) { updater?.checkForUpdates() }
+                iconLink("stethoscope", help: "Diagnostics") { diagnostics.show() }
+                iconLink("envelope", help: "Send feedback") {
+                    NSWorkspace.shared.open(AppInfo.feedbackPage)
                 }
-                Text("·").foregroundStyle(.white.opacity(0.2))
-                link("Send feedback") { NSWorkspace.shared.open(AppInfo.feedbackPage) }
             }
             .padding(.top, 12)
         }
@@ -106,8 +115,33 @@ private extension PreferencesView {
 
 }
 
+/// A glyph that opens something, for the footer, where there is no room for the
+/// word.
+///
+/// The help string is the accessibility label as well: an icon with a tooltip
+/// and no label is a button VoiceOver reads out as "button".
+@MainActor private func iconLink(
+    _ symbol: String, help: LocalizedStringKey, enabled: Bool = true,
+    action: @escaping () -> Void
+) -> some View {
+    Button(action: action) { Image(systemName: symbol) }
+        .buttonStyle(.plain)
+        .font(.system(size: 12.5))
+        .foregroundStyle(enabled ? Tokens.blue.opacity(0.9) : .white.opacity(0.22))
+        .disabled(!enabled)
+        // The glyphs are three different widths; the target should not be, and
+        // a tooltip needs somewhere for the pointer to rest still.
+        .frame(width: 22, height: 20)
+        .contentShape(.rect)
+        .hoverChip(padding: 2, isActive: enabled)
+        // Above, not below: this row sits on the bottom edge of a window that
+        // does not resize, and a tip hung under it is drawn outside and clipped.
+        .tooltip(help, above: true)
+        .accessibilityLabel(help)
+}
+
 /// A word that opens something, in both panes' footers and beside a provider.
-private func link(
+@MainActor private func link(
     _ title: LocalizedStringKey, enabled: Bool = true, action: @escaping () -> Void
 ) -> some View {
     Button(title, action: action)
@@ -116,6 +150,7 @@ private func link(
         .foregroundStyle(enabled ? Tokens.blue.opacity(0.9) : .white.opacity(0.22))
         .disabled(!enabled)
         .fixedSize()
+        .hoverChip(cornerRadius: 5, padding: 3, isActive: enabled)
 }
 
 /// The numbers and the behaviour, in the board's three groups.
@@ -262,6 +297,7 @@ private struct GeneralPane: View {
                             preferences.hasDefaults ? .white.opacity(0.25) : Tokens.amber
                         )
                         .disabled(preferences.hasDefaults)
+                        .hoverChip(cornerRadius: 5, padding: 3, isActive: !preferences.hasDefaults)
                         .tooltip("The marks and the two alert switches, back to their defaults")
                         .fixedSize()
                 }

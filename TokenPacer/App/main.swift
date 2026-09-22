@@ -5,6 +5,11 @@ if CommandLine.arguments.contains("--probe") {
     exit(0)
 }
 
+if CommandLine.arguments.contains("--raw") {
+    await Probe.raw()
+    exit(0)
+}
+
 // One pill in the notch, always. A second copy would draw over the first.
 guard SingleInstance.acquire() else {
     FileHandle.standardError.write(Data("Token Pacer is already running.\n".utf8))

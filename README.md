@@ -61,6 +61,7 @@ Useful while working:
 TP_OPEN_PREFS=1 build/TokenPacer.app/Contents/MacOS/TokenPacer   # straight to Preferences
 TOKENPACER_PANEL_DUMP=/tmp/panels make run                       # dump every CLI screen read
 swift run TokenPacer --probe                                     # parse the logs, print, exit
+swift run TokenPacer --raw                                       # every provider's reply, verbatim
 ```
 
 Conventions for anything committed here are in [CLAUDE.md](CLAUDE.md) — commit
