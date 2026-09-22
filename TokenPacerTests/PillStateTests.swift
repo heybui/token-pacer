@@ -101,7 +101,7 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     let sizes = Set(PillState.allCases.map { "\($0.size.width)x\($0.size.height)x\($0.cornerRadius)" })
     #expect(sizes.count >= 4)
     #expect(PillState.hidden.size.height == 3)
-    #expect(PillState.pinned.size == CGSize(width: 752, height: 540))
+    #expect(PillState.pinned.size == CGSize(width: 752, height: 680))
 }
 
 // MARK: - model

@@ -15,7 +15,12 @@ enum PillState: String, CaseIterable, Sendable {
         // drawn for a ring and two lines; any single number here is wrong for some
         // of the lists the card can hold.
         case .hover, .warning: CGSize(width: 404, height: 98)
-        case .pinned: CGSize(width: 752, height: 540)
+        // 540 was the height this was drawn at, and the panel has since grown
+        // past it — a splits band of four rows over a 90-day heatmap and a spend
+        // cell does not fit in it. It is a cap rather than the height now
+        // (`ContentFit.cap`), so headroom costs nothing: a provider with less to
+        // say still stops at its own content.
+        case .pinned: CGSize(width: 752, height: 680)
         }
     }
 
