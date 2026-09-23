@@ -140,6 +140,35 @@ private let creditReply = """
     #expect(limits.spend?.used.amountMinor == 1_181)
 }
 
+/// Verbatim shape from a business workspace: the budget's amounts arrive as
+/// strings, and a strict number decode threw the whole reply away.
+@Test func aBudgetSpelledAsStringsStillReads() throws {
+    let limits = try #require(CodexUsagePanel.parse("""
+    {"id":2,"result":{"ordinaryUsageAllowed":null,"rateLimits":{"limitId":"codex","primary":null,\
+    "secondary":null,"credits":{"hasCredits":true,"unlimited":false,"balance":null},\
+    "individualLimit":{"limit":"40000","used":"1195.640303492546","remainingPercent":97,\
+    "resetsAt":1790812801},"spendControlReached":false,"planType":"business"}}}
+    """, now: now))
+
+    #expect(limits.primary?.usedPercent == 3)
+    #expect(limits.spend?.used.amountMinor == 1_196)
+    #expect(limits.spend?.limit?.amountMinor == 40_000)
+    #expect(limits.planType == "Business")
+}
+
+/// The windows get the same tolerance; a release that quotes them should not
+/// cost the row.
+@Test func aWindowSpelledAsStringsStillReads() throws {
+    let limits = try #require(CodexUsagePanel.parse("""
+    {"id":2,"result":{"rateLimits":{"primary":\
+    {"usedPercent":"12.5","windowDurationMins":"300","resetsAt":"1789981987"}}}}
+    """, now: now))
+
+    #expect(limits.primary?.usedPercent == 12.5)
+    #expect(limits.primary?.windowMinutes == 300)
+    #expect(limits.primary?.resetsAt == Date(timeIntervalSince1970: 1_789_981_987))
+}
+
 /// A zero cap caps nothing, and dividing by it is how a budget row reads `NaN%`.
 @Test func anEmptyBudgetIsNoBudget() throws {
     #expect(CodexUsagePanel.parse("""

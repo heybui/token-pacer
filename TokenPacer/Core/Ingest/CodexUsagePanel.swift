@@ -85,6 +85,15 @@ struct CodexUsagePanel: UsagePanel {
             let windowDurationMins: Int?
             let resetsAt: Double?
 
+            init(from decoder: any Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                usedPercent = c.number(.usedPercent)
+                windowDurationMins = c.number(.windowDurationMins).map { Int($0) }
+                resetsAt = c.number(.resetsAt)
+            }
+
+            private enum CodingKeys: String, CodingKey { case usedPercent, windowDurationMins, resetsAt }
+
             var normalised: RateLimitWindow? {
                 guard let used = usedPercent, let minutes = windowDurationMins, let resets = resetsAt
                 else { return nil }
@@ -105,6 +114,16 @@ struct CodexUsagePanel: UsagePanel {
             let used: Double?
             let remainingPercent: Double?
             let resetsAt: Double?
+
+            init(from decoder: any Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                limit = c.number(.limit)
+                used = c.number(.used)
+                remainingPercent = c.number(.remainingPercent)
+                resetsAt = c.number(.resetsAt)
+            }
+
+            private enum CodingKeys: String, CodingKey { case limit, used, remainingPercent, resetsAt }
 
             /// What the account has drawn from its budget: the amount, the cap,
             /// and how far through it that is.
@@ -166,5 +185,16 @@ struct CodexUsagePanel: UsagePanel {
                 Money(amountMinor: Int(amount.rounded()), currency: Money.credits, exponent: 0)
             }
         }
+    }
+}
+
+private extension KeyedDecodingContainer {
+    /// A number, or a number spelled as a string. Codex sends a business
+    /// budget's `limit` and `used` as `"40000"` and `"1195.64"` beside plain
+    /// numbers in the same object, and one strict `Double` that meets a string
+    /// fails the whole reply. A field that is neither reads as absent.
+    func number(_ key: Key) -> Double? {
+        if let value = try? decodeIfPresent(Double.self, forKey: key) { return value }
+        return (try? decodeIfPresent(String.self, forKey: key))?.flatMap(Double.init)
     }
 }
