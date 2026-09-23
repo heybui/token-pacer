@@ -210,6 +210,7 @@ final class UsageStore {
     /// has a panel worth reading; a source with none is never spawned.
     private let panels: [SourceID: any UsagePanel]
     private let archive: Archive?
+    private let appVersion: String
 
     /// Which providers are being tracked at all.
     ///
@@ -230,19 +231,34 @@ final class UsageStore {
         weights: TokenWeights = .default,
         interval: TimeInterval = 5,
         panels: [SourceID: any UsagePanel] = [:],
-        archive: Archive? = .default
+        archive: Archive? = .default,
+        appVersion: String = UsageStore.runningVersion
     ) {
         self.sources = sources
         self.weights = weights
         self.interval = interval
         self.panels = panels
         self.archive = archive
+        self.appVersion = appVersion
 
         let restored = archive?.load()
-        self.pollers = restored?.pollers ?? [:]
         self.liveLimits = restored?.limits ?? [:]
-        self.limitsErrors = restored?.limitsErrors ?? [:]
+        // A different build is a fresh start for the schedule, not the
+        // readings: the last figures stay on screen while every provider is
+        // asked again at once — what "Check again" does, without the press.
+        if restored?.appVersion == appVersion {
+            self.pollers = restored?.pollers ?? [:]
+            self.limitsErrors = restored?.limitsErrors ?? [:]
+        }
         self.errors = limitsErrors
+    }
+
+    /// `1.1.2 (267)`. Read here rather than from `AppInfo`, which is not Core's.
+    nonisolated static var runningVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "0"
+        let build = info?["CFBundleVersion"] as? String ?? "0"
+        return "\(version) (\(build))"
     }
 
     /// Hands every source its byte offsets back and repopulates the events the
@@ -327,7 +343,8 @@ final class UsageStore {
 
     private func persist() {
         archive?.save(ArchivedState(
-            pollers: pollers, limits: liveLimits, limitsErrors: limitsErrors
+            pollers: pollers, limits: liveLimits, limitsErrors: limitsErrors,
+            appVersion: appVersion
         ))
     }
 

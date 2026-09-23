@@ -33,6 +33,14 @@ struct ArchivedState: Codable, Sendable {
     /// either. Optional so a version-3 file written before this field still
     /// decodes; it is a new fact about the same reading, not a changed one.
     var limitsErrors: [SourceID: String]?
+    /// The build that wrote this file, as `1.1.2 (267)`.
+    ///
+    /// A backoff earned by one build is not evidence against the next: the
+    /// failure it counts is usually the very bug the update fixed. Restored
+    /// across an upgrade it held the fixed build to the broken one's schedule —
+    /// up to an hour of a blank row before the first read. Optional, so a file
+    /// from before this field loads, and reads as written by some other build.
+    var appVersion: String?
     var savedAt = Date.now
 }
 

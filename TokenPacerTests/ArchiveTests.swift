@@ -242,3 +242,52 @@ private func line(id: String, output: Int, at date: Date) -> String {
     let state = try #require(archive.load())
     #expect(state.limitsErrors == nil)
 }
+
+/// A backoff earned by the broken build held the fixed one to its schedule: a
+/// Codex account that failed under 1.1.1 read "—" for up to an hour after the
+/// update that fixed it. A new build asks again at once.
+@MainActor
+@Test func anUpgradeAsksAgainAtOnce() throws {
+    var poller = PanelPoller()
+    poller.failed(at: Date())
+
+    let archive = temporaryArchive()
+    archive.save(ArchivedState(
+        pollers: [.codex: poller],
+        limitsErrors: [.codex: "Could not read Codex's usage panel"],
+        appVersion: "1.1.1 (255)"
+    ))
+
+    let upgraded = UsageStore(sources: [], archive: archive, appVersion: "1.1.2 (267)")
+    #expect(upgraded.errors.isEmpty)
+
+    // Same build: the backoff and its reason are kept, as before.
+    let relaunched = UsageStore(sources: [], archive: archive, appVersion: "1.1.1 (255)")
+    #expect(relaunched.errors[.codex] == "Could not read Codex's usage panel")
+}
+
+/// Every installed copy wrote its file before the field existed. That file
+/// has to load — losing it costs a re-measure of everything — and count as
+/// another build's. Written out by hand: a file saved from this build would
+/// only prove the field round-trips.
+@MainActor
+@Test func aStateFileWithNoBuildLoadsAndCountsAsAnUpgrade() throws {
+    let archive = temporaryArchive()
+    try FileManager.default.createDirectory(
+        at: archive.url.deletingLastPathComponent(), withIntermediateDirectories: true
+    )
+    try Data("""
+    {
+      "limits" : [ "codex", { "observedAt" : "2026-09-23T07:37:56Z", "planType" : "Plus" } ],
+      "limitsErrors" : [ "codex", "Could not read Codex's usage panel" ],
+      "pollers" : [ "codex", { "failures" : 5, "lastRunAt" : "2026-09-23T07:37:57Z" } ],
+      "savedAt" : "2026-09-23T07:37:57Z",
+      "version" : 3
+    }
+    """.utf8).write(to: archive.url)
+
+    let state = try #require(archive.load())
+    #expect(state.appVersion == nil)
+    #expect(state.limits[.codex]?.planType == "Plus")
+    #expect(UsageStore(sources: [], archive: archive, appVersion: "1.1.2 (267)").errors.isEmpty)
+}
