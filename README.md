@@ -18,17 +18,18 @@ trust and reads the answer it already has.
 | | |
 |---|---|
 | macOS | 15 (Sequoia) or later |
-| Mac | any. A notched Mac hides the shell behind the hardware; elsewhere the pill docks top-centre in the menu bar row |
+| Mac | any. A notched Mac hides the shell behind the hardware; elsewhere the pill docks top-centre in the menu bar row. Settings → Show on picks the display |
 | Permissions | **none.** Not sandboxed, no Accessibility, no Screen Recording, no Automation |
-| Notifications | optional, asked the first time you cross a threshold. Denied just means no banner |
+| Alerts | none from macOS. The pill opens by itself when a provider crosses a mark, so there is no notification permission to ask for |
 
 To see anything, at least one provider's logs must exist —
-`~/.claude/projects/…jsonl` or `~/.codex/sessions/…jsonl`. To see its
-**percentage**, that provider's CLI must be on disk in a known location (or named
-by `TOKENPACER_CLAUDE_BIN` / `TOKENPACER_CODEX_BIN` / `TOKENPACER_COPILOT_BIN`),
-and Claude and Codex each need one directory you have already answered their
-trust prompt for. Without that, everything else still works — only that row's
-percentage is missing.
+`~/.claude/projects/…jsonl`, `~/.codex/sessions/…jsonl` or
+`~/.copilot/data.db`. To see its **percentage**, that provider's CLI must be on
+disk in a known location (or named by `TOKENPACER_CLAUDE_BIN` /
+`TOKENPACER_CODEX_BIN` / `TOKENPACER_COPILOT_BIN`), and Claude needs one
+directory you have already answered its trust prompt for — Codex and Copilot
+answer over JSON-RPC and start no session. Without that, everything else still
+works — only that row's percentage is missing.
 
 ## Development setup
 
@@ -50,10 +51,8 @@ Two build systems over one set of folders, so they cannot drift:
   entitlements, hardened runtime). Uses synchronized folder groups, so **adding a
   file needs no project edit**.
 
-Running in place is not a bundle and two things degrade: **notifications** are
-skipped (`UNUserNotificationCenter` traps outside a bundle) and **launch at
-login** reports disabled (`SMAppService` needs a signed bundle). Use `make app`
-when either matters.
+Running in place is not a bundle, so **launch at login** reports disabled
+(`SMAppService` needs a signed bundle). Use `make app` when that matters.
 
 Useful while working:
 

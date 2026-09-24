@@ -16,9 +16,8 @@ different clock, and the only way to see any of them is to stop what you are
 doing and ask the CLI. So you find out you are at 94% by being told you are at
 100% — usually mid-task, usually on the one afternoon it matters.
 
-The figures exist. Claude Code draws them on `/usage`, Codex answers them over
-its own JSON-RPC,
-Copilot on `/usage`. Nothing keeps them in front of you.
+The figures exist. Claude Code draws them on `/usage`; Codex and Copilot answer
+for them over their own JSON-RPC. Nothing keeps them in front of you.
 
 ## The product, in one line
 
@@ -48,11 +47,13 @@ them.
    two-provider row, the weekly dot, the raw token count — and the comparison
    lives in the card instead.
 3. **Ask for nothing.** No account, no API key, no token of our own, no
-   Accessibility, no Screen Recording, no Automation, no network call. The app
-   asks the CLI you already trust, and reads the answer it already has.
-4. **The state is in the notch; the moment is in the banner.** The notch always
-   carries where you are. A banner fires only for the one transition that
-   changes what you should do: going over.
+   Accessibility, no Screen Recording, no Automation, no notification
+   permission, and no network call but the update check. The app asks the CLI
+   you already trust, and reads the answer it already has.
+4. **The state is in the notch, and so is the moment.** The notch always
+   carries where you are, and opens by itself only for the two transitions that
+   change what you should do — crossing watch, crossing over. It waits there
+   until you look; there is no banner.
 
 ## The zone rule
 
@@ -65,9 +66,10 @@ the icon. There is exactly one function that decides it.
 | **Watch** | watch → over — amber `#e8b33c` |
 | **Over** | above the over threshold — red `#e2543f` |
 
-Defaults 75 / 90, both user-set on a single two-handle track where watch can
-never pass over. Moving a handle moves the capsules on the mark, the colour of
-the border and the point the banner fires, together.
+Defaults 75 / 90, set per provider on its own two-handle track where watch can
+never pass over: a row read against another provider's marks is coloured by a
+rule that does not apply to it. Moving a handle moves that provider's capsules,
+the colour of its border and the point the pill opens, together.
 
 ## What you see
 
@@ -75,21 +77,31 @@ the border and the point the banner fires, together.
 
 Seven states, one object. On a notched Mac the shell spans the hardware and the
 figures sit in the wings either side; off one it is a single 226 × 36 row docked
-top-centre.
+top-centre. Settings picks the display — Automatic is the notch, or the main
+screen without one — and a chosen monitor that is unplugged hands the pill back
+to Automatic until it returns.
 
 | State | What it says |
 |---|---|
 | **Hidden** | nothing is running and you asked for quiet — the menu bar reads as stock hardware |
 | **Ghost** | resting at 45%, showing the weekly cap |
 | **Collapsed** | the normal one: mark and percentage left, time to reset right |
-| **Over · at the cap** | the same row, mark full, figure and countdown red |
-| **Hover card** | one row per provider on one scale, each with its own reset |
-| **Over** | the big percentage, the countdown, one coach line |
-| **Pinned panel** | the sparkline, splits by model and project, 30-day history |
+| **At the cap** | a red dot and the countdown in red — at 100% there is nothing to report but the wait |
+| **Hover card** | one row per provider on one scale, each with its own reset and its own sessions working |
+| **Warning** | whichever provider crossed: its mark at twice the size, the percentage, the countdown, one line |
+| **Pinned panel** | the provider picker as its title, the sparkline, splits by model, project and kind, 90-day history |
 
-Hover opens the card. Double-click pins the panel — a single click was tried and
-reverted; the menu bar is a strip people click at all day. Esc closes. Right-click
-opens the menu: Preferences, Check for updates, Send feedback, Quit.
+Hover opens the card, and clicking a provider's row puts it in the band — the
+choice is made where the three stand side by side. Double-click pins the panel —
+a single click was tried and reverted; the menu bar is a strip people click at
+all day. Esc or a click outside closes it. Right-click opens the menu:
+Preferences, Check for updates, Send feedback, Quit.
+
+The right wing can end in one badge: a triangle while any provider cannot be
+read, otherwise the count of sessions answering on the pinned provider. A
+waiting build is not a third contender — it keeps, so it is an Install button in
+the card's footer, beside Settings and Open the panel. While anything is failing,
+Check again takes the place of the card's "Updated …" line.
 
 ### The mark — twelve of them
 
@@ -126,36 +138,47 @@ rather than as a second border drawn inside the black.
 
 ### Preferences — two panes
 
-**General.** *Zones*: the two-handle track and a sentence saying what the numbers
-do. *Alerts*: notify when over, sound when over (greyed out with the banner off —
-a sound with nothing to carry it is nothing). *Providers*: one switch each; off
-means that CLI is never asked anything, and the last one on cannot be turned off.
-*App*: launch at login, minutes of quiet before the pill hides (0 never hides), check for updates
-automatically, restore defaults — which restores every switch in both panes.
+**General.** *Providers*: every CLI found on this Mac is tracked, and there is no
+switch to track one. Each row carries that provider's own two-handle track, a
+button that gives the others the same marks, and a tick for whether it has a row
+on the card; a CLI that is missing says so and links to its install page. Reset
+alert configuration puts the marks and both alert switches back. *Alerts*: tell
+me at watch and over, and play a sound with it (greyed out with the first off —
+a sound with nothing on screen to explain it is a noise). *App*: which display
+shows the pill, launch at login, minutes of quiet before the pill hides (0 never
+hides), update automatically. A language picker appears on its own once a
+second language ships. The footer carries the version, Check for updates,
+Diagnostics — every provider's raw reply, with the account id and home paths
+stripped — and Send feedback.
 
 **Appearance.** Two grids of twelve, drawn live at real size and walked from 0 to
 100% so you pick a mark by watching it work rather than by reading its name. Plus
-the one switch that changes what the band *holds* rather than how it looks:
-percentage beside the mark, on by default.
+the two switches that change what the band *holds* rather than how it looks: the
+percentage beside the mark and the count of sessions working, both on by
+default.
 
-### Notifications
+### Alerts
 
-One banner, once per window, on going over only. Watch stays silent and visual —
-the mark simply tints amber. The banner says the percentage, the time left and
-one coach line. Permission is asked the first time you cross, never at launch;
-denying it costs the banner and nothing else.
+No banner, and no permission to ask for one. When any tracked provider crosses
+its watch or its over mark, the pill opens into the warning card by itself —
+pinned provider or not — and holds there until the pointer comes near: reading
+it is answering it. Each mark fires once per window. The card names the
+provider and says the percentage, the time to reset and one line — "still room"
+past watch, "wrap up soon" past over. The sound is optional.
 
 ## What each provider gives you
 
 | | Session window | Week | Other |
 |---|---|---|---|
 | **Claude Code** | 5-hour rolling %, to the whole point | weekly cap % | monthly credit spend, where the account buys past the plan |
-| **Codex** | 5-hour % | weekly % | the plan name |
+| **Codex** | 5-hour % | weekly % | the plan name; a workspace metered in credits reports a monthly credit budget instead, and that becomes the headline |
 | **Copilot** | — | — | one monthly plan budget in credits, e.g. `7,074 / 18,000 AIC` |
 
-Claude and Codex also contribute the sparkline, the model and project splits and
-the 30-day history, all from their local logs. Copilot writes nothing readable,
-so it is a single row with no history behind it.
+All three also contribute the sparkline, the splits by model, project and kind,
+and the 90-day history, from what they already write locally — Claude and Codex
+their session logs, Copilot its `data.db`. What they write also says which
+sessions have a model answering right now, and that is what the job count
+counts.
 
 A provider's directory that does not exist contributes nothing — no error, no
 prompt, no row.
@@ -193,21 +216,22 @@ reading as missing features.
 | The band, all seven states | ✅ on screen, against live figures |
 | Three providers | ✅ Claude, Codex, Copilot |
 | Twelve marks, twelve borders, both grids live | ✅ |
-| Preferences, notifications, launch at login | ✅ |
+| Preferences, alerts in the pill, launch at login | ✅ |
 | Pinned panel — sparkline, splits, history | ✅ |
 | In-app updates | ✅ Sparkle, automatic checks on by default |
-| Release — notarized DMG, appcast, Homebrew cask | 🔨 pipeline built, blocked on a Developer ID certificate |
+| Release — notarized DMG, appcast | ✅ cut by CI on a published release, served from tokenpacer.com |
+| Homebrew cask | 🔨 written every release, published only when the tap is checked out beside this repo — CI has none |
 
 ## Open questions
 
 - **Web and desktop-app spend is invisible.** No local artefact records it. The
   only honest handling today is that the panel reading jumps when it refreshes.
 - **Copilot's reset date is inferred** from the month boundary. GitHub knows the
-  billing anniversary; the panel does not print it. The day it does, the
-  inference goes.
-- **A panel-only provider has no second opinion.** If Copilot's `/usage` screen
-  changes, that row goes to `--` with nothing behind it. Claude and Codex at
-  least keep logs.
+  billing anniversary; `account.getQuota`'s `resetDate` states when the quota
+  was read, not when it refills. The day it points forward, the inference goes.
+- **Copilot's figure has no second opinion.** If `account.getQuota` changes
+  shape, that row goes to `--` with nothing behind it: `data.db` records its
+  volume, never its quota.
 - **`--` has to read as "not reported", never as "no usage."** The attention
   badge is what carries the difference, and it has never been tested on someone
   who did not build it.
