@@ -332,6 +332,7 @@ final class UsageStore {
     /// installed it. Without this the message outlives the problem and only a
     /// relaunch clears it.
     func recheck() {
+        Log.usage.info("recheck: every provider asked again")
         limitsDisabled.removeAll()
         limitsErrors.removeAll()
         errors.removeAll()
