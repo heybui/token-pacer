@@ -28,6 +28,8 @@ struct PillView: View {
     /// Non-nil when the last refresh failed. The figure stays; it is marked
     /// unverified rather than hidden.
     var attention: String?
+    /// Any tracked provider's failure: what the badge slot answers to.
+    var trouble: String?
     /// The same, per provider, for the card's rows.
     var errors: [SourceID: String] = [:]
     /// The card's own controls: which provider the strip carries, what each has
@@ -67,7 +69,7 @@ struct PillView: View {
     /// One slot; the order lives on `Badge` so the wing is measured for
     /// whatever this draws.
     private var badge: PillState.Badge? {
-        .of(attention: attention, workingSessions: workingSessions)
+        .of(attention: trouble, workingSessions: workingSessions)
     }
     var onTogglePinned: () -> Void = {}
     var onClose: () -> Void = {}
@@ -372,8 +374,8 @@ struct PillView: View {
                 zones: zones,
                 onPick: { viewing = $0 == snapshot?.source ? nil : $0 }
             )
-            if let attention {
-                AttentionBadge(message: attention, size: 10)
+            if let trouble {
+                AttentionBadge(message: trouble, size: 10)
             } else if workingSessions > 0 {
                 JobBadge(count: workingSessions, scale: PillState.badgePinnedScale)
             }
@@ -446,7 +448,7 @@ struct PillView: View {
             notchGap
 
             TrailingWing(
-                snapshot: snapshot, isGhost: isGhost, attention: attention,
+                snapshot: snapshot, isGhost: isGhost, attention: trouble,
                 workingSessions: workingSessions, badge: badge
             )
             .padding(.leading, PillState.notchClearance)

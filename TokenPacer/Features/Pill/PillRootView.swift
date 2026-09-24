@@ -78,7 +78,14 @@ struct PillRootView: View {
     /// What the right wing's badge slot holds, if anything. The view draws from
     /// the same answer the model measures the wing with.
     private var badge: PillState.Badge? {
-        .of(attention: store.errors[store.activeSource], workingSessions: workingSessions)
+        .of(attention: trouble, workingSessions: workingSessions)
+    }
+
+    /// Any tracked provider that cannot be read, the pinned one first. A job
+    /// count beside Claude said nothing while Codex's row was failing under it.
+    private var trouble: String? {
+        store.errors[store.activeSource]
+            ?? SourceID.allCases.lazy.filter(preferences.tracks).compactMap { store.errors[$0] }.first
     }
 
     /// The pill itself, lifted out of `body`: with every input the shell now
@@ -96,6 +103,7 @@ struct PillRootView: View {
             border: preferences.border,
             bordersOn: preferences.bordersOn,
             attention: store.errors[store.activeSource],
+            trouble: trouble,
             errors: store.errors,
             isAnyoneWorking: store.anyoneWorking,
             running: running,
