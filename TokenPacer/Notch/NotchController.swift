@@ -292,8 +292,13 @@ final class NotchController {
     }
 
     private func resize(to size: CGSize) {
-        guard let metrics, size != panel.frame.size else { return }
-        panel.setFrame(NotchAnchor.hostFrame(for: metrics, size: size), display: true)
+        // The whole frame, not the size: plugging in a monitor moves the screens
+        // under a window whose size has not changed, and a size check left the
+        // pill mid-screen until a hover resized it.
+        guard let metrics else { return }
+        let frame = NotchAnchor.hostFrame(for: metrics, size: size)
+        guard frame != panel.frame else { return }
+        panel.setFrame(frame, display: true)
         clip.pin(host, size: PillState.hostSize(around: model.band))
     }
 
