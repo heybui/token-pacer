@@ -185,17 +185,17 @@ struct HoverCard: View {
     }
 
     private var statusLine: String {
-        guard let percent = snapshot?.sessionPercent else { return String(localized: "Measuring") }
-        if percent >= toneScale.critAt { return String(localized: "Wrap up soon") }
+        guard let percent = snapshot?.sessionPercent else { return String(localized: "Reading usage…") }
+        if percent >= toneScale.critAt { return String(localized: "Nearly at the limit") }
         return percent >= toneScale.warnAt
-            ? String(localized: "Running hot")
+            ? String(localized: "Usage is climbing")
             : String(localized: "Plenty of room")
     }
 
     /// What the colours mean, in the user's own numbers.
     private var zoneRule: String {
         String(
-            localized: "Safe to \(Int(toneScale.warnAt))% · watch to \(Int(toneScale.critAt))% · over above",
+            localized: "Safe below \(Int(toneScale.warnAt))% · watch \(Int(toneScale.warnAt))–\(Int(toneScale.critAt))% · over \(Int(toneScale.critAt))%",
             comment: "What the three tones mean, in the user's own thresholds."
         )
     }
@@ -229,11 +229,12 @@ struct HoverCard: View {
     /// "reported" alone would imply the figure was just read. Between anchors it
     /// is that reading carried forward by local token flow, so say how old it is.
     private func reportedLabel(_ snapshot: UsageSnapshot) -> String {
-        guard let confirmedAt = snapshot.confirmedAt else { return String(localized: "reported") }
-        let minutes = Int(Date.now.timeIntervalSince(confirmedAt) / 60)
-        return minutes < 1
-            ? String(localized: "reported")
-            : String(localized: "reported \(minutes)m ago")
+        guard let confirmedAt = snapshot.confirmedAt,
+              Date.now.timeIntervalSince(confirmedAt) >= 60
+        else { return String(localized: "Updated just now") }
+        // Spelled out, "3 minutes ago" rather than "3m": the corner has the room.
+        let age = confirmedAt.formatted(.relative(presentation: .named, unitsStyle: .wide))
+        return String(localized: "Updated \(age)")
     }
 }
 
