@@ -19,6 +19,10 @@ struct PillInputs: Equatable, Sendable {
     /// measured against. The pinned provider's own is not enough: a pill pinned
     /// to an idle one would withdraw while another was mid-turn.
     var lastActivity: Date?
+    /// A session is mid-turn by the registry's account. A long tool call or a
+    /// long think writes no tokens, so the logs alone went quiet and the pill
+    /// withdrew while a prompt was still running.
+    var isWorking = false
     /// What the right wing carries at its end, when anything does — a source
     /// complaining, or a count of sessions waiting for an answer. Geometry only;
     /// what either one says lives on the store.
@@ -65,6 +69,7 @@ enum PillStateResolver {
     }
 
     private static func nothingRunning(_ inputs: PillInputs, at now: Date) -> Bool {
+        if inputs.isWorking { return false }
         // Whichever is newer: the figure the store hands down covers every
         // tracked provider, and the pinned one's own covers a caller that has
         // not set it.

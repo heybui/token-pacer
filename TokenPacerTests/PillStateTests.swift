@@ -45,6 +45,13 @@ private func resolve(_ inputs: PillInputs) -> PillState {
     )) == .collapsed)
 }
 
+/// A prompt stuck in a long tool call logs nothing for minutes, and the
+/// registry still says it is busy. That is running, not quiet.
+@MainActor @Test func aBusySessionKeepsThePillOnScreen() {
+    let quiet = snapshot(lastActivity: now.addingTimeInterval(-20 * 60))
+    #expect(resolve(PillInputs(snapshot: quiet, isWorking: true)) == .collapsed)
+}
+
 @MainActor @Test func nothingReadYetIsAlsoHidden() {
     #expect(resolve(PillInputs(snapshot: nil)) == .hidden)
     #expect(resolve(PillInputs(snapshot: snapshot(lastActivity: nil))) == .hidden)

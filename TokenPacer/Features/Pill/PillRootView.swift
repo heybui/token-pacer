@@ -141,6 +141,10 @@ struct PillRootView: View {
                 model.inputs.lastActivity = activity
                 model.update(snapshot: store.snapshot)
             }
+            .onChange(of: store.anyoneWorking, initial: true) { _, working in
+                model.inputs.isWorking = working
+                model.update(snapshot: store.snapshot)
+            }
             // Geometry inputs: both change how wide the wings have to be.
             .onChange(of: preferences.mark, initial: true) { _, mark in
                 model.inputs.mark = mark
