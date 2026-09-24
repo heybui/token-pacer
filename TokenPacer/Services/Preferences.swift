@@ -117,6 +117,18 @@ final class Preferences {
         didSet { store.set(pillSource.rawValue, forKey: Key.pillSource) }
     }
 
+    /// The display the pill lives on, by UUID. Nil is automatic: the notch
+    /// when the Mac has one, the main screen otherwise.
+    var display: String? {
+        didSet { store.set(display, forKey: Key.display) }
+    }
+
+    /// The chosen display's name, kept so the picker can still say which one
+    /// it is while that monitor is unplugged.
+    var displayName: String? {
+        didSet { store.set(displayName, forKey: Key.displayName) }
+    }
+
     /// Which language the app draws itself in. English unless somebody picks
     /// another one — never "whatever the Mac is set to".
     ///
@@ -236,6 +248,8 @@ final class Preferences {
         border = (store.string(forKey: Key.border).flatMap(BorderEffect.init(rawValue:)))
             ?? Default.border
         bordersOn = store.object(forKey: Key.bordersOn) as? Bool ?? Default.bordersOn
+        display = store.string(forKey: Key.display)
+        displayName = store.string(forKey: Key.displayName)
         // A first launch has nothing stored and lands on English. A local first:
         // reading the property back counts as using `self`, and the rest of the
         // stored properties are not set yet.
@@ -326,6 +340,8 @@ final class Preferences {
         static func warnAt(_ source: SourceID) -> String { "pref.warnAt.\(source.rawValue)" }
         static func criticalAt(_ source: SourceID) -> String { "pref.criticalAt.\(source.rawValue)" }
         static let hiddenFromCard = "pref.hiddenFromCard"
+        static let display = "pref.display"
+        static let displayName = "pref.displayName"
         static let sharedWarnAt = "pref.warnAt"
         static let sharedCriticalAt = "pref.criticalAt"
         /// Named for what it used to do — it fires at the watch mark as well

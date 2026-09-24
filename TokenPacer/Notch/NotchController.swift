@@ -158,6 +158,19 @@ final class NotchController {
             forName: NSWorkspace.activeSpaceDidChangeNotification,
             object: nil, queue: .main
         ) { [weak self] _ in MainActor.assumeIsolated { self?.reanchor() } })
+
+        watchDisplayChoice()
+    }
+
+    /// The screen picked in Settings. Observation fires once per registration,
+    /// so each change re-arms it.
+    private func watchDisplayChoice() {
+        withObservationTracking { _ = preferences.display } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.reanchor()
+                self?.watchDisplayChoice()
+            }
+        }
     }
 
     /// A non-activating panel never sees a keystroke unless it is key, and it
@@ -216,7 +229,8 @@ final class NotchController {
 
     private func reanchor() {
         guard let screen = NotchAnchor.preferred(
-            from: NSScreen.screens.map(\.metrics), main: NSScreen.main?.metrics
+            from: NSScreen.screens.map(\.metrics), main: NSScreen.main?.metrics,
+            chosen: preferences.display
         ) else { return }
         metrics = screen
         model.band = NotchAnchor.band(screen)     // publishes chrome, which fits the window
@@ -298,7 +312,8 @@ extension NSScreen {
             // gap at the top is the row itself. An accessory app has no main menu
             // to ask, and `NSStatusBar.thickness` answers a different question.
             menuBarHeight: frame.maxY - visibleFrame.maxY,
-            isBuiltIn: isBuiltIn
+            isBuiltIn: isBuiltIn,
+            id: displayUUID ?? ""
         )
     }
 

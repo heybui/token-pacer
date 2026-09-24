@@ -192,3 +192,15 @@ private let external = ScreenMetrics(
     #expect(NotchAnchor.preferred(from: [external], main: external) == external)
     #expect(NotchAnchor.preferred(from: [], main: nil) == nil)
 }
+
+@Test func aChosenScreenWinsWhileConnected() {
+    var laptop = builtIn
+    laptop.id = "LAPTOP"
+    var monitor = external
+    monitor.id = "MONITOR"
+
+    #expect(NotchAnchor.preferred(from: [laptop, monitor], main: laptop, chosen: "MONITOR") == monitor)
+    // Unplugged: back to the notch, not nowhere.
+    #expect(NotchAnchor.preferred(from: [laptop], main: laptop, chosen: "MONITOR") == laptop)
+    #expect(NotchAnchor.preferred(from: [laptop, monitor], main: monitor, chosen: nil) == laptop)
+}

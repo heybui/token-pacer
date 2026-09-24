@@ -170,6 +170,22 @@ private struct GeneralPane: View {
     @State private var installed: Set<SourceID> = []
     @State private var launchEnabled = false
     @State private var updatesAutomatically = true
+    @State private var screens: [DisplayOption] = []
+
+    /// The id and the name move together, so an unplugged choice keeps its name.
+    private var displayChoice: Binding<String?> {
+        Binding(
+            get: { preferences.display },
+            set: { id in
+                preferences.display = id
+                if let id, let name = screens.first(where: { $0.id == id })?.name {
+                    preferences.displayName = name
+                } else if id == nil {
+                    preferences.displayName = nil
+                }
+            }
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -338,6 +354,28 @@ private struct GeneralPane: View {
                         }
                         .labelsHidden()
                         .fixedSize()
+                    }
+                }
+                row("Show on", note: AttributedString(localized: "Automatic is the notch, or the main screen without one")) {
+                    Picker("Show on", selection: displayChoice) {
+                        Text("Automatic").tag(String?.none)
+                        ForEach(screens) { screen in
+                            Text(verbatim: screen.name).tag(Optional(screen.id))
+                        }
+                        // Unplugged: still named, so the choice is not silently
+                        // lost. The pill is on the automatic screen meanwhile.
+                        if let id = preferences.display, !screens.contains(where: { $0.id == id }) {
+                            Text("\(preferences.displayName ?? String(localized: "Display")) (not connected)")
+                                .tag(Optional(id))
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .task {
+                        screens = Displays.connected()
+                        for await _ in NotificationCenter.default.notifications(named: Displays.didChange) {
+                            screens = Displays.connected()
+                        }
                     }
                 }
                 row("Launch at login") {

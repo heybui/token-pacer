@@ -13,6 +13,9 @@ struct ScreenMetrics: Equatable, Sendable {
     /// Only the panel wired into the Mac can have a notch. Nothing else in these
     /// metrics can tell an external display apart from the built-in one.
     var isBuiltIn: Bool = false
+    /// The display's UUID: stable across unplugging and reconnecting, which the
+    /// `NSScreenNumber` is not. What a chosen screen is remembered by.
+    var id: String = ""
 }
 
 /// The strip the shell lives in, and the hardware it works around.
@@ -55,8 +58,14 @@ enum NotchAnchor {
     /// the whole product, and `NSScreen.main` is the screen holding the key
     /// window, which for an app with no windows is whatever was focused last.
     /// Clamshell or a desktop Mac falls back to the main screen.
-    static func preferred(from screens: [ScreenMetrics], main: ScreenMetrics?) -> ScreenMetrics? {
-        screens.first { notchWidth($0) != nil } ?? main ?? screens.first
+    ///
+    /// A screen the user picked wins while it is connected. Unplugged, the pill
+    /// falls back to the rule above and returns when it comes back.
+    static func preferred(
+        from screens: [ScreenMetrics], main: ScreenMetrics?, chosen: String? = nil
+    ) -> ScreenMetrics? {
+        if let chosen, let screen = screens.first(where: { $0.id == chosen }) { return screen }
+        return screens.first { notchWidth($0) != nil } ?? main ?? screens.first
     }
 
     /// The hardware itself: the hole the shell reaches around, and the one
