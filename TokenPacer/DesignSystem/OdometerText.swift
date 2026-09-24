@@ -59,6 +59,10 @@ private struct DigitStrip: View {
         .offset(y: -CGFloat(value) * height)
         .frame(width: width, height: height, alignment: .top)
         .clipped()
+        // `clipped` cuts the drawing, not the hit area. The other nine digits
+        // hung invisibly below the band's countdown and swallowed the card's
+        // Check again button under it.
+        .contentShape(.rect)
         .blur(radius: settled ? 0 : 0.5)
         // 0.48, not the board's 0.34: at a third of a second the roll read as a
         // number replacing itself rather than a wheel turning, and the blur it is
