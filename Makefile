@@ -273,12 +273,19 @@ cask: $(DMG)
 	'  version "$(VERSION)"' \
 	'  sha256 "$(shell shasum -a 256 $(DMG) | cut -d" " -f1)"' \
 	'' \
-	'  url "$(RELEASE_URL)/v#{version}/$(APP)-#{version}.dmg"' \
+	'  url "$(RELEASE_URL)/v#{version}/$(APP)-#{version}.dmg",' \
+	'      verified: "github.com/$(SITE_REPO)/"' \
 	'  name "Token Pacer"' \
 	'  desc "Claude Code and Codex usage in the notch"' \
-	'  homepage "https://tokenpacer.com"' \
+	'  homepage "https://tokenpacer.com/"' \
 	'' \
-	'  depends_on macos: ">= :sequoia"' \
+	'  livecheck do' \
+	'    url "https://tokenpacer.com/appcast.xml"' \
+	'    strategy :sparkle, &:short_version' \
+	'  end' \
+	'' \
+	'  auto_updates true' \
+	'  depends_on macos: :sequoia' \
 	'' \
 	'  app "$(APP).app"' \
 	'' \
