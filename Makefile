@@ -46,8 +46,8 @@ DMG     := build/$(APP)-$(VERSION).dmg
 ## tap carries the cask. Both are checked out beside this one.
 SITE_REPO ?= heybui/tokenpacer.com
 SITE_DIR  ?= ../tokenpacer.com
-TAP_REPO  ?= redevify/homebrew-tap
-TAP_DIR   ?= ../homebrew-tap
+HOMEBREW_TAP_REPO ?= redevify/homebrew-tap
+HOMEBREW_TAP_DIR  ?= ../homebrew-tap
 ## Per release, so it is never the URL baked into a build — only the feed is that,
 ## and the feed is the domain.
 RELEASE_URL := https://github.com/$(SITE_REPO)/releases/download
@@ -345,15 +345,15 @@ release:
 	@# are how anyone actually gets the app. A release must not fail because
 	@# the tap is not checked out beside this repo — which is also what lets
 	@# CI run this same target without one.
-	@if [ -d "$(TAP_DIR)/.git" ]; then \
-	  mkdir -p $(TAP_DIR)/Casks; \
-	  cp build/token-pacer.rb $(TAP_DIR)/Casks/token-pacer.rb; \
-	  git -C $(TAP_DIR) add Casks/token-pacer.rb; \
-	  git -C $(TAP_DIR) diff --cached --quiet \
-	    || git -C $(TAP_DIR) commit -m "token-pacer $(VERSION)"; \
-	  git -C $(TAP_DIR) push; \
+	@if [ -d "$(HOMEBREW_TAP_DIR)/.git" ]; then \
+	  mkdir -p $(HOMEBREW_TAP_DIR)/Casks; \
+	  cp build/token-pacer.rb $(HOMEBREW_TAP_DIR)/Casks/token-pacer.rb; \
+	  git -C $(HOMEBREW_TAP_DIR) add Casks/token-pacer.rb; \
+	  git -C $(HOMEBREW_TAP_DIR) diff --cached --quiet \
+	    || git -C $(HOMEBREW_TAP_DIR) commit -m "token-pacer $(VERSION)"; \
+	  git -C $(HOMEBREW_TAP_DIR) push; \
 	else \
-	  echo "No tap at $(TAP_DIR) — skipped the cask; build/token-pacer.rb is ready."; \
+	  echo "No tap at $(HOMEBREW_TAP_DIR) — skipped the cask; build/token-pacer.rb is ready."; \
 	fi
 	@echo "→ released $(APP) $(VERSION)"
 

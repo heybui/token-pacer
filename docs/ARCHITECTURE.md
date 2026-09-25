@@ -482,8 +482,8 @@ distribution surface, both checked out beside this one:
 | `redevify/homebrew-tap` | `Casks/token-pacer.rb` | `brew tap redevify/tap` |
 
 The feed is served from the domain, never from the release it ships with: a build
-polls the URL it was compiled with for ever. `SITE_REPO`, `SITE_DIR`, `TAP_REPO`
-and `TAP_DIR` in the Makefile are the only knobs.
+polls the URL it was compiled with for ever. `SITE_REPO`, `SITE_DIR`, `HOMEBREW_TAP_REPO`
+and `HOMEBREW_TAP_DIR` in the Makefile are the only knobs.
 
 **Publishing a release in this repo is the release.** Its tag names the version
 and its body is the notes. The workflow hands the tag to `make` as `VERSION`,
