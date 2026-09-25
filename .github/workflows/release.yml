@@ -195,6 +195,8 @@ jobs:
           GH_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
           SITE_REPO: ${{ vars.SITE_REPO || 'heybui/tokenpacer.com' }}
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO || 'redevify/homebrew-tap' }}
         run: |
           set -euo pipefail
 
@@ -207,6 +209,17 @@ jobs:
           git clone --depth 1 \
             "https://x-access-token:$GH_TOKEN@github.com/$SITE_REPO.git" "$RUNNER_TEMP/site"
 
+          # The tap lives in another owner's account, so it takes its own token: a
+          # fine-grained one is scoped to a single owner. Optional on purpose —
+          # `make release` skips the cask when there is no checkout, and a
+          # release must not fail over the convenience channel.
+          if [ -n "$HOMEBREW_TAP_TOKEN" ]; then
+            git clone --depth 1 \
+              "https://x-access-token:$HOMEBREW_TAP_TOKEN@github.com/$HOMEBREW_TAP_REPO.git" "$RUNNER_TEMP/tap"
+          else
+            echo "::warning::HOMEBREW_TAP_TOKEN is unset — the cask is built but not pushed."
+          fi
+
           # Sparkle reads this from the login Keychain, which a runner has none of.
           printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key"
           trap 'rm -f "$RUNNER_TEMP/sparkle.key"' EXIT
@@ -214,6 +227,7 @@ jobs:
           make release \
             VERSION="${{ steps.version.outputs.version }}" \
             SITE_DIR="$RUNNER_TEMP/site" \
+            HOMEBREW_TAP_DIR="$RUNNER_TEMP/tap" \
             NOTARY_ARGS="--keychain-profile token-pacer --keychain $KEYCHAIN --timeout 12m" \
             APPCAST_ARGS="--ed-key-file $RUNNER_TEMP/sparkle.key"
 
