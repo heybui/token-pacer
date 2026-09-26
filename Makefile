@@ -273,8 +273,7 @@ cask: $(DMG)
 	'  version "$(VERSION)"' \
 	'  sha256 "$(shell shasum -a 256 $(DMG) | cut -d" " -f1)"' \
 	'' \
-	'  url "$(RELEASE_URL)/v#{version}/$(APP)-#{version}.dmg",' \
-	'      verified: "github.com/$(SITE_REPO)/"' \
+	'  url "$(RELEASE_URL)/v#{version}/$(APP)-#{version}.dmg"' \
 	'  name "Token Pacer"' \
 	'  desc "Claude Code and Codex usage in the notch"' \
 	'  homepage "https://tokenpacer.com/"' \
