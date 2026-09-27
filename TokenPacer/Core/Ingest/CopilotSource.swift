@@ -23,6 +23,12 @@ import SQLite3
 ///          total_cached_tokens, total_reasoning_tokens)
 /// ```
 ///
+/// Not every Copilot writes that table. The CLI (1.0.89 on the machine this
+/// was checked on) never puts its sessions in `data.db` at all; it logs each
+/// one to `session-state/<id>/events.jsonl`, which marks every turn outright
+/// with `assistant.turn_start` and `assistant.turn_end`. So the running signal
+/// is either one, merged by session id — some sessions appear in both.
+///
 /// What that costs, stated plainly: these are **running totals**, not a row per
 /// request. A session's growth between two polls becomes one event stamped
 /// `updated_at`, so Copilot's sparkline and splits are as fine as the poll where
@@ -41,15 +47,29 @@ actor CopilotSource: UsageSource {
     private let cutoff: Date?
     /// How much of each session has already been turned into events.
     private var emitted: [String: Totals] = [:]
-    /// `updated_at` of every session the last query found running.
-    private var running: [Date] = []
+    /// `updated_at` of every session the last query found running, by id.
+    private var running: [String: Date] = [:]
+
+    /// The CLI's per-session event logs. Read for turn markers only.
+    private let sessions: URL
+    private var scanner = LogScanner()
+    private let changed: ChangeGate?
+    private var lastScan = Date.distantPast
+
+    /// As Claude's: the watcher is a shortcut, never the only way a write is
+    /// noticed. See `ClaudeCodeSource.scanAtLeastEvery`.
+    private static let scanAtLeastEvery: TimeInterval = 60
 
     init(
         store: URL = AgentHome.copilot.appending(path: "data.db"),
-        retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600
+        sessions: URL = AgentHome.copilot.appending(path: "session-state"),
+        retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600,
+        changed: ChangeGate? = nil
     ) {
         self.store = store
+        self.sessions = sessions
         self.cutoff = retention.map { Date.now.addingTimeInterval(-$0) }
+        self.changed = changed
     }
 
     // MARK: - Resuming
@@ -87,14 +107,25 @@ actor CopilotSource: UsageSource {
             events = read()
         }
 
+        if changed?() ?? true || now.timeIntervalSince(lastScan) >= Self.scanAtLeastEvery {
+            lastScan = now
+            // Nothing to decode: usage still comes from the table above.
+            _ = try? scanner.scan(root: sessions, since: cutoff) { _, _ in [] }
+        }
+
+        // `is_running` outlives a crash — a session killed mid-turn keeps the
+        // flag set — so it is believed only while its row is still moving, on
+        // the same in-flight cap every other provider's dot uses. The scanner
+        // applies that cap to the logs itself.
+        let flagged = running.filter {
+            now.timeIntervalSince($0.value) < SnapshotBuilder.inFlightWindow
+        }.keys
+        let logged = scanner.workingFiles(at: now).map {
+            $0.deletingLastPathComponent().lastPathComponent
+        }
         return SourceSnapshot(
             source: .copilot, events: events, limits: nil,
-            // `is_running` outlives a crash — a session killed mid-turn keeps
-            // the flag set — so it is believed only while its row is still
-            // moving, on the same in-flight cap every other provider's dot uses.
-            workingSessions: running.count {
-                now.timeIntervalSince($0) < SnapshotBuilder.inFlightWindow
-            }
+            workingSessions: Set(flagged).union(logged).count
         )
     }
 
@@ -115,12 +146,12 @@ actor CopilotSource: UsageSource {
         sqlite3_bind_text(statement, 1, since, -1, Self.transient)
 
         var events: [UsageEvent] = []
-        running = []
+        running = [:]
         while sqlite3_step(statement) == SQLITE_ROW {
             guard let session = text(statement, 0),
                   let stamp = text(statement, 2).flatMap(ISO8601.parse)
             else { continue }
-            if sqlite3_column_int(statement, 3) == 1 { running.append(stamp) }
+            if sqlite3_column_int(statement, 3) == 1 { running[session] = stamp }
 
             let totals = Totals(
                 input: count(statement, 4), output: count(statement, 5),

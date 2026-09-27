@@ -103,6 +103,7 @@ final class LogWatcher: @unchecked Sendable {
         // have woken both sources whenever either wrote.
         let claude = LogWatcher(root: AgentHome.claude.appending(path: "projects"))
         let codex = LogWatcher(root: AgentHome.codex.appending(path: "sessions"))
+        let copilot = LogWatcher(root: AgentHome.copilot.appending(path: "session-state"))
 
         // A root with no watcher falls back to scanning every tick, which is the
         // behaviour this replaced — it costs the CPU this saves, never accuracy.
@@ -110,13 +111,13 @@ final class LogWatcher: @unchecked Sendable {
             [
                 ClaudeCodeSource(changed: Self.gate(claude)),
                 CodexSource(changed: Self.gate(codex)),
-                // Unwatched on purpose: `~/.copilot` holds a sqlite database and
-                // eighty process logs, and waking the store for every write to
-                // any of them would cost more than the one file is worth. It is
-                // a `stat` a tick, and a decode only when that file moved.
-                CopilotSource(),
+                // Only `session-state` is watched: the rest of `~/.copilot`
+                // holds a sqlite database and eighty process logs, and waking
+                // for every write to them would cost more than `data.db` is
+                // worth. That one file stays a `stat` a tick.
+                CopilotSource(changed: Self.gate(copilot)),
             ],
-            [claude, codex].compactMap(\.self)
+            [claude, codex, copilot].compactMap(\.self)
         )
     }
 

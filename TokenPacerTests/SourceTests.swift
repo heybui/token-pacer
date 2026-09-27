@@ -336,6 +336,10 @@ private actor SlowSource: UsageSource {
     #expect(events.first?.project == "thing")
 }
 
+/// Copilot's tests read no event logs unless they say so: the default is the
+/// machine's own `~/.copilot`, where a live CLI would move the count.
+private let noSessions = URL(filePath: "/nope/session-state")
+
 /// A schema-faithful `data.db`: what Copilot writes, in the columns it writes
 /// it in.
 private func copilotStore(_ rows: String) throws -> URL {
@@ -406,17 +410,41 @@ private func bump(
         \(copilotSession("c", running: true, minutesAgo: 60))
         """)
 
-    let snapshot = try await CopilotSource(store: store).poll()
+    let snapshot = try await CopilotSource(store: store, sessions: noSessions).poll()
     #expect(snapshot.workingSessions == 1)
     // Every session is met for the first time, so every one is baselined.
     #expect(snapshot.events.isEmpty)
     #expect(snapshot.limits == nil)
 }
 
+/// The CLI never writes `data.db`; its turns are in `events.jsonl`. A turn
+/// opened and not yet closed is a job, one that ended is not — and a session
+/// both places know about is still one session.
+@Test func copilotCountsTheCLISessionsWhoseTurnIsOpen() async throws {
+    let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    func log(_ id: String, _ types: [String]) throws {
+        let folder = root.appending(path: id)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let stamp = Date.now.ISO8601Format()
+        let lines = types.map { #"{"type":"\#($0)","data":{},"timestamp":"\#(stamp)"}"# }
+        try (lines.joined(separator: "\n") + "\n")
+            .write(to: folder.appending(path: "events.jsonl"), atomically: true, encoding: .utf8)
+    }
+    // Same millisecond, end then start: the agent loop going round again.
+    try log("open", ["user.message", "assistant.turn_start", "assistant.turn_end", "assistant.turn_start", "tool.execution_start"])
+    try log("done", ["assistant.turn_start", "assistant.message", "assistant.turn_end", "session.usage_checkpoint"])
+    try log("both", ["assistant.turn_start"])
+    let store = try copilotStore(copilotSession("both", running: true, minutesAgo: 0))
+
+    let snapshot = try await CopilotSource(store: store, sessions: root).poll()
+    #expect(snapshot.workingSessions == 2)
+}
+
 /// A machine that has never run Copilot has no such database, which is not an
 /// error: the panel is what says whether the CLI is there.
 @Test func aMissingCopilotStoreIsQuiet() async throws {
-    let snapshot = try await CopilotSource(store: URL(filePath: "/nope/data.db")).poll()
+    let snapshot = try await CopilotSource(store: URL(filePath: "/nope/data.db"), sessions: noSessions).poll()
     #expect(snapshot.workingSessions == 0)
     #expect(snapshot.events.isEmpty)
 }
@@ -452,7 +480,7 @@ private func bump(
     let store = try copilotStore(copilotSession(
         "s1", project: "p1", input: 103_398, output: 63, cached: 101_734
     ))
-    let source = CopilotSource(store: store)
+    let source = CopilotSource(store: store, sessions: noSessions)
 
     // First sight of the session is a baseline, not 103,398 tokens today.
     #expect(try await source.poll().events.isEmpty)
@@ -482,7 +510,7 @@ private func bump(
         \(copilotSession("s1", project: "p2", output: 1))
         \(copilotSession("s2", output: 1))
         """)
-    let source = CopilotSource(store: store)
+    let source = CopilotSource(store: store, sessions: noSessions)
     _ = try await source.poll()
 
     try bump(store, "s1", output: 11)
@@ -498,13 +526,13 @@ private func bump(
 /// archived event ids carry it, because an id *is* the totals it moved to.
 @Test func copilotResumesFromTheWatermarkInItsEventIds() async throws {
     let store = try copilotStore(copilotSession("s1", project: "p1", output: 100))
-    let source = CopilotSource(store: store)
+    let source = CopilotSource(store: store, sessions: noSessions)
     _ = try await source.poll()
     try bump(store, "s1", input: 10, output: 200, cached: 4, reasoning: 1)
     let first = try await source.poll().events
     #expect(first.count == 1)
 
-    let resumed = CopilotSource(store: store)
+    let resumed = CopilotSource(store: store, sessions: noSessions)
     await resumed.restore(cursors: [:], seen: Set(first.map(\.id)))
     // Same totals as the id already claims: no growth, so no event — and no
     // replay of the 100 output tokens the first pass already counted.
@@ -518,7 +546,7 @@ private func bump(
 /// than the one already counted. A negative delta is not usage.
 @Test func copilotNeverCountsARowThatWentBackwards() async throws {
     let store = try copilotStore(copilotSession("s1", output: 100))
-    let source = CopilotSource(store: store)
+    let source = CopilotSource(store: store, sessions: noSessions)
     _ = try await source.poll()
     try bump(store, "s1", output: 20)
     #expect(try await source.poll().events.isEmpty)

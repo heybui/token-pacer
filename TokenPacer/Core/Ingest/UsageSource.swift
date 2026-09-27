@@ -38,14 +38,18 @@ struct LogActivity: Equatable, Sendable {
     var turnAt: Date?
     var turnEnded = false
 
-    /// The lines that open and close a turn, in both formats. Two thirds of a
-    /// session log is bookkeeping — `ai-title`, `mode`, `queue-operation`,
-    /// `attachment`, `item_completed` — so only these four answer the question.
+    /// The lines that open and close a turn, in all three formats. Two thirds
+    /// of a session log is bookkeeping — `ai-title`, `mode`, `queue-operation`,
+    /// `attachment`, `item_completed` — so only these answer the question.
     ///
     /// Claude marks a turn with the conversation itself: a `user` line opens
     /// one, an `assistant` line that did not stop for a tool closes it. Codex
-    /// says so outright, one level down, in `payload.type`.
-    static let turnMarkers: Set<String> = ["user", "assistant", "task_started", "task_complete"]
+    /// says so outright, one level down, in `payload.type`. Copilot says so
+    /// outright at the top level.
+    static let turnMarkers: Set<String> = [
+        "user", "assistant", "task_started", "task_complete",
+        "assistant.turn_start", "assistant.turn_end",
+    ]
 
     /// A prompt or a tool result with no answer yet, or an assistant line that
     /// stopped to run a tool. Both mean work is happening with nothing logged.
@@ -83,11 +87,15 @@ struct LogScanner {
     /// Capped at the same in-flight window the dot uses: a CLI killed mid-turn
     /// leaves its last line looking like work that never finished, and a log
     /// that has said nothing for a quarter of an hour is not a job in progress.
-    func working(at now: Date) -> Int {
-        activityByFile.values.count {
-            $0.isAwaitingResponse
-                && now.timeIntervalSince($0.lastLineAt) < SnapshotBuilder.inFlightWindow
-        }
+    func working(at now: Date) -> Int { workingFiles(at: now).count }
+
+    /// The logs behind `working`, for a source that has to merge them with
+    /// another signal without counting one session twice.
+    func workingFiles(at now: Date) -> [URL] {
+        activityByFile.filter {
+            $0.value.isAwaitingResponse
+                && now.timeIntervalSince($0.value.lastLineAt) < SnapshotBuilder.inFlightWindow
+        }.map(\.key)
     }
 
     mutating func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {
@@ -115,7 +123,7 @@ struct LogScanner {
         var kind: String? { payload?.type ?? type }
 
         var endsTurn: Bool {
-            kind == "task_complete"
+            kind == "task_complete" || kind == "assistant.turn_end"
                 || (kind == "assistant" && message?.stop_reason != "tool_use")
         }
     }
@@ -153,7 +161,10 @@ struct LogScanner {
                       let kind = meta.kind, LogActivity.turnMarkers.contains(kind),
                       let stamp = meta.timestamp.flatMap(ISO8601.parse)
                 else { continue }
-                if stamp > (activityByFile[file]?.turnAt ?? .distantPast) {
+                // Not strictly newer: Copilot closes one turn and opens the
+                // next in the same millisecond, and a poll that lands between
+                // the two lines must still let the second one win.
+                if stamp >= (activityByFile[file]?.turnAt ?? .distantPast) {
                     activityByFile[file]?.turnAt = stamp
                     activityByFile[file]?.turnEnded = meta.endsTurn
                 }
