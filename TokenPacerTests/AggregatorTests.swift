@@ -62,12 +62,11 @@ private func event(
     #expect(rows[1].share == 25)
 }
 
-@Test func sharesKeepOnlyTheTopRows() {
+@Test func sharesKeepEveryRowLargestFirst() {
     let rows = Aggregator.shares(
         (1...5).map { event(minutesAgo: Double($0), output: $0 * 100, project: "p\($0)") }
     ) { $0.project ?? "—" }
-    #expect(rows.count == Aggregator.splitRows)
-    #expect(rows.map(\.name) == ["p5", "p4", "p3"])
+    #expect(rows.map(\.name) == ["p5", "p4", "p3", "p2", "p1"])
 }
 
 @Test func splitsDescribeTheOpenWindowOnly() {

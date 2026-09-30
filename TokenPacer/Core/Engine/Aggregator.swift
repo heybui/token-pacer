@@ -72,8 +72,6 @@ enum Aggregator {
     /// 26 bars, as the design draws.
     static let bucketCount = 26
     static let bucketSeconds: TimeInterval = 300
-    /// The design's three rows per split.
-    static let splitRows = 3
     /// A calendar grid makes a quarter legible in the space a week's list took.
     static let historyDays = 90
 
@@ -152,12 +150,12 @@ enum Aggregator {
         return buckets.map { $0 / peak }
     }
 
-    /// Top rows by weighted share. The tail is dropped rather than lumped into
-    /// "other": three named rows is what the design has room for.
+    /// Every row by weighted share, largest first. None is dropped: over a
+    /// week the project the last five hours were spent on can be a sliver, and
+    /// a top three hid it outright. The column scrolls instead.
     static func shares(
         _ events: [UsageEvent],
         weights: TokenWeights = .default,
-        limit: Int = splitRows,
         by key: (UsageEvent) -> String
     ) -> [UsageSplit] {
         var totals: [String: Double] = [:]
@@ -166,7 +164,7 @@ enum Aggregator {
         }
         let sum = totals.values.reduce(0, +)
         guard sum > 0 else { return [] }
-        // Spelled out in steps rather than one chain: map, sort, prefix and map
+        // Spelled out in steps rather than one chain: map, sort and map
         // together are more than the type checker will solve in reasonable time
         // on a dictionary, and it gives up rather than slowing down.
         var rows: [UsageSplit] = totals.map {
@@ -174,7 +172,7 @@ enum Aggregator {
         }
         // Name breaks the tie so equal shares don't reorder on every refresh.
         rows.sort { $0.share == $1.share ? $0.name < $1.name : $0.share > $1.share }
-        return Array(rows.prefix(limit))
+        return rows
     }
 
     static func history(

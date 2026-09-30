@@ -309,8 +309,10 @@ private struct SplitColumn: View {
     let title: LocalizedStringKey
     let rows: [UsageSplit]
 
-    /// The design's ranking colours: the leader stands out, the tail recedes.
-    private static let rank: [Color] = [Tokens.amber, Tokens.blue, .white.opacity(0.3)]
+    /// Four rows — a 15pt name, 4pt, a 3pt bar — and the 9pt between them.
+    /// By kind never has more than four, so the panel keeps the height it had
+    /// when every column stopped at its fourth row.
+    private static let listHeight: CGFloat = 4 * 22 + 3 * 9
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -322,6 +324,30 @@ private struct SplitColumn: View {
                     .font(Typography.sans(11.5))
                     .foregroundStyle(.white.opacity(0.3))
             }
+            // Every row, not a top three: a week can have a dozen projects.
+            // Short lists sit at their own height; a long one scrolls inside
+            // the height four rows take — By kind's four — so the panel never
+            // grows with the list.
+            ViewThatFits(in: .vertical) {
+                SplitRows(rows: rows)
+                // Clear of the scroller, which is drawn over the content.
+                ScrollView { SplitRows(rows: rows).padding(.trailing, 10) }
+                    .scrollIndicators(.visible)
+            }
+            .frame(maxHeight: Self.listHeight)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct SplitRows: View {
+    let rows: [UsageSplit]
+
+    /// The design's ranking colours: the leader stands out, the tail recedes.
+    private static let rank: [Color] = [Tokens.amber, Tokens.blue, .white.opacity(0.3)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -343,7 +369,6 @@ private struct SplitColumn: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
