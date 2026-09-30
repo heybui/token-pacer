@@ -17,6 +17,12 @@ actor CodexSource: UsageSource {
     /// Codex event was filed under "unknown" in the panel's own splits.
     private var modelByFile: [URL: String] = [:]
     private var latestLimits: RateLimits?
+    /// Whether a log writes `token_usage_record`. Codex before 0.153 did not,
+    /// and stated each request only as the `last_token_usage` of a
+    /// `token_count` — so six days of it were missing from the history grid.
+    /// Sniffed once per file, from the file itself: a relaunch resumes past
+    /// the first record, and the record always precedes its `token_count`.
+    private var writesRecords: [URL: Bool] = [:]
 
     private let cutoff: Date?
     private let changed: ChangeGate?
@@ -72,7 +78,7 @@ actor CodexSource: UsageSource {
     }
 
     private static let interesting = [
-        "token_usage_record", "rate_limits", "session_meta", "turn_context",
+        "token_usage_record", "token_count", "rate_limits", "session_meta", "turn_context",
     ]
 
     private func decode(_ line: Data, file: URL) -> [UsageEvent] {
@@ -98,9 +104,9 @@ actor CodexSource: UsageSource {
             return []
 
         case "event_msg":
-            // `token_count` carries the authoritative limits. Usage on this line is
-            // cumulative, so it is deliberately not turned into an event — that
-            // would double count against `token_usage_record`.
+            // `token_count` carries the authoritative limits. Its usage is an
+            // event only in a log that writes no `token_usage_record` — where
+            // there is one, counting both would double every request.
             // Newest wins, not last-read wins. `logFiles` walks the tree in
             // `FileManager.enumerator` order, which is unspecified, so two
             // sessions writing at once published whichever file the walk
@@ -111,25 +117,16 @@ actor CodexSource: UsageSource {
                stamp > (latestLimits?.observedAt ?? .distantPast) {
                 latestLimits = limits.normalised(observedAt: stamp)
             }
-            return []
+            return legacyUsage(row, at: stamp, file: file)
 
         case "token_usage_record":
+            writesRecords[file] = true
             guard let payload = row.payload,
                   let usage = payload.usage,
                   let responseID = payload.response_id
             else { return [] }
 
-            // `cached_input_tokens` is a SUBSET of `input_tokens` here, unlike
-            // Claude. Subtracting is what makes the two sources comparable.
-            let cacheRead = usage.cached_input_tokens ?? 0
-            let counts = TokenCounts(
-                input: max(0, (usage.input_tokens ?? 0) - cacheRead),
-                output: usage.output_tokens ?? 0,
-                cacheWrite: usage.cache_write_input_tokens ?? 0,
-                cacheRead: cacheRead,
-                // Also a subset, of output. Display only; never weighted again.
-                reasoning: usage.reasoning_output_tokens ?? 0
-            )
+            let counts = usage.counts
             guard counts.total > 0 else { return [] }
 
             return [UsageEvent(
@@ -149,6 +146,39 @@ actor CodexSource: UsageSource {
         }
     }
 
+    /// A request as a `token_count` states it, for a log with no records.
+    ///
+    /// Keyed by the running total it brought the session to: Codex repeats a
+    /// `token_count` when only the limits moved, and a repeat has the same
+    /// total, so `seen` drops it.
+    private func legacyUsage(_ row: Line, at stamp: Date, file: URL) -> [UsageEvent] {
+        guard let info = row.payload?.info,
+              let usage = info.last_token_usage,
+              let total = info.total_token_usage?.total_tokens,
+              !hasRecords(file)
+        else { return [] }
+        let counts = usage.counts
+        guard counts.total > 0 else { return [] }
+
+        return [UsageEvent(
+            id: "codex:\(file.deletingPathExtension().lastPathComponent):\(total)",
+            source: .codex,
+            timestamp: stamp,
+            model: modelByFile[file],
+            project: projectByFile[file],
+            sessionID: nil,
+            counts: counts
+        )]
+    }
+
+    private func hasRecords(_ file: URL) -> Bool {
+        if let known = writesRecords[file] { return known }
+        let found = (try? Data(contentsOf: file, options: .mappedIfSafe))?
+            .containsBytes(of: "\"token_usage_record\"") ?? false
+        writesRecords[file] = found
+        return found
+    }
+
     private struct Line: Decodable {
         let type: String?
         let timestamp: String?
@@ -161,6 +191,12 @@ actor CodexSource: UsageSource {
             let response_id: String?
             let usage: Usage?
             let rate_limits: Limits?
+            let info: Info?
+        }
+
+        struct Info: Decodable {
+            let last_token_usage: Usage?
+            let total_token_usage: Usage?
         }
 
         struct Usage: Decodable {
@@ -169,6 +205,21 @@ actor CodexSource: UsageSource {
             let cache_write_input_tokens: Int?
             let output_tokens: Int?
             let reasoning_output_tokens: Int?
+            let total_tokens: Int?
+
+            /// `cached_input_tokens` is a SUBSET of `input_tokens` here, unlike
+            /// Claude. Subtracting is what makes the two sources comparable.
+            var counts: TokenCounts {
+                let cacheRead = cached_input_tokens ?? 0
+                return TokenCounts(
+                    input: max(0, (input_tokens ?? 0) - cacheRead),
+                    output: output_tokens ?? 0,
+                    cacheWrite: cache_write_input_tokens ?? 0,
+                    cacheRead: cacheRead,
+                    // Also a subset, of output. Display only; never weighted again.
+                    reasoning: reasoning_output_tokens ?? 0
+                )
+            }
         }
 
         struct Limits: Decodable {

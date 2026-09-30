@@ -587,3 +587,46 @@ private func execute(_ database: URL, _ sql: String) throws {
     let snapshot = try await source.poll()
     #expect(snapshot.limits?.primary?.usedPercent == 80)
 }
+
+// MARK: - Codex before token_usage_record
+
+private func codexCount(_ stamp: String, total: Int, last: Int) -> String {
+    """
+    {"timestamp":"\(stamp)","type":"event_msg","payload":{"type":"token_count","info":{\
+    "total_token_usage":{"input_tokens":\(total),"output_tokens":0,"total_tokens":\(total)},\
+    "last_token_usage":{"input_tokens":\(last),"output_tokens":0,"total_tokens":\(last)}}}}
+    """
+}
+
+private func codexRecord(_ stamp: String, input: Int) -> String {
+    """
+    {"timestamp":"\(stamp)","type":"token_usage_record","payload":{"session_id":"s",\
+    "response_id":"resp_\(stamp)","usage":{"input_tokens":\(input),"output_tokens":0}}}
+    """
+}
+
+/// Codex before 0.153 wrote no `token_usage_record`, only `token_count`. Its
+/// `last_token_usage` is the request; a repeat with the same total is not.
+/// Where records exist, `token_count` never counts, or every request doubles.
+@Test func codexCountsTokenCountOnlyWhereThereAreNoRecords() async throws {
+    let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let old = [
+        codexCount("2026-09-01T10:00:00.000Z", total: 100, last: 100),
+        codexCount("2026-09-01T10:00:01.000Z", total: 100, last: 100),
+        codexCount("2026-09-01T10:00:02.000Z", total: 130, last: 30),
+    ]
+    let new = [
+        codexRecord("2026-09-21T10:00:00.000Z", input: 40),
+        codexCount("2026-09-21T10:00:00.100Z", total: 40, last: 40),
+    ]
+    try (old.joined(separator: "\n") + "\n")
+        .write(to: root.appending(path: "old.jsonl"), atomically: true, encoding: .utf8)
+    try (new.joined(separator: "\n") + "\n")
+        .write(to: root.appending(path: "new.jsonl"), atomically: true, encoding: .utf8)
+
+    let events = try await CodexSource(root: root, retention: nil).poll().events
+    #expect(events.map(\.counts.input).sorted() == [30, 40, 100])
+}
+
