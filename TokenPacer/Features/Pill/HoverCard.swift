@@ -90,21 +90,16 @@ struct HoverCard: View {
                         // goes once the card has been seen with it.
                         UpdatedLine(version: updatedTo) { caption = $0 }
                     } else if let snapshot, snapshot.sessionPercent != nil {
-                        // How old the figure is. Between readings the pill is
-                        // showing the last one unmoved, and saying so is the
-                        // difference between a stale number and a lying one.
-                        Text(reportedLabel(snapshot))
-                            .font(Typography.mono(9.5))
-                            .foregroundStyle(.white.opacity(0.34))
-                            .onHover { caption = $0 ? String(localized: "When the numbers were last read") : nil }
+                        // How old the figure is, and the way to make it younger:
+                        // past the five-minute floor, on request. The age is what
+                        // a reader wants refreshed, so it is the control itself.
+                        // Through its cooldown it greys out rather than going.
+                        CardButton(
+                            text: reportedLabel(snapshot),
+                            label: String(localized: "Click to read usage now"),
+                            availableAt: recheckAvailableAt, action: onRecheck
+                        ) { caption = $0 }
                     }
-                    // Past the five-minute floor, on request. Always in the
-                    // corner — through its cooldown it greys out rather than
-                    // going, so the control is where it was a minute ago.
-                    CardButton(
-                        symbol: "arrow.clockwise", label: String(localized: "Read usage now"),
-                        spins: true, availableAt: recheckAvailableAt, action: onRecheck
-                    ) { caption = $0 }
                 }
             }
 
@@ -284,7 +279,9 @@ private struct UpdatedLine: View {
 /// A control in the card's footer: an icon that says what it does on hover, in
 /// the same line the rows caption themselves into.
 private struct CardButton: View {
-    let symbol: String
+    var symbol = ""
+    /// Words in place of the symbol, set as the corner's quiet mono line.
+    var text: String?
     let label: String
     var tint: Color = .white.opacity(0.42)
     /// One turn on press. A reading takes seconds to come back and the panel
@@ -308,16 +305,23 @@ private struct CardButton: View {
             if spins { turns += 1 }
             action()
         } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(tint)
-                // Greyed, never gone: still there to point at, and its caption
-                // says when it comes back.
-                .opacity(isCooling ? 0.7 : 1)
-                .rotationEffect(.degrees(Double(turns) * 360))
-                .animation(.easeInOut(duration: 0.55), value: turns)
-                .frame(width: 18, height: 14)
-                .contentShape(.rect)
+            if let text {
+                Text(text)
+                    .font(Typography.mono(9.5))
+                    .foregroundStyle(.white.opacity(isCooling ? 0.24 : 0.34))
+                    .contentShape(.rect)
+            } else {
+                Image(systemName: symbol)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(tint)
+                    // Greyed, never gone: still there to point at, and its caption
+                    // says when it comes back.
+                    .opacity(isCooling ? 0.7 : 1)
+                    .rotationEffect(.degrees(Double(turns) * 360))
+                    .animation(.easeInOut(duration: 0.55), value: turns)
+                    .frame(width: 18, height: 14)
+                    .contentShape(.rect)
+            }
         }
         .buttonStyle(.plain)
         .disabled(isCooling)
