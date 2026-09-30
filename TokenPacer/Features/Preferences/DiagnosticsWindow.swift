@@ -93,7 +93,12 @@ struct DiagnosticsView: View {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(report, forType: .string)
                 }
+                // Drawn like every other word that does something in the app,
+                // so it answers the pointer the way they do.
+                .buttonStyle(.plain)
+                .foregroundStyle(report == nil ? .white.opacity(0.22) : Tokens.blue.opacity(0.9))
                 .disabled(report == nil)
+                .hoverChip(cornerRadius: 5, padding: 3, isActive: report != nil)
             }
             .font(Typography.sans(12))
         }
