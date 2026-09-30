@@ -418,7 +418,7 @@ private struct HistoryHeatmap: View {
     private func monthLabels(_ weeks: [Week]) -> some View {
         HStack(spacing: gap) {
             ForEach(Array(weeks.enumerated()), id: \.element.id) { index, week in
-                Text(startsNewMonth(index, in: weeks) ? week.id.formatted(.dateTime.month(.abbreviated)) : "")
+                Text(startsNewMonth(index, in: weeks) ? firstDay(week).formatted(.dateTime.month(.abbreviated)) : "")
                     .font(Typography.mono(9))
                     .foregroundStyle(.white.opacity(0.3))
                     .fixedSize()
@@ -427,10 +427,21 @@ private struct HistoryHeatmap: View {
         }
     }
 
+    /// The first day the column actually draws. The week's own start can sit
+    /// before the range, and naming the first column after it put "Jun" over a
+    /// column that shows only July.
+    private func firstDay(_ week: Week) -> Date {
+        week.days.lazy.compactMap { $0?.day }.first ?? week.id
+    }
+
     private func startsNewMonth(_ index: Int, in weeks: [Week]) -> Bool {
-        guard index > 0 else { return true }
-        return Self.calendar.component(.month, from: weeks[index].id)
-            != Self.calendar.component(.month, from: weeks[index - 1].id)
+        func month(_ index: Int) -> Int {
+            Self.calendar.component(.month, from: firstDay(weeks[index]))
+        }
+        // The first column is named only if the next one is not: a label is
+        // wider than a cell, so two adjacent ones overlap into "Jun Jul".
+        guard index > 0 else { return weeks.count < 2 || month(0) == month(1) }
+        return month(index) != month(index - 1)
     }
 
     private func weekdayName(_ row: Int) -> String {
