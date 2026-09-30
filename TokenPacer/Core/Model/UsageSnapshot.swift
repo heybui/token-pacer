@@ -110,7 +110,8 @@ enum SnapshotBuilder {
             snapshot.resetsAt = current?.end
         }
 
-        if let secondary = limits?.secondary.flatMap({ $0.resetsAt > now ? $0 : nil }) {
+        let secondary = limits?.secondary.flatMap { $0.resetsAt > now ? $0 : nil }
+        if let secondary {
             snapshot.weeklyPercent = secondary.usedPercent
             snapshot.weeklyResetsAt = secondary.resetsAt
             snapshot.weeklyWindowMinutes = secondary.windowMinutes
@@ -123,7 +124,8 @@ enum SnapshotBuilder {
         // panel alone, which is shut almost always. On the 5s tick it was the
         // most expensive thing the app did, and it grew with the history.
         snapshot.panel = panel ?? Aggregator.panel(
-            events: events, window: splitSpan, at: now, weights: weights
+            events: events, window: splitSpan, weeklyWindow: secondary?.span,
+            at: now, weights: weights
         )
 
         return snapshot

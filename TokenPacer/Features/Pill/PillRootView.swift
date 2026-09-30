@@ -113,6 +113,8 @@ struct PillRootView: View {
             jobsBySource: jobsBySource,
             zones: zones,
             onPin: { preferences.pillSource = $0 },
+            splitWindow: preferences.splitWindow,
+            onSplitWindow: { preferences.splitWindow = $0 },
             workingSessions: workingSessions,
             updateVersion: updater?.pendingVersion,
             onInstallUpdate: { updater?.checkForUpdates() },

@@ -11,6 +11,10 @@ struct PinnedPanelView: View {
     var providers: [UsageSnapshot] = []
     var errors: [SourceID: String] = [:]
     var zones: [SourceID: ToneScale] = [:]
+    /// Which limit the splits describe. A preference, so it is handed in and
+    /// changed through the owner rather than held here.
+    var splitWindow: SplitWindow = .session
+    var onSplitWindow: (SplitWindow) -> Void = { _ in }
 
     /// Which provider is being read about, when it is not the pinned one.
     ///
@@ -221,10 +225,24 @@ struct PinnedPanelView: View {
     // MARK: - splits
 
     private var splits: some View {
-        HStack(alignment: .top, spacing: 22) {
-            SplitColumn(title: "By model", rows: panel.byModel)
-            SplitColumn(title: "By project", rows: panel.byProject)
-            SplitColumn(title: "By kind", rows: panel.byKind)
+        let rows = panel.splits(for: splitWindow)
+        return HStack(alignment: .top, spacing: 22) {
+            SplitColumn(title: "By model", rows: rows.byModel)
+            SplitColumn(title: "By project", rows: rows.byProject)
+            SplitColumn(title: "By kind", rows: rows.byKind)
+        }
+        // On the titles' own line, so choosing a window costs the panel no
+        // height. Only where there is a second window to choose.
+        .overlay(alignment: .topTrailing) {
+            if panel.weekly != nil {
+                SplitWindowPicker(
+                    selection: splitWindow,
+                    sessionMinutes: shown?.windowMinutes,
+                    weeklyMinutes: shown?.weeklyWindowMinutes,
+                    onPick: onSplitWindow
+                )
+                .offset(y: -3)
+            }
         }
     }
 

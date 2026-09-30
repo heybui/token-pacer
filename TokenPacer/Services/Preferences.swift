@@ -86,6 +86,13 @@ final class Preferences {
         didSet { store.set(bordersOn, forKey: Key.bordersOn) }
     }
 
+    /// Which limit the panel's splits describe. One choice for every provider,
+    /// and one that falls back to the headline's window on a provider with no
+    /// longer cap, so it never has to be made twice.
+    var splitWindow: SplitWindow {
+        didSet { store.set(splitWindow.rawValue, forKey: Key.splitWindow) }
+    }
+
     /// Whether the menu bar carries the figure as well as the mark.
     ///
     /// Off leaves the mark alone out there — which is the whole reading for
@@ -248,6 +255,8 @@ final class Preferences {
         border = (store.string(forKey: Key.border).flatMap(BorderEffect.init(rawValue:)))
             ?? Default.border
         bordersOn = store.object(forKey: Key.bordersOn) as? Bool ?? Default.bordersOn
+        splitWindow = store.string(forKey: Key.splitWindow).flatMap(SplitWindow.init(rawValue:))
+            ?? Default.splitWindow
         display = store.string(forKey: Key.display)
         displayName = store.string(forKey: Key.displayName)
         // A first launch has nothing stored and lands on English. A local first:
@@ -326,6 +335,7 @@ final class Preferences {
         static let showsJobCount = true
         static let border = BorderEffect.comet
         static let bordersOn = true
+        static let splitWindow = SplitWindow.session
         /// Not a default setting any more — the floor under detection, for a Mac
         /// with no CLI on it at all.
         static let everySource = Set(SourceID.allCases)
@@ -355,6 +365,7 @@ final class Preferences {
         static let showsJobCount = "pref.showsJobCount"
         static let border = "pref.border"
         static let bordersOn = "pref.bordersOn"
+        static let splitWindow = "pref.splitWindow"
         static let language = "pref.language"
         static let pillSource = "pref.pillSource"
     }

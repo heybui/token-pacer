@@ -18,6 +18,22 @@ struct DayUsage: Equatable, Sendable, Identifiable {
 }
 
 /// Everything the pinned panel draws that the headline figures don't already carry.
+/// Which limit the panel's three splits describe.
+enum SplitWindow: String, CaseIterable, Sendable {
+    /// The headline's own window: five hours on most plans, a month on a
+    /// credit budget.
+    case session
+    /// The longer cap beside it, where the account has one.
+    case weekly
+}
+
+/// The three splits for one window.
+struct WindowSplits: Equatable, Sendable {
+    var byModel: [UsageSplit] = []
+    var byProject: [UsageSplit] = []
+    var byKind: [UsageSplit] = []
+}
+
 struct PanelData: Equatable, Sendable {
     /// Weighted tokens per 5-minute bucket, oldest first, scaled 0–1 against the
     /// tallest bucket. Ready to multiply by a bar height.
@@ -29,9 +45,20 @@ struct PanelData: Equatable, Sendable {
     /// a tenth of a fresh one, so the kind that is most of the raw traffic can
     /// be a sliver of the percentage.
     var byKind: [UsageSplit] = []
+    /// The same three over the longer cap. Built alongside rather than on
+    /// demand, so switching between them is instant and the tick never learns
+    /// which one is on screen. Nil where the account has no second window.
+    var weekly: WindowSplits?
     var history: [DayUsage] = []
 
     static let empty = PanelData()
+
+    /// The splits for `window`, falling back to the headline's where the
+    /// longer cap does not exist.
+    func splits(for window: SplitWindow) -> WindowSplits {
+        if window == .weekly, let weekly { return weekly }
+        return WindowSplits(byModel: byModel, byProject: byProject, byKind: byKind)
+    }
 }
 
 /// Folds raw events into the shapes the panel reads. Pure: no I/O, no `Date.now`.
@@ -56,6 +83,8 @@ enum Aggregator {
         /// workspace on a credit budget is metered by the month, and the three
         /// columns have to cover the same period as the figure above them.
         window: DateInterval?,
+        /// The longer cap's span, for the panel's second set of splits.
+        weeklyWindow: DateInterval? = nil,
         at now: Date,
         weights: TokenWeights = .default,
         historyDays: Int = historyDays,
@@ -63,17 +92,28 @@ enum Aggregator {
     ) -> PanelData {
         // Splits describe the window on screen. With no window open there is
         // nothing to attribute, and last window's breakdown would be a lie.
+        let session = splits(events, in: window, weights: weights)
+        return PanelData(
+            sparkline: sparkline(events: events, at: now, weights: weights),
+            byModel: session.byModel,
+            byProject: session.byProject,
+            byKind: session.byKind,
+            weekly: weeklyWindow.map { splits(events, in: $0, weights: weights) },
+            history: history(events: events, at: now, days: historyDays,
+                             weights: weights, calendar: calendar)
+        )
+    }
+
+    static func splits(
+        _ events: [UsageEvent], in window: DateInterval?, weights: TokenWeights
+    ) -> WindowSplits {
         let inWindow = window.map { window in
             events.filter { $0.timestamp >= window.start && $0.timestamp < window.end }
         } ?? []
-
-        return PanelData(
-            sparkline: sparkline(events: events, at: now, weights: weights),
+        return WindowSplits(
             byModel: shares(inWindow, weights: weights) { Self.displayModel($0.model) },
             byProject: shares(inWindow, weights: weights) { $0.project ?? "—" },
-            byKind: mix(inWindow, weights: weights),
-            history: history(events: events, at: now, days: historyDays,
-                             weights: weights, calendar: calendar)
+            byKind: mix(inWindow, weights: weights)
         )
     }
 

@@ -56,6 +56,9 @@ struct PillView: View {
     /// own chrome is already drawn in the pinned provider's.
     var zones: [SourceID: ToneScale] = [:]
     var onPin: (SourceID) -> Void = { _ in }
+    /// Which limit the pinned panel's splits describe, and how it is changed.
+    var splitWindow: SplitWindow = .session
+    var onSplitWindow: (SplitWindow) -> Void = { _ in }
     /// Sessions with work in flight — anywhere on the machine, not only in this
     /// project, and across every tracked provider. Their own windows are behind something; the pill is
     /// the one thing always in sight that can say they are running at all.
@@ -348,6 +351,7 @@ struct PillView: View {
         case .pinned:
             PinnedPanelView(
                 snapshot: snapshot, providers: providers, errors: errors, zones: zones,
+                splitWindow: splitWindow, onSplitWindow: onSplitWindow,
                 viewing: $viewing,
                 mark: mark, attention: attention,
                 topInset: bodyTop, showsHeader: !spansNotch, onClose: onClose

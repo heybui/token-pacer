@@ -118,3 +118,22 @@ private func event(
     #expect(Aggregator.displayModel("") == "unknown")
     #expect(Aggregator.displayModel(nil) == "unknown")
 }
+
+/// The longer cap gets its own splits, built alongside the headline's, and
+/// asking for it where there is none falls back to the headline's.
+@Test func splitsAreBuiltForTheLongerCapToo() {
+    let recent = event(minutesAgo: 1, model: "now")
+    let older = event(minutesAgo: 3 * 24 * 60, model: "earlier")
+    let session = DateInterval(start: t0.addingTimeInterval(-3600), duration: 5 * 3600)
+    let week = DateInterval(start: t0.addingTimeInterval(-5 * 24 * 3600), duration: 7 * 24 * 3600)
+
+    let panel = Aggregator.panel(
+        events: [older, recent], window: session, weeklyWindow: week, at: t0
+    )
+    #expect(panel.splits(for: .session).byModel.map(\.name) == ["now"])
+    #expect(panel.splits(for: .weekly).byModel.map(\.name).sorted() == ["earlier", "now"])
+
+    let noWeek = Aggregator.panel(events: [older, recent], window: session, at: t0)
+    #expect(noWeek.weekly == nil)
+    #expect(noWeek.splits(for: .weekly).byModel.map(\.name) == ["now"])
+}
