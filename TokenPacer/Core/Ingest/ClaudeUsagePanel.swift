@@ -30,7 +30,8 @@ struct ClaudeUsagePanel: UsagePanel {
     /// the session window is a failure, not an empty reading: every account the
     /// CLI signs in shows one.
     static func parse(_ raw: String, now: Date) -> RateLimits? {
-        let text = normalize(raw)
+        // The screen, not the stream: see `PanelText.screen`.
+        let text = normalize(PanelText.screen(raw))
         guard let session = window(after: #"Current\s*session"#, in: text,
                                    minutes: sessionWindowMinutes, now: now)
         else { return nil }
@@ -62,8 +63,11 @@ struct ClaudeUsagePanel: UsagePanel {
             windowMinutes: minutes,
             // A window with no readable reset is still worth showing. Dating it
             // now makes it look like it resets this instant, so it is pushed out
-            // by the window's own length instead.
-            resetsAt: resetDate(in: section, now: now)
+            // by the window's own length instead — which also makes the window
+            // look as if it opened this instant, so every copy of the section
+            // is tried before settling for that.
+            resetsAt: PanelText.tails(after: label, in: text).lazy
+                .compactMap { resetDate(in: $0, now: now, within: minutes) }.first
                 ?? now.addingTimeInterval(TimeInterval(minutes * 60))
         )
     }
@@ -117,12 +121,35 @@ struct ClaudeUsagePanel: UsagePanel {
     /// `ResetsSep22at1am(Asia/Saigon)`, with every space a cursor jump that did
     /// not survive. The year is never printed and the day often isn't, so both
     /// are inferred as the next such moment after `now`, which is what a reset is.
-    static func resetDate(in section: String, now: Date) -> Date? {
-        guard let parts = PanelText.captures(#"Resets\s*([^()]{1,40}?)\s*\(([^)]+)\)"#, in: section),
-              let zone = TimeZone(identifier: parts[1].trimmingCharacters(in: .whitespaces))
+    ///
+    /// A repaint mangles it further — `Rests`, `(Asi/Saigon)` — so every stamp
+    /// in the section is tried, a zone that is not one is read as the Mac's
+    /// own (the panel prints the Mac's own), and a date is believed only if it
+    /// falls inside the window it is the end of.
+    static func resetDate(in section: String, now: Date, within minutes: Int) -> Date? {
+        // Up to the next section: past it, a stamp is some other window's.
+        let own = section.range(of: #"Current|Usage\s*credits"#, options: .regularExpression)
+            .map { String(section[..<$0.lowerBound]) } ?? section
+        guard let regex = try? NSRegularExpression(pattern: #"Re?s?e?t?s\s*([^()]{1,40}?)\s*\(([^)]+)\)"#)
         else { return nil }
+        let latest = now.addingTimeInterval(TimeInterval(minutes * 60) + 60)
 
-        let stamp = respace(parts[0])
+        for match in regex.matches(in: own, range: NSRange(own.startIndex..., in: own)) {
+            guard let stampRange = Range(match.range(at: 1), in: own),
+                  let zoneRange = Range(match.range(at: 2), in: own)
+            else { continue }
+            let zone = TimeZone(identifier: own[zoneRange].trimmingCharacters(in: .whitespaces))
+                ?? .current
+            if let date = resetDate(stamp: String(own[stampRange]), zone: zone, now: now),
+               date > now, date <= latest {
+                return date
+            }
+        }
+        return nil
+    }
+
+    private static func resetDate(stamp raw: String, zone: TimeZone, now: Date) -> Date? {
+        let stamp = respace(raw)
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = zone
 

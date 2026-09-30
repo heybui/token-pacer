@@ -88,6 +88,80 @@ enum PanelText {
         return text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
     }
 
+    /// The screen the stream draws, rather than the stream.
+    ///
+    /// Claude Code repaints by moving the cursor over cells that did not
+    /// change: `Resets Oc\e[13G 6 a\e[18G 1am` is "Resets Oct 6 at 1am" with
+    /// both `t`s left standing from the frame before. Stripping the escapes
+    /// loses those letters for good, so the moves are played onto a grid
+    /// instead. Relative moves only — the CLI uses no absolute positioning, so
+    /// the grid never needs to know where the viewport's top is.
+    /// ponytail: CUU/CUD/CUF/CUB/CHA/EL, CR, LF, BS, TAB; one cell per
+    /// character. A panel that starts drawing wide glyphs or absolute CUP
+    /// moves wants a real emulator.
+    static func screen(_ raw: String) -> String {
+        var rows: [[Character]] = [[]]
+        var row = 0, column = 0
+        var characters = raw.makeIterator()
+
+        func put(_ character: Character) {
+            while rows[row].count <= column { rows[row].append(" ") }
+            rows[row][column] = character
+            column += 1
+        }
+
+        while let character = characters.next() {
+            switch character {
+            case "\u{1B}":
+                guard let kind = characters.next() else { break }
+                if kind == "[" {
+                    var parameters = ""
+                    var final: Character?
+                    while let next = characters.next() {
+                        if let ascii = next.asciiValue, (0x40...0x7E).contains(ascii) { final = next; break }
+                        parameters.append(next)
+                    }
+                    let n = max(1, Int(parameters.filter(\.isNumber)) ?? 1)
+                    switch final {
+                    case "A": row = max(0, row - n)
+                    case "B": row += n
+                    case "C": column += n
+                    case "D": column = max(0, column - n)
+                    case "G": column = n - 1
+                    case "K":
+                        while rows.count <= row { rows.append([]) }
+                        switch parameters {
+                        case "", "0": if rows[row].count > column { rows[row].removeSubrange(column...) }
+                        case "1": for i in 0..<min(column + 1, rows[row].count) { rows[row][i] = " " }
+                        default: rows[row] = []
+                        }
+                    default: break
+                    }
+                } else if kind == "]" {
+                    // OSC, to BEL or ST.
+                    while let next = characters.next(), next != "\u{07}" {
+                        if next == "\u{1B}" { _ = characters.next(); break }
+                    }
+                } else if kind == "(" || kind == ")" {
+                    _ = characters.next()
+                }
+            case "\n", "\r\n":
+                row += 1
+                column = 0
+            case "\r": column = 0
+            case "\u{08}": column = max(0, column - 1)
+            case "\t": column = (column / 8 + 1) * 8
+            default:
+                guard !(character.unicodeScalars.first.map(CharacterSet.controlCharacters.contains) ?? false)
+                else { continue }
+                while rows.count <= row { rows.append([]) }
+                put(character)
+            }
+            while rows.count <= row { rows.append([]) }
+        }
+        return rows.map { String($0) }.joined(separator: "\n")
+    }
+
     /// A panel can repaint mid-read — a cached figure first, the refreshed one
     /// after — so the *last* match is the one that counts.
     static func tail(after pattern: String, in text: String, span: Int = 220) -> String? {
@@ -98,6 +172,16 @@ enum PanelText {
 
         let rest = text[range.upperBound...]
         return String(rest.prefix(span))
+    }
+
+    /// What follows every match, newest first. A repaint redraws only the
+    /// cells that changed, so the newest copy of a section can be missing a
+    /// word the one before it still has.
+    static func tails(after pattern: String, in text: String, span: Int = 220) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        return regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            .reversed()
+            .compactMap { Range($0.range, in: text).map { String(text[$0.upperBound...].prefix(span)) } }
     }
 
     static func firstCapture(_ pattern: String, in text: String) -> String? {

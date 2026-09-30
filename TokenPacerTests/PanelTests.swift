@@ -138,3 +138,74 @@ Total~786tok/turn Currentsession 7%used Resets2:50pm(Asia/Saigon) Currentweek(al
         #expect(recoverable.isFatal == false)
     }
 }
+
+/// A repaint redraws only the cells that changed. The newest copy of a section
+/// can lose its `Resets` word and half its zone, which used to leave both
+/// windows dated from the moment of the read — so the splits covered a window
+/// that had "just opened" on every refresh.
+@Test func aMangledRepaintStillFindsTheResets() throws {
+    let repainted = """
+    Currentsession 7%used Resets2:50pm(Asia/Saigon) Currentweek(allmodels) 19%used \
+    ResetsSep22at1am(Asia/Saigon) Refreshing… Currentsession 7%used 2:49pm (Asi/Saigon) \
+    Current week (all models) 19% used Rests Sep 22 at 1am (Asia/Saigon) \
+    Usagecredits 99%used S$11.99/S$12.00spent ResetsOct1(Asia/Saigon)
+    """
+    let limits = try #require(ClaudeUsagePanel.parse(repainted, now: now))
+
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = saigon
+    let session = try #require(limits.primary?.resetsAt)
+    #expect(calendar.dateComponents([.hour, .minute], from: session) == DateComponents(hour: 14, minute: 50))
+    let week = try #require(limits.secondary?.resetsAt)
+    #expect(calendar.dateComponents([.month, .day, .hour], from: week) == DateComponents(month: 9, day: 22, hour: 1))
+}
+
+/// A zone the repaint cut short is read as the Mac's own, which is the zone
+/// the panel prints in the first place.
+@Test func aMangledZoneIsTheMacsOwn() throws {
+    let date = try #require(ClaudeUsagePanel.resetDate(
+        in: " 7%used Resets 2:50pm (Asi/Saigon)", now: now, within: 24 * 60
+    ))
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .current
+    #expect(calendar.dateComponents([.hour, .minute], from: date) == DateComponents(hour: 14, minute: 50))
+}
+
+/// A stamp is believed only inside its own window: a five-hour window cannot
+/// reset in five days, and a week cannot take the credits' reset.
+@Test func aResetOutsideItsWindowIsNotBelieved() {
+    #expect(ClaudeUsagePanel.resetDate(
+        in: " 7%used ResetsSep22at1am(Asia/Saigon)", now: now, within: 300
+    ) == nil)
+    #expect(ClaudeUsagePanel.resetDate(
+        in: " 19%used Usagecredits 99%used ResetsSep18(Asia/Saigon)", now: now, within: 10_080
+    ) == nil)
+}
+
+/// Verbatim from a live run: the repaint jumps the cursor over the cells that
+/// did not change, so the stream spells `Resets Oc 6 a 1am` and only the
+/// screen it draws says `Resets Oct 6 at 1am`.
+@Test func aRepaintThatSkipsUnchangedCellsIsReadOffTheScreen() throws {
+    let e = "\u{1B}"
+    let raw = """
+    \(e)[2C\(e)[1BCurrent session\(e)[51G\(e)[K
+    \(e)[2C\(e)[1B███\(e)[51G   7% used\(e)[K
+    \(e)[2C\(e)[1BResets 2:50pm (Asia/Saigon)\(e)[K
+    \(e)[2C\(e)[1BCurrent week (all models)\(e)[51G\(e)[K
+    \(e)[2C\(e)[1B██████████████\(e)[51G   19% used\(e)[K
+    \(e)[2C\(e)[1BResets Sep 22 at 1am (Asia/Saigon)\(e)[K
+    \(e)[12A\(e)[2C\(e)[1BCurrent session\(e)[51G\(e)[K
+    \(e)[2C\(e)[1B███\(e)[51G   7% used\(e)[K
+    \(e)[2C\(e)[1BResets 2:50pm (Asia/Saigon)\(e)[K
+    \(e)[2C\(e)[1BCurrent week (all models)\(e)[51G\(e)[K
+    \(e)[2C\(e)[1B██████████████\(e)[51G   19% used\(e)[K
+    \(e)[2C\(e)[1BResets Se\(e)[13G 22 a\(e)[19G 1am (Asia/Saigon)\(e)[51G\(e)[K
+    """
+    #expect(PanelText.screen(raw).contains("Resets Sep 22 at 1am (Asia/Saigon)"))
+
+    let limits = try #require(ClaudeUsagePanel.parse(raw, now: now))
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = saigon
+    let week = try #require(limits.secondary?.resetsAt)
+    #expect(calendar.dateComponents([.month, .day, .hour], from: week) == DateComponents(month: 9, day: 22, hour: 1))
+}
