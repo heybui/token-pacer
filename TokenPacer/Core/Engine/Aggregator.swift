@@ -164,15 +164,10 @@ enum Aggregator {
         }
     }
 
-    /// `claude-opus-5` → `Opus 5`. Anything that isn't a Claude model is left
-    /// alone: guessing at another vendor's naming is how "Gpt 5.6 Terra" happens.
+    /// The id exactly as the log states it. Renaming it was guesswork: "Opus
+    /// 5 5" out of `claude-opus-5-5`, and a snapshot date read as a version.
     static func displayModel(_ model: String?) -> String {
         guard let model, !model.isEmpty else { return "unknown" }
-        guard model.hasPrefix("claude-") else { return model }
         return model
-            .dropFirst("claude-".count)
-            .split(separator: "-")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            .joined(separator: " ")
     }
 }

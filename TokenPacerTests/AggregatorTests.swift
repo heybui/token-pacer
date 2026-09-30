@@ -112,9 +112,9 @@ private func event(
 
 // MARK: - names
 
-@Test func modelNamesAreShortenedOnlyWhenTheyAreClaudes() {
-    #expect(Aggregator.displayModel("claude-opus-5") == "Opus 5")
-    #expect(Aggregator.displayModel("claude-haiku-4-5-20251001") == "Haiku 4 5 20251001")
+@Test func modelNamesAreShownAsLogged() {
+    #expect(Aggregator.displayModel("claude-opus-5-5") == "claude-opus-5-5")
     #expect(Aggregator.displayModel("gpt-5.6-terra") == "gpt-5.6-terra")
+    #expect(Aggregator.displayModel("") == "unknown")
     #expect(Aggregator.displayModel(nil) == "unknown")
 }
