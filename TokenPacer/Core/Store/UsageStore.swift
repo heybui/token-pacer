@@ -14,6 +14,11 @@ final class UsageStore {
 
     func eventCount(_ id: SourceID) -> Int { events[id]?.count ?? 0 }
 
+    /// Why each failing provider's last reading failed, as a kind rather than
+    /// a sentence: the welcome card says what to do about it, and the sentence
+    /// in `errors` only says what went wrong.
+    private(set) var failures: [SourceID: PanelError] = [:]
+
     /// A `/usage` run is outstanding. The UI never waits on this — the next tick
     /// picks the result up — but `--probe` has to, or it exits before the CLI
     /// has finished booting and reports the inferred figure it was built to check.
@@ -630,6 +635,7 @@ final class UsageStore {
             pollers[id] = poller
             liveLimits[id] = limits
             limitsErrors[id] = nil
+            failures[id] = nil
             errors[id] = Self.simulatedError
             persist()
 
@@ -641,6 +647,7 @@ final class UsageStore {
             persist()
             let failure = error as? PanelError
             if failure?.isFatal == true { limitsDisabled.insert(id) }
+            failures[id] = failure
             limitsErrors[id] = failure?.message(for: id.displayName) ?? error.localizedDescription
             errors[id] = Self.simulatedError ?? limitsErrors[id]
 

@@ -291,13 +291,14 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
 }
 
 
-/// Only the warning casts a shadow. Every small state sits flush in the menu bar
-/// row, continuous with the notch's own black, and a 31pt shadow under one reads
-/// as a seam across the top of the screen. Hover and pinned gave theirs up too:
-/// a surface you opened yourself does not have to announce that it is floating.
-@MainActor @Test func onlyTheWarningCastsAShadow() {
+/// Only the two surfaces that arrive unasked cast a shadow: the warning and
+/// the welcome. Every small state sits flush in the menu bar row, continuous
+/// with the notch's own black, and a 31pt shadow under one reads as a seam
+/// across the top of the screen. Hover and pinned gave theirs up too: a surface
+/// you opened yourself does not have to announce that it is floating.
+@MainActor @Test func onlyWhatArrivesUnaskedCastsAShadow() {
     for state in PillState.allCases {
-        #expect(state.castsShadow == (state == .warning))
+        #expect(state.castsShadow == (state == .warning || state == .welcome))
     }
 
     // The host still has to clear the shadow of the state that does cast one.
@@ -492,4 +493,21 @@ private func trackPoints(_ track: ShellTrack, in rect: CGRect) -> ([CGPoint], In
     let glowing = PillState.pinned.windowMargin(glowing: true)
     #expect(glowing.width == BorderEffect.glowReach)
     #expect(glowing.height == BorderEffect.glowReach)
+}
+
+/// A first launch reads old logs or none, which is dormant — and a hidden pill
+/// is an app that seems not to have started. The welcome is held through that,
+/// and through the pointer reaching for its buttons; only the panel beats it.
+@MainActor @Test func theWelcomeHoldsThroughQuietAndHover() {
+    var inputs = PillInputs(snapshot: snapshot(lastActivity: nil))
+    inputs.showsWelcome = true
+    #expect(resolve(inputs) == .welcome)
+    inputs.pointerInside = true
+    #expect(resolve(inputs) == .welcome)
+    inputs.isPinned = true
+    #expect(resolve(inputs) == .pinned)
+
+    inputs.isPinned = false
+    inputs.showsWelcome = false
+    #expect(resolve(inputs) == .hover)
 }

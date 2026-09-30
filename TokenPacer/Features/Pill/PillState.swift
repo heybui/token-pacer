@@ -1,8 +1,12 @@
 import CoreGraphics
 
-/// The seven states from the design board. One object, one shell, different sizes.
+/// The seven states from the design board, and the welcome that comes before
+/// any of them. One object, one shell, different sizes.
 enum PillState: String, CaseIterable, Sendable {
     case hidden, ghost, collapsed, hover, warning, exhausted, pinned
+    /// What a first launch opens on. Every other state assumes somebody already
+    /// knows the notch is where the app lives, and the quiet one hides it.
+    case welcome
 
     /// Shell dimensions, verbatim from the design board.
     var size: CGSize {
@@ -14,7 +18,7 @@ enum PillState: String, CaseIterable, Sendable {
         // and a preference is coming that turns providers off. The board's 98 was
         // drawn for a ring and two lines; any single number here is wrong for some
         // of the lists the card can hold.
-        case .hover, .warning: CGSize(width: 404, height: 98)
+        case .hover, .warning, .welcome: CGSize(width: 404, height: 98)
         // 540 was the height this was drawn at, and the panel has since grown
         // past it — a splits band of four rows over a 90-day heatmap and a spend
         // cell does not fit in it. It is a cap rather than the height now
@@ -44,7 +48,7 @@ enum PillState: String, CaseIterable, Sendable {
 
     var contentFit: ContentFit {
         switch self {
-        case .hover, .warning: .floor
+        case .hover, .warning, .welcome: .floor
         case .pinned: .cap
         case .hidden, .ghost, .collapsed, .exhausted: .fixed
         }
@@ -55,7 +59,7 @@ enum PillState: String, CaseIterable, Sendable {
     var fillsFlanks: Bool {
         switch self {
         case .collapsed, .ghost, .exhausted: true
-        case .hidden, .hover, .warning, .pinned: false
+        case .hidden, .hover, .warning, .pinned, .welcome: false
         }
     }
 
@@ -69,10 +73,11 @@ enum PillState: String, CaseIterable, Sendable {
     ///
     /// The two states you open yourself — hover and pinned — dropped theirs as
     /// well. Only the warning still casts one: it is the one surface that
-    /// arrives unasked, and the depth is what says so.
+    /// arrives unasked, and the depth is what says so. The welcome arrives
+    /// unasked too.
     var castsShadow: Bool {
         switch self {
-        case .warning: true
+        case .warning, .welcome: true
         case .hidden, .ghost, .collapsed, .hover, .exhausted, .pinned: false
         }
     }
@@ -319,7 +324,7 @@ enum PillState: String, CaseIterable, Sendable {
         switch self {
         case .hidden: 6
         case .ghost, .collapsed, .exhausted: 13
-        case .hover, .warning, .pinned: 26
+        case .hover, .warning, .pinned, .welcome: 26
         }
     }
 

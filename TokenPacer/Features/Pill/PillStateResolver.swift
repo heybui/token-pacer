@@ -32,6 +32,9 @@ struct PillInputs: Equatable, Sendable {
     /// Whether the figure is carried beside it. Geometry as much as taste: the
     /// headline is a third of the leading wing.
     var showsPercentage = true
+    /// The welcome card is up: a first launch, or every tracked provider
+    /// failing. Held until it is answered, hover or no hover.
+    var showsWelcome = false
 }
 
 /// One function, no scattered booleans. The design's seven states are mutually
@@ -43,6 +46,11 @@ enum PillStateResolver {
     static func resolve(_ inputs: PillInputs, at now: Date) -> PillState {
         // Off is off: no figures, no alerts, and hovering does not reveal any.
         if inputs.isPinned { return .pinned }
+        // Before dormancy, which on a first launch is every launch: the logs
+        // are old or there are none, and a hidden pill is an app that seems not
+        // to have started. Before hover too, or reaching for its buttons would
+        // swap it for the hover card.
+        if inputs.showsWelcome { return .welcome }
 
         if inputs.hidesAfterQuietMinutes > 0, nothingRunning(inputs, at: now) {
             // Dormant is about leaving the notch alone, not about putting the

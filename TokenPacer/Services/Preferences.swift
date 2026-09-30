@@ -86,6 +86,12 @@ final class Preferences {
         didSet { store.set(bordersOn, forKey: Key.bordersOn) }
     }
 
+    /// The welcome card has been answered. Until then it is what the notch
+    /// shows, however quiet the machine is.
+    var hasOnboarded: Bool {
+        didSet { store.set(hasOnboarded, forKey: Key.hasOnboarded) }
+    }
+
     /// Which limit the panel's splits describe. One choice for every provider,
     /// and one that falls back to the headline's window on a provider with no
     /// longer cap, so it never has to be made twice.
@@ -255,6 +261,7 @@ final class Preferences {
         border = (store.string(forKey: Key.border).flatMap(BorderEffect.init(rawValue:)))
             ?? Default.border
         bordersOn = store.object(forKey: Key.bordersOn) as? Bool ?? Default.bordersOn
+        hasOnboarded = store.bool(forKey: Key.hasOnboarded)
         splitWindow = store.string(forKey: Key.splitWindow).flatMap(SplitWindow.init(rawValue:))
             ?? Default.splitWindow
         display = store.string(forKey: Key.display)
@@ -366,6 +373,7 @@ final class Preferences {
         static let border = "pref.border"
         static let bordersOn = "pref.bordersOn"
         static let splitWindow = "pref.splitWindow"
+        static let hasOnboarded = "pref.hasOnboarded"
         static let language = "pref.language"
         static let pillSource = "pref.pillSource"
     }

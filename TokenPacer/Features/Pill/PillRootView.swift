@@ -12,6 +12,14 @@ struct PillRootView: View {
     var updater: Updater?
     var onOpenPreferences: () -> Void = {}
 
+    /// The complaints the welcome was last answered with. It comes back only
+    /// when they change, so "Got it" on a machine with no CLI is not asked
+    /// again every tick.
+    @State private var answeredFailures: [SourceID: String]?
+    /// The border runs once when the first reading lands, so the eye goes to
+    /// the notch at the moment there is something there.
+    @State private var isPulsing = false
+
     var menuItems: [NotchMenuItem] {
         [
             NotchMenuItem(title: String(localized: "Preferences"), key: "⌘,", action: onOpenPreferences),
@@ -64,6 +72,46 @@ struct PillRootView: View {
         return percent / max(1, preferences.zone(for: snapshot.source).critAt)
     }
 
+    /// One row per tracked provider, in the order the card lists them.
+    private var welcomeRows: [WelcomeCard.Row] {
+        SourceID.allCases.filter(preferences.tracks).map { id in
+            let snapshot = store.snapshots[id]
+            let status: WelcomeCard.Status
+            if let percent = snapshot?.sessionPercent {
+                status = .reported(percent: percent, windowMinutes: snapshot?.windowMinutes)
+            } else if let message = store.errors[id] {
+                status = .failed(store.failures[id], message: message)
+            } else if !id.cliIsInstalled {
+                status = .notInstalled
+            } else {
+                status = .reading
+            }
+            return WelcomeCard.Row(source: id, status: status)
+        }
+    }
+
+    private var trackedFailures: [SourceID: String] {
+        store.errors.filter { preferences.tracks($0.key) }
+    }
+
+    /// A first launch, or a machine where nothing tracked can be read — the
+    /// pill would have nothing to show, and this says why.
+    private var showsWelcome: Bool {
+        guard preferences.hasOnboarded else { return true }
+        let rows = welcomeRows
+        return !rows.isEmpty && rows.allSatisfy(\.status.isStuck)
+            && trackedFailures != answeredFailures
+    }
+
+    private func answerWelcome() {
+        preferences.hasOnboarded = true
+        answeredFailures = trackedFailures
+    }
+
+    private var hasReading: Bool {
+        SourceID.allCases.contains { store.snapshots[$0]?.sessionPercent != nil }
+    }
+
     private var alertMarks: [SourceID: [Double]] {
         guard preferences.notifiesOnZone else { return [:] }
         return Dictionary(uniqueKeysWithValues: SourceID.allCases.map {
@@ -105,7 +153,7 @@ struct PillRootView: View {
             attention: store.errors[store.activeSource],
             trouble: trouble,
             errors: store.errors,
-            isAnyoneWorking: store.anyoneWorking,
+            isAnyoneWorking: store.anyoneWorking || isPulsing,
             running: running,
             alert: store.alert,
             alerting: store.alert.flatMap { store.snapshots[$0.source] },
@@ -118,11 +166,18 @@ struct PillRootView: View {
             workingSessions: workingSessions,
             updateVersion: updater?.pendingVersion,
             onInstallUpdate: { updater?.checkForUpdates() },
-            onTogglePinned: { model.togglePinned() },
+            // Opening the panel is finding the app, which is what the welcome
+            // was for.
+            onTogglePinned: {
+                if model.state == .welcome { answerWelcome() }
+                model.togglePinned()
+            },
             onClose: { model.setPinned(false) },
             onContentHeight: { model.contentHeight = $0 },
             onOpenSettings: onOpenPreferences,
             onRecheck: { store.recheck() },
+            welcomeRows: welcomeRows,
+            onDismissWelcome: answerWelcome,
             isMenuOpen: model.isMenuOpen,
             menuItems: menuItems,
             onCloseMenu: { model.closeMenu() },
@@ -191,6 +246,21 @@ struct PillRootView: View {
             .onChange(of: preferences.zones) { _, _ in model.update(snapshot: store.snapshot) }
             .onChange(of: preferences.hidesAfterQuietMinutes) { _, _ in
                 model.update(snapshot: store.snapshot)
+            }
+            .onChange(of: showsWelcome, initial: true) { _, shows in
+                model.inputs.showsWelcome = shows
+                model.update(snapshot: store.snapshot)
+            }
+            // Only on a first launch. Every launch builds its snapshots from
+            // nothing, so the first reading "arrives" each time; the pulse is
+            // for the one where nobody knows yet where to look.
+            .onChange(of: hasReading) { was, has in
+                if !was, has, !preferences.hasOnboarded { isPulsing = true }
+            }
+            .task(id: isPulsing) {
+                guard isPulsing else { return }
+                try? await Task.sleep(for: .seconds(3))
+                isPulsing = false
             }
             // The shell is black in every state, so its contents are never styled
             // for a light desktop.

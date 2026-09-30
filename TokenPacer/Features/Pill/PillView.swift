@@ -83,6 +83,9 @@ struct PillView: View {
     var onOpenSettings: () -> Void = {}
     /// Ask every provider again, from the card's own headline.
     var onRecheck: () -> Void = {}
+    /// What the welcome card lists, and how it is answered.
+    var welcomeRows: [WelcomeCard.Row] = []
+    var onDismissWelcome: () -> Void = {}
     var isMenuOpen = false
     var menuItems: [NotchMenuItem] = []
     var onCloseMenu: () -> Void = {}
@@ -348,6 +351,8 @@ struct PillView: View {
                 onExpand: onTogglePinned, onOpenSettings: onOpenSettings, onRecheck: onRecheck,
                 onInstallUpdate: onInstallUpdate
             )
+        case .welcome:
+            WelcomeCard(rows: welcomeRows, onOpenSettings: onOpenSettings, onDismiss: onDismissWelcome)
         case .pinned:
             PinnedPanelView(
                 snapshot: snapshot, providers: providers, errors: errors, zones: zones,
@@ -427,7 +432,7 @@ struct PillView: View {
         guard bordersOn else { return false }
         return switch state {
         case .pinned, .hidden, .ghost: false
-        case .collapsed, .hover, .warning, .exhausted: true
+        case .collapsed, .hover, .warning, .exhausted, .welcome: true
         }
     }
 
