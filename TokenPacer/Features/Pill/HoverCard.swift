@@ -192,9 +192,11 @@ struct HoverCard: View {
                 comment: "Rotating footer line. First value names a window, second is a percentage."
             ))
         }
+        // Named, not "a model": the reader knows who they were talking to.
+        let name = snapshot.source.displayName
         lines.append(snapshot.isBurning
-            ? String(localized: "A model is answering now")
-            : String(localized: "Nothing is running"))
+            ? String(localized: "\(name) is working on a reply", comment: "Rotating footer line. The value is a product name.")
+            : String(localized: "\(name) is taking a break", comment: "Rotating footer line. The value is a product name."))
         return lines
     }
 
