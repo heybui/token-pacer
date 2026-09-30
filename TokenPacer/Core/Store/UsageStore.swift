@@ -269,7 +269,7 @@ final class UsageStore {
         guard let archived = archive?.loadEvents() else { return }
         var count = 0
 
-        for source in sources {
+        for source in sources where !source.rereadsOnLaunch {
             guard let state = archived.sources[source.id] else { continue }
             events[source.id] = state.events
             count += state.events.count

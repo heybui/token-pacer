@@ -1,52 +1,46 @@
 import Foundation
 import SQLite3
 
-/// Reads `~/.copilot/data.db`, where Copilot records what each session it has
-/// opened has spent and whether that session is answering right now.
+/// Reads what Copilot writes down about its requests and its sessions, from
+/// three places, because no one of them has both.
+///
+/// **Usage** is `session-store.db`'s `assistant_usage_events`: a row per
+/// request — model, the four counts, its own timestamp — joined to `sessions`
+/// for the repository. Every client writes it, the CLI included, so it is the
+/// only one of the three that can fill the history grid backwards.
+///
+/// It was dropped once for `data.db`'s running totals, on the evidence that it
+/// had not been written since 11 Sep. It was written again after that, and it
+/// holds every session `data.db` does, with the same input and output totals,
+/// plus the CLI's own. A running total can only count growth after the app
+/// first saw it; a row per request needs no such guess.
+///
+/// **Running** is either `data.db`'s `sessions.is_running`, or an open turn in
+/// the CLI's `session-state/<id>/events.jsonl` — the CLI never puts its
+/// sessions in `data.db`. Merged by session id; some sessions appear in both.
 ///
 /// Not a usage source in the sense the other two are: Copilot states its spend
-/// in its own `/usage` panel, so there are no limits here. This carries the
-/// volume, the models and the projects the panel has no room for, and the one
-/// fact a panel cannot give — a session in flight.
-///
-/// It used to read two other places, and Copilot went quiet in both.
-/// `session-store.db`'s `assistant_usage_events` had a row per request and
-/// stopped being written. `open-sessions-state.json` is still written, but only
-/// once, at session open: `refreshedAt` never advances past `openedAt` and
-/// `working` was false in all 109 entries on the machine this was rewritten
-/// against, so a dot waiting for that flag could never light. Both facts moved
-/// into one row per session here:
-///
-/// ```
-/// sessions(id, model, updated_at, is_running,
-///          total_input_tokens, total_output_tokens,
-///          total_cached_tokens, total_reasoning_tokens)
-/// ```
-///
-/// Not every Copilot writes that table. The CLI (1.0.89 on the machine this
-/// was checked on) never puts its sessions in `data.db` at all; it logs each
-/// one to `session-state/<id>/events.jsonl`, which marks every turn outright
-/// with `assistant.turn_start` and `assistant.turn_end`. So the running signal
-/// is either one, merged by session id — some sessions appear in both.
-///
-/// What that costs, stated plainly: these are **running totals**, not a row per
-/// request. A session's growth between two polls becomes one event stamped
-/// `updated_at`, so Copilot's sparkline and splits are as fine as the poll where
-/// Claude's and Codex's are as fine as the request. Nothing finer is left on
-/// disk. There is no cache-write column either, so a write is counted as plain
-/// input rather than invented.
+/// in its own `/usage` panel, so there are no limits here.
 actor CopilotSource: UsageSource {
     nonisolated let id = SourceID.copilot
 
-    /// Copilot's own store. Opened read-only, never written to, and only when
-    /// it has moved.
+    /// A few hundred rows a month, read whole in a millisecond. Cheaper than a
+    /// cursor that has to survive a store Copilot rebuilds.
+    nonisolated var rereadsOnLaunch: Bool { true }
+
+    /// The request log. Opened read-only, never written to, and only when it
+    /// has moved.
+    private let log: URL
+    /// Where the running flag lives.
     private let store: URL
-    /// Newest mtime of the store and its write-ahead log as of the last query.
-    /// Copilot writes into the WAL, so the database file alone does not move.
-    private var queriedAt: Date?
+    /// Newest mtime of each database and its write-ahead log as of the last
+    /// query. Copilot writes into the WAL, so the database file alone does not
+    /// move.
+    private var loggedAt: Date?
+    private var storedAt: Date?
     private let cutoff: Date?
-    /// How much of each session has already been turned into events.
-    private var emitted: [String: Totals] = [:]
+    /// The last `assistant_usage_events.id` turned into an event.
+    private var lastRowID: Int64 = 0
     /// `updated_at` of every session the last query found running, by id.
     private var running: [String: Date] = [:]
 
@@ -61,55 +55,41 @@ actor CopilotSource: UsageSource {
     private static let scanAtLeastEvery: TimeInterval = 60
 
     init(
+        log: URL = AgentHome.copilot.appending(path: "session-store.db"),
         store: URL = AgentHome.copilot.appending(path: "data.db"),
         sessions: URL = AgentHome.copilot.appending(path: "session-state"),
         retention: TimeInterval? = TimeInterval(Aggregator.historyDays) * 24 * 3600,
         changed: ChangeGate? = nil
     ) {
+        self.log = log
         self.store = store
         self.sessions = sessions
         self.cutoff = retention.map { Date.now.addingTimeInterval(-$0) }
         self.changed = changed
     }
 
-    // MARK: - Resuming
-
-    /// The protocol persists byte offsets, and a running total is not one — but
-    /// the archived event ids come back through here, and an id *is* the
-    /// watermark it moved its session to. That is enough to resume without a
-    /// second store.
-    func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {
-        for id in seen {
-            guard let mark = Self.watermark(in: id),
-                  mark.totals.sum > (emitted[mark.session]?.sum ?? -1)
-            else { continue }
-            emitted[mark.session] = mark.totals
-        }
-    }
-
-    /// Nothing: see `restore`.
+    /// Nothing: see `rereadsOnLaunch`.
+    func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>) {}
     func cursors() -> [String: JSONLReader.Cursor] { [:] }
 
     func poll() throws -> SourceSnapshot {
         let now = Date.now
-        // `-wal`, not `.wal`: SQLite names it by appending to the whole path.
-        // Fresh `URL`s each time: `resourceValues(forKeys:)` caches what it read
-        // on the instance it read it from, so a stored one answers with the
-        // mtime it had when the app launched and the store is never re-read.
-        let moved = [store.path, store.path + "-wal"]
-            .compactMap { try? FileManager.default.attributesOfItem(atPath: $0) }
-            .compactMap { $0[.modificationDate] as? Date }
-            .max()
 
         var events: [UsageEvent] = []
-        if moved != queriedAt {
-            queriedAt = moved
-            events = read()
+        let logMoved = Self.modified(log)
+        if logMoved != loggedAt {
+            loggedAt = logMoved
+            events = usage()
+        }
+        let storeMoved = Self.modified(store)
+        if storeMoved != storedAt {
+            storedAt = storeMoved
+            running = flagged()
         }
 
         if changed?() ?? true || now.timeIntervalSince(lastScan) >= Self.scanAtLeastEvery {
             lastScan = now
-            // Nothing to decode: usage still comes from the table above.
+            // Nothing to decode: usage comes from the request log.
             _ = try? scanner.scan(root: sessions, since: cutoff) { _, _ in [] }
         }
 
@@ -117,7 +97,7 @@ actor CopilotSource: UsageSource {
         // flag set — so it is believed only while its row is still moving, on
         // the same in-flight cap every other provider's dot uses. The scanner
         // applies that cap to the logs itself.
-        let flagged = running.filter {
+        let live = running.filter {
             now.timeIntervalSince($0.value) < SnapshotBuilder.inFlightWindow
         }.keys
         let logged = scanner.workingFiles(at: now).map {
@@ -125,139 +105,122 @@ actor CopilotSource: UsageSource {
         }
         return SourceSnapshot(
             source: .copilot, events: events, limits: nil,
-            workingSessions: Set(flagged).union(logged).count
+            workingSessions: Set(live).union(logged).count
         )
     }
 
-    // MARK: - The sessions table
+    /// `-wal`, not `.wal`: SQLite names it by appending to the whole path.
+    /// Fresh paths each time: `resourceValues(forKeys:)` caches what it read on
+    /// the `URL` it read it from, so a stored one answers with the mtime it had
+    /// when the app launched and the database is never re-read.
+    private static func modified(_ database: URL) -> Date? {
+        [database.path, database.path + "-wal"]
+            .compactMap { try? FileManager.default.attributesOfItem(atPath: $0) }
+            .compactMap { $0[.modificationDate] as? Date }
+            .max()
+    }
 
-    private func read() -> [UsageEvent] {
-        var db: OpaquePointer?
-        guard sqlite3_open_v2(store.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
-            sqlite3_close(db)
-            return []
-        }
+    // MARK: - The request log
+
+    /// Every request logged since the last row read.
+    ///
+    /// `input_tokens` is the whole prompt — cache reads and writes included, as
+    /// the row's own `token_details_json` spells out: 15 fresh tokens inside a
+    /// 216,755-token prompt. Subtracting them is what makes this comparable
+    /// with the other two providers, exactly as Codex needs.
+    private func usage() -> [UsageEvent] {
+        guard let db = Self.open(log) else { return [] }
         defer { sqlite3_close(db) }
 
+        // A store rebuilt from scratch starts its ids again, so a cursor past
+        // the end means the table is not the one it was read from.
+        if let highest = single(db, "SELECT MAX(id) FROM assistant_usage_events"),
+           highest < lastRowID {
+            lastRowID = 0
+        }
+
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, Self.query, -1, &statement, nil) == SQLITE_OK else { return [] }
+        guard sqlite3_prepare_v2(db, Self.usageQuery, -1, &statement, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(statement) }
-        let since = cutoff.map { $0.formatted(.iso8601) } ?? "0000"
-        sqlite3_bind_text(statement, 1, since, -1, Self.transient)
+        sqlite3_bind_int64(statement, 1, lastRowID)
+        // Compared as a date alone: rows written by the schema's own default
+        // are `2026-09-11 08:23:38`, not the ISO string the CLI writes, and ten
+        // characters is all the two spellings agree on.
+        let since = cutoff.map { String($0.formatted(.iso8601).prefix(10)) } ?? "0000-00-00"
+        sqlite3_bind_text(statement, 2, since, -1, Self.transient)
 
         var events: [UsageEvent] = []
-        running = [:]
         while sqlite3_step(statement) == SQLITE_ROW {
-            guard let session = text(statement, 0),
-                  let stamp = text(statement, 2).flatMap(ISO8601.parse)
-            else { continue }
-            if sqlite3_column_int(statement, 3) == 1 { running[session] = stamp }
+            let rowID = sqlite3_column_int64(statement, 0)
+            lastRowID = max(lastRowID, rowID)
+            guard let stamp = text(statement, 7).flatMap(Self.parse) else { continue }
 
-            let totals = Totals(
-                input: count(statement, 4), output: count(statement, 5),
-                cached: count(statement, 6), reasoning: count(statement, 7)
+            let cacheRead = count(statement, 4)
+            let cacheWrite = count(statement, 5)
+            let counts = TokenCounts(
+                input: max(0, count(statement, 2) - cacheRead - cacheWrite),
+                output: count(statement, 3),
+                cacheWrite: cacheWrite,
+                cacheRead: cacheRead,
+                // A subset of output here too. Display only, never weighted again.
+                reasoning: count(statement, 6)
             )
-            let previous = emitted[session]
-            emitted[session] = totals
-            // A session met for the first time is baselined, never counted: its
-            // totals are however long it has been running, and landing a week of
-            // tokens on today is worse than missing them. Everything after this
-            // poll is growth, and growth is what an event is.
-            guard let previous else { continue }
-
-            let counts = totals.delta(since: previous).counts
             guard counts.total > 0 else { continue }
 
             events.append(UsageEvent(
-                id: Self.identify(session, at: totals),
+                id: "copilot:\(rowID)",
                 source: .copilot,
                 timestamp: stamp,
                 model: text(statement, 1),
                 // `owner/name` when the session was opened in a repository,
                 // which reads better than the folder name behind it.
-                project: text(statement, 8).flatMap { owner in
-                    text(statement, 9).map { "\(owner)/\($0)" }
-                } ?? text(statement, 10),
-                sessionID: session,
+                project: text(statement, 9) ?? text(statement, 10).map {
+                    URL(filePath: $0).lastPathComponent
+                },
+                sessionID: text(statement, 8),
                 counts: counts
             ))
         }
         return events
     }
 
-    /// One row per session, with whatever repository it was opened in.
-    ///
-    /// `GROUP BY` because the workspace join is 1:1 today and this does not
-    /// depend on it staying that way: a session that grew two workspaces would
-    /// otherwise be read twice in one pass.
-    private static let query = """
-        SELECT s.id, s.model, s.updated_at, s.is_running,
-               s.total_input_tokens, s.total_output_tokens,
-               s.total_cached_tokens, s.total_reasoning_tokens,
-               p.github_owner, p.github_repo, p.name
-          FROM sessions s
-          LEFT JOIN workspaces w ON w.session_id = s.id
-          LEFT JOIN projects   p ON p.id = w.project_id
-         WHERE s.updated_at >= ?
-         GROUP BY s.id
-         ORDER BY s.updated_at
+    private static let usageQuery = """
+        SELECT e.id, e.model, e.input_tokens, e.output_tokens,
+               e.cache_read_tokens, e.cache_write_tokens, e.reasoning_tokens,
+               e.created_at, e.session_id, s.repository, s.cwd
+          FROM assistant_usage_events e
+          LEFT JOIN sessions s ON s.id = e.session_id
+         WHERE e.id > ? AND e.created_at >= ?
+         ORDER BY e.id
         """
 
-    // MARK: - Watermarks
+    /// Both spellings the column holds: the CLI writes ISO 8601, the schema's
+    /// own default writes `datetime('now')`.
+    private static func parse(_ text: String) -> Date? {
+        ISO8601.parse(text) ?? ISO8601.parse(text.replacing(" ", with: "T") + "Z")
+    }
 
-    /// Cumulative totals, exactly as a row states them.
-    private struct Totals: Equatable {
-        var input = 0
-        var output = 0
-        var cached = 0
-        var reasoning = 0
+    // MARK: - The running flag
 
-        var sum: Int { input + output + cached + reasoning }
+    private func flagged() -> [String: Date] {
+        guard let db = Self.open(store) else { return [:] }
+        defer { sqlite3_close(db) }
 
-        /// Clamped: Copilot rewrites a session's row, and a fork or a rollback
-        /// can leave a total lower than the one already counted.
-        func delta(since previous: Totals) -> Totals {
-            Totals(
-                input: max(0, input - previous.input),
-                output: max(0, output - previous.output),
-                cached: max(0, cached - previous.cached),
-                reasoning: max(0, reasoning - previous.reasoning)
-            )
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, Self.runningQuery, -1, &statement, nil) == SQLITE_OK else { return [:] }
+        defer { sqlite3_finalize(statement) }
+
+        var running: [String: Date] = [:]
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let session = text(statement, 0),
+                  let stamp = text(statement, 1).flatMap(ISO8601.parse)
+            else { continue }
+            running[session] = stamp
         }
-
-        /// `total_cached_tokens` is part of `total_input_tokens`, as it was in
-        /// the row-per-request table before it — 42,373 of a 42,375-token prompt
-        /// on the session this was written against. Subtracting it is what makes
-        /// the figure comparable with the other two providers.
-        var counts: TokenCounts {
-            TokenCounts(
-                input: max(0, input - cached), output: output,
-                cacheWrite: 0, cacheRead: cached,
-                // A subset of output here too. Display only, never weighted again.
-                reasoning: reasoning
-            )
-        }
+        return running
     }
 
-    private static func identify(_ session: String, at totals: Totals) -> String {
-        "copilot:\(session):\(totals.input)-\(totals.output)-\(totals.cached)-\(totals.reasoning)"
-    }
-
-    /// A session whose events have all aged out of retention comes back unknown,
-    /// and an unknown session is baselined rather than counted. An id this does
-    /// not recognise — the row-per-request `copilot:<rowid>` that came before —
-    /// is simply not a watermark.
-    private static func watermark(in id: String) -> (session: String, totals: Totals)? {
-        let parts = id.split(separator: ":")
-        guard parts.count == 3, parts[0] == "copilot" else { return nil }
-        let numbers = parts[2].split(separator: "-").compactMap { Int($0) }
-        guard numbers.count == 4 else { return nil }
-        return (
-            String(parts[1]),
-            Totals(input: numbers[0], output: numbers[1],
-                   cached: numbers[2], reasoning: numbers[3])
-        )
-    }
+    private static let runningQuery = "SELECT id, updated_at FROM sessions WHERE is_running = 1"
 
     // MARK: - SQLite
 
@@ -266,6 +229,24 @@ actor CopilotSource: UsageSource {
     private static let transient = unsafeBitCast(
         -1, to: sqlite3_destructor_type.self
     )
+
+    /// A missing database is a Copilot that has never been run, not a failure:
+    /// the panel says whether the CLI is there, and says it better.
+    private static func open(_ database: URL) -> OpaquePointer? {
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(database.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
+            sqlite3_close(db)
+            return nil
+        }
+        return db
+    }
+
+    private func single(_ db: OpaquePointer?, _ sql: String) -> Int64? {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(statement) }
+        return sqlite3_step(statement) == SQLITE_ROW ? sqlite3_column_int64(statement, 0) : nil
+    }
 
     private func count(_ statement: OpaquePointer?, _ column: Int32) -> Int {
         Int(sqlite3_column_int64(statement, column))

@@ -19,6 +19,14 @@ protocol UsageSource: Actor {
     /// rather than stored twice.
     func restore(cursors: [String: JSONLReader.Cursor], seen: Set<String>)
     func cursors() -> [String: JSONLReader.Cursor]
+
+    /// Reads its whole history again on every launch, so nothing it archived
+    /// is handed back: the fresh read would land on top of it.
+    nonisolated var rereadsOnLaunch: Bool { get }
+}
+
+extension UsageSource {
+    nonisolated var rereadsOnLaunch: Bool { false }
 }
 
 /// What the newest log line says about right now.
