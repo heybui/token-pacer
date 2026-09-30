@@ -347,7 +347,22 @@ final class UsageStore {
     /// so the poller stops asking — and that was true until the user went and
     /// installed it. Without this the message outlives the problem and only a
     /// relaunch clears it.
-    func recheck() {
+    /// How often a reading can be asked for by hand. Each one boots every
+    /// provider's CLI, and a button pressed ten times in a row would boot them
+    /// ten times for figures that move in whole percentages.
+    static let recheckCooldown: TimeInterval = 60
+
+    /// When a reading was last asked for by hand.
+    private(set) var recheckedAt: Date?
+
+    /// When the next one may be. The buttons that ask grey out until then.
+    var recheckAvailableAt: Date? {
+        recheckedAt.map { $0.addingTimeInterval(Self.recheckCooldown) }
+    }
+
+    func recheck(now: Date = .now) {
+        if let recheckedAt, now.timeIntervalSince(recheckedAt) < Self.recheckCooldown { return }
+        recheckedAt = now
         Log.usage.info("recheck: every provider asked again")
         limitsDisabled.removeAll()
         limitsErrors.removeAll()
@@ -356,6 +371,12 @@ final class UsageStore {
         // an hour, which is not what "check again" means.
         for id in SourceID.allCases { pollers[id] = PanelPoller() }
         persist()
+        // Now, not on the next tick: the splits and the heatmap are rebuilt
+        // with it rather than up to a minute later, and the readings start
+        // this instant — pressing a button and waiting five seconds for it
+        // to do anything reads as a miss.
+        panelBuiltAt.removeAll()
+        Task { await refreshSoon() }
     }
 
     private func persist() {

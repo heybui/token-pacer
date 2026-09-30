@@ -37,11 +37,15 @@ struct HoverCard: View {
     /// The gear opens Preferences itself. It used to open a four-row menu whose
     /// first row was Preferences — a click to reach a click.
     var onOpenSettings: () -> Void = {}
-    /// Ask every provider again. Only reachable while something is wrong, which
-    /// is the only time there is anything to ask again about.
+    /// Ask every provider again, and when it may be asked next — the store
+    /// holds hand-asked readings to one a minute.
     var onRecheck: () -> Void = {}
+    var recheckAvailableAt: Date?
     /// Bring Sparkle's own window forward, which is where installing happens.
     var onInstallUpdate: () -> Void = {}
+    /// The version the app just updated itself to, until the card has been
+    /// seen with it. An install that asks nobody says so afterwards, here.
+    var updatedTo: String?
 
     @Environment(\.tone) private var toneScale
 
@@ -76,16 +80,31 @@ struct HoverCard: View {
                     // again. The slot is worth more as the button for that.
                     CardButton(
                         symbol: "arrow.clockwise", label: String(localized: "Check again"),
-                        tint: Tokens.amber, spins: true, action: onRecheck
+                        tint: Tokens.amber, spins: true, availableAt: recheckAvailableAt,
+                        action: onRecheck
                     ) { caption = $0 ?? trouble }
-                } else if let snapshot, snapshot.sessionPercent != nil {
-                    // How old the figure is. Between readings the pill is showing
-                    // the last one unmoved, and saying so is the difference
-                    // between a stale number and a lying one.
-                    Text(reportedLabel(snapshot))
-                        .font(Typography.mono(9.5))
-                        .foregroundStyle(.white.opacity(0.34))
-                        .onHover { caption = $0 ? String(localized: "When the numbers were last read") : nil }
+                } else {
+                    if let updatedTo {
+                        // The same corner that says how old the figures are: it
+                        // is news about the app rather than the reading, and it
+                        // goes once the card has been seen with it.
+                        UpdatedLine(version: updatedTo) { caption = $0 }
+                    } else if let snapshot, snapshot.sessionPercent != nil {
+                        // How old the figure is. Between readings the pill is
+                        // showing the last one unmoved, and saying so is the
+                        // difference between a stale number and a lying one.
+                        Text(reportedLabel(snapshot))
+                            .font(Typography.mono(9.5))
+                            .foregroundStyle(.white.opacity(0.34))
+                            .onHover { caption = $0 ? String(localized: "When the numbers were last read") : nil }
+                    }
+                    // Past the five-minute floor, on request. Always in the
+                    // corner — through its cooldown it greys out rather than
+                    // going, so the control is where it was a minute ago.
+                    CardButton(
+                        symbol: "arrow.clockwise", label: String(localized: "Read usage now"),
+                        spins: true, availableAt: recheckAvailableAt, action: onRecheck
+                    ) { caption = $0 }
                 }
             }
 
@@ -238,6 +257,30 @@ struct HoverCard: View {
     }
 }
 
+/// "Updated to 1.3.0 · What's new", in the header's corner.
+private struct UpdatedLine: View {
+    let version: String
+    let onCaption: (String?) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            // Sized and toned as the "Updated … ago" it stands in for.
+            Text("Updated to \(version) ·")
+                .font(Typography.mono(9.5))
+                .foregroundStyle(.white.opacity(0.34))
+            if let page = AppInfo.releasePage(for: version) {
+                Link("What's new", destination: page)
+                    .buttonStyle(.plain)
+                    .font(Typography.mono(9.5))
+                    .foregroundStyle(Tokens.blue.opacity(0.9))
+                    .fixedSize()
+                    .hoverChip(cornerRadius: 5, padding: 3)
+                    .onHover { onCaption($0 ? String(localized: "Open the release notes") : nil) }
+            }
+        }
+    }
+}
+
 /// A control in the card's footer: an icon that says what it does on hover, in
 /// the same line the rows caption themselves into.
 private struct CardButton: View {
@@ -247,10 +290,18 @@ private struct CardButton: View {
     /// One turn on press. A reading takes seconds to come back and the panel
     /// looks identical while it does, so without this a press reads as a miss.
     var spins = false
+    /// Greyed out until then, for an action that is rate limited.
+    var availableAt: Date?
     let action: () -> Void
     let onCaption: (String?) -> Void
 
     @State private var turns = 0
+    @State private var now = Date.now
+
+    private var secondsLeft: Int {
+        availableAt.map { Int($0.timeIntervalSince(now).rounded(.up)) } ?? 0
+    }
+    private var isCooling: Bool { secondsLeft > 0 }
 
     var body: some View {
         Button {
@@ -260,14 +311,31 @@ private struct CardButton: View {
             Image(systemName: symbol)
                 .font(.system(size: 10.5, weight: .medium))
                 .foregroundStyle(tint)
+                // Greyed, never gone: still there to point at, and its caption
+                // says when it comes back.
+                .opacity(isCooling ? 0.7 : 1)
                 .rotationEffect(.degrees(Double(turns) * 360))
                 .animation(.easeInOut(duration: 0.55), value: turns)
                 .frame(width: 18, height: 14)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .disabled(isCooling)
         .accessibilityLabel(label)
-        .hoverChip()
-        .onHover { onCaption($0 ? label : nil) }
+        .hoverChip(isActive: !isCooling)
+        .onHover { onCaption($0 ? caption : nil) }
+        // A second's tick, only through the cooldown and only while the card
+        // is up: nothing else would bring the button back.
+        .task(id: availableAt) {
+            now = .now
+            while isCooling, !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                now = .now
+            }
+        }
+    }
+
+    private var caption: String {
+        isCooling ? String(localized: "Read again in \(secondsLeft)s") : label
     }
 }

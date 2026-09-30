@@ -68,6 +68,8 @@ struct PillView: View {
     var updateVersion: String?
     /// Bring Sparkle's own window forward, which is where installing happens.
     var onInstallUpdate: () -> Void = {}
+    /// The version just installed, until the card has been seen with it.
+    var updatedTo: String?
 
     /// One slot; the order lives on `Badge` so the wing is measured for
     /// whatever this draws.
@@ -83,6 +85,7 @@ struct PillView: View {
     var onOpenSettings: () -> Void = {}
     /// Ask every provider again, from the card's own headline.
     var onRecheck: () -> Void = {}
+    var recheckAvailableAt: Date?
     /// What the welcome card lists, and how it is answered.
     var welcomeRows: [WelcomeCard.Row] = []
     var onDismissWelcome: () -> Void = {}
@@ -349,7 +352,8 @@ struct PillView: View {
                 updateVersion: updateVersion, onPin: onPin,
                 barWidth: providerBarWidth,
                 onExpand: onTogglePinned, onOpenSettings: onOpenSettings, onRecheck: onRecheck,
-                onInstallUpdate: onInstallUpdate
+                recheckAvailableAt: recheckAvailableAt,
+                onInstallUpdate: onInstallUpdate, updatedTo: updatedTo
             )
         case .welcome:
             WelcomeCard(rows: welcomeRows, onOpenSettings: onOpenSettings, onDismiss: onDismissWelcome)

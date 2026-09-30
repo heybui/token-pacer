@@ -273,3 +273,17 @@ private actor StatedSource: UsageSource {
     await store.refresh()
     #expect(store.alert == nil)
 }
+
+/// A reading asked for by hand boots every provider's CLI, so a button pressed
+/// over and over is heard once a minute.
+@MainActor @Test func aReadingAskedForByHandIsHeardOnceAMinute() {
+    let store = UsageStore(sources: [], archive: nil)
+    let t = Date(timeIntervalSince1970: 1_789_000_000)
+    store.recheck(now: t)
+    #expect(store.recheckedAt == t)
+    store.recheck(now: t.addingTimeInterval(30))
+    #expect(store.recheckedAt == t)
+    #expect(store.recheckAvailableAt == t.addingTimeInterval(UsageStore.recheckCooldown))
+    store.recheck(now: t.addingTimeInterval(UsageStore.recheckCooldown))
+    #expect(store.recheckedAt == t.addingTimeInterval(UsageStore.recheckCooldown))
+}

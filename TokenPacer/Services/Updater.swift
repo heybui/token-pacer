@@ -11,7 +11,7 @@ import Sparkle
 // @preconcurrency: Sparkle's delegate protocol predates strict concurrency and
 // is not annotated, but it calls back on the main thread.
 @Observable
-final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
+final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate, SPUUpdaterDelegate {
     /// Optional, not implicitly unwrapped: it cannot be built before `super.init()`
     /// because Sparkle takes `self` as its user-driver delegate, and an `!` there is
     /// a force unwrap with the crash moved to first use.
@@ -21,6 +21,14 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
     /// notch menu says so in its own row; this app asks macOS for nothing.
     private(set) var pendingVersion: String?
 
+    /// Sparkle's own "install and relaunch now", handed over once an update
+    /// has downloaded in the background. Held rather than called: the app
+    /// picks the moment, so a restart never lands in the middle of a turn.
+    @ObservationIgnored private var installNow: (() -> Void)?
+
+    /// Downloaded, verified, and waiting only for a quiet moment.
+    private(set) var isReadyToInstall = false
+
     override init() {
         // Debug hook: `TOKENPACER_SIMULATE_UPDATE=1.2.0` puts the badge and the
         // card's row on screen. The real state needs a signed appcast, and the
@@ -29,7 +37,7 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
         pendingVersion = ProcessInfo.processInfo.environment["TOKENPACER_SIMULATE_UPDATE"]
         super.init()
         controller = SPUStandardUpdaterController(
-            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: self
+            startingUpdater: true, updaterDelegate: self, userDriverDelegate: self
         )
     }
 
@@ -55,9 +63,35 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
         }
     }
 
+    /// Now, if the update is already down; otherwise Sparkle's own window,
+    /// which is where a check the user asked for belongs.
+    func install() {
+        guard let installNow else { return checkForUpdates() }
+        Log.update.notice("installing \(self.pendingVersion ?? "?", privacy: .public) and relaunching")
+        installNow()
+    }
+
     func checkForUpdates() {
         NSApp.activate()
         controller?.updater.checkForUpdates()
+    }
+
+    // MARK: - installing without a quit
+
+    /// An accessory app is never quit, so "install on quit" was an install
+    /// that waited for a restart of the Mac. Taking the handler stalls
+    /// Sparkle's own cycle — its one-day reminder included — so the card and
+    /// the menu offer the version from here on instead of a day from now.
+    /// Sparkle still installs on quit if the moment never comes.
+    func updater(
+        _ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
+        immediateInstallationBlock immediateInstallHandler: @escaping () -> Void
+    ) -> Bool {
+        installNow = immediateInstallHandler
+        pendingVersion = item.displayVersionString
+        isReadyToInstall = true
+        Log.update.notice("\(item.displayVersionString, privacy: .public) downloaded, installing at the next quiet moment")
+        return true
     }
 
     // MARK: - gentle reminders

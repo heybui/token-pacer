@@ -92,6 +92,13 @@ final class Preferences {
         didSet { store.set(hasOnboarded, forKey: Key.hasOnboarded) }
     }
 
+    /// The version whose arrival has been seen. Nil until the first launch
+    /// that knows to write it; an update is the version on disk no longer
+    /// matching it, and the card says so until the card has been looked at.
+    var seenVersion: String? {
+        didSet { store.set(seenVersion, forKey: Key.seenVersion) }
+    }
+
     /// Which limit the panel's splits describe. One choice for every provider,
     /// and one that falls back to the headline's window on a provider with no
     /// longer cap, so it never has to be made twice.
@@ -262,6 +269,7 @@ final class Preferences {
             ?? Default.border
         bordersOn = store.object(forKey: Key.bordersOn) as? Bool ?? Default.bordersOn
         hasOnboarded = store.bool(forKey: Key.hasOnboarded)
+        seenVersion = store.string(forKey: Key.seenVersion)
         splitWindow = store.string(forKey: Key.splitWindow).flatMap(SplitWindow.init(rawValue:))
             ?? Default.splitWindow
         display = store.string(forKey: Key.display)
@@ -374,6 +382,7 @@ final class Preferences {
         static let bordersOn = "pref.bordersOn"
         static let splitWindow = "pref.splitWindow"
         static let hasOnboarded = "pref.hasOnboarded"
+        static let seenVersion = "pref.seenVersion"
         static let language = "pref.language"
         static let pillSource = "pref.pillSource"
     }

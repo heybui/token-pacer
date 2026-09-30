@@ -24,7 +24,7 @@ struct PillRootView: View {
         [
             NotchMenuItem(title: String(localized: "Preferences"), key: "⌘,", action: onOpenPreferences),
             NotchMenuItem(title: updateTitle, isEnabled: updater?.canCheck ?? false) {
-                updater?.checkForUpdates()
+                updater?.install()
             },
             NotchMenuItem(title: String(localized: "Send feedback")) {
                 NSWorkspace.shared.open(AppInfo.feedbackPage)
@@ -108,6 +108,29 @@ struct PillRootView: View {
         answeredFailures = trackedFailures
     }
 
+    /// How long nothing may have happened before a downloaded update restarts
+    /// the app: the pill's own threshold for going quiet.
+    private static let quietBeforeInstall: TimeInterval = 5 * 60
+
+    /// Nobody is using it: no session answering, the pointer elsewhere, no
+    /// panel, card or menu open, and no activity for a while. A restart then
+    /// costs a pill that blinks for two seconds, not an interrupted read.
+    private var isQuietEnoughToRestart: Bool {
+        guard !store.anyoneWorking, !model.inputs.pointerInside, !model.isMenuOpen else { return false }
+        switch model.state {
+        case .pinned, .hover, .warning, .welcome: return false
+        case .hidden, .ghost, .collapsed, .exhausted: break
+        }
+        let quiet = Date.now.timeIntervalSince(store.lastActivity ?? .distantPast)
+        return quiet >= Self.quietBeforeInstall
+    }
+
+    /// The version on disk, when it is not the one last seen arriving.
+    private var updatedTo: String? {
+        guard let seen = preferences.seenVersion, seen != AppInfo.version else { return nil }
+        return AppInfo.version
+    }
+
     private var hasReading: Bool {
         SourceID.allCases.contains { store.snapshots[$0]?.sessionPercent != nil }
     }
@@ -165,7 +188,8 @@ struct PillRootView: View {
             onSplitWindow: { preferences.splitWindow = $0 },
             workingSessions: workingSessions,
             updateVersion: updater?.pendingVersion,
-            onInstallUpdate: { updater?.checkForUpdates() },
+            onInstallUpdate: { updater?.install() },
+            updatedTo: updatedTo,
             // Opening the panel is finding the app, which is what the welcome
             // was for.
             onTogglePinned: {
@@ -176,6 +200,7 @@ struct PillRootView: View {
             onContentHeight: { model.contentHeight = $0 },
             onOpenSettings: onOpenPreferences,
             onRecheck: { store.recheck() },
+            recheckAvailableAt: store.recheckAvailableAt,
             welcomeRows: welcomeRows,
             onDismissWelcome: answerWelcome,
             isMenuOpen: model.isMenuOpen,
@@ -247,6 +272,17 @@ struct PillRootView: View {
             .onChange(of: preferences.hidesAfterQuietMinutes) { _, _ in
                 model.update(snapshot: store.snapshot)
             }
+            // A first run has nothing to compare against, and the welcome is
+            // its news; from here on a different version on disk is an update.
+            .onAppear {
+                if preferences.seenVersion == nil { preferences.seenVersion = AppInfo.version }
+            }
+            // Seen once the card that says so has been open and closed again.
+            .onChange(of: model.state) { was, now in
+                if was == .hover, now != .hover, updatedTo != nil {
+                    preferences.seenVersion = AppInfo.version
+                }
+            }
             .onChange(of: showsWelcome, initial: true) { _, shows in
                 model.inputs.showsWelcome = shows
                 model.update(snapshot: store.snapshot)
@@ -256,6 +292,18 @@ struct PillRootView: View {
             // for the one where nobody knows yet where to look.
             .onChange(of: hasReading) { was, has in
                 if !was, has, !preferences.hasOnboarded { isPulsing = true }
+            }
+            // Only while an update is waiting, and only every half minute:
+            // a restart can wait that long, and nothing ticks when none is due.
+            .task(id: updater?.isReadyToInstall == true) {
+                guard updater?.isReadyToInstall == true else { return }
+                while !Task.isCancelled {
+                    if isQuietEnoughToRestart {
+                        updater?.install()
+                        return
+                    }
+                    try? await Task.sleep(for: .seconds(30))
+                }
             }
             .task(id: isPulsing) {
                 guard isPulsing else { return }

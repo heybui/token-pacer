@@ -330,13 +330,64 @@ private struct SplitColumn: View {
             // grows with the list.
             ViewThatFits(in: .vertical) {
                 SplitRows(rows: rows)
-                // Clear of the scroller, which is drawn over the content.
-                ScrollView { SplitRows(rows: rows).padding(.trailing, 10) }
-                    .scrollIndicators(.visible)
+                ScrollingSplitRows(rows: rows)
             }
-            .frame(maxHeight: Self.listHeight)
+            // Top: the frame takes the whole four rows, and a shorter list
+            // centred in it floated away from its own title.
+            .frame(maxHeight: Self.listHeight, alignment: .top)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The list past four rows, with a scroller drawn to match the panel.
+///
+/// The system one is a legacy scroller whenever it is forced visible: a grey
+/// track the height of the column with a knob in it, the one piece of stock
+/// chrome on a black panel. This is a 3pt capsule and no track, always on,
+/// because a list that scrolls has to say so without a pointer over it.
+/// ponytail: wheel and trackpad only — the capsule is not draggable; add a
+/// drag gesture if a mouse without a wheel ever has to reach the tail.
+private struct ScrollingSplitRows: View {
+    let rows: [UsageSplit]
+
+    /// Where the list is scrolled to, and how much of it there is.
+    @State private var geometry = ScrollSpan()
+
+    private struct ScrollSpan: Equatable {
+        var offset: CGFloat = 0
+        var content: CGFloat = 1
+        var visible: CGFloat = 1
+    }
+
+    var body: some View {
+        ScrollView {
+            // Clear of the capsule, which sits over the content's edge.
+            SplitRows(rows: rows).padding(.trailing, 8)
+        }
+        // `.never`, not `.hidden`: with scroll bars set to always show — or a
+        // mouse plugged in — `.hidden` is only a preference, and the legacy
+        // scroller was drawn anyway, beside this one.
+        .scrollIndicators(.never)
+        .onScrollGeometryChange(for: ScrollSpan.self) {
+            ScrollSpan(
+                offset: $0.contentOffset.y,
+                content: max(1, $0.contentSize.height),
+                visible: max(1, $0.containerSize.height)
+            )
+        } action: { _, span in geometry = span }
+        .overlay(alignment: .topTrailing) {
+            let thumb = max(16, geometry.visible * min(1, geometry.visible / geometry.content))
+            let travel = geometry.visible - thumb
+            let progress = geometry.content > geometry.visible
+                ? min(1, max(0, geometry.offset / (geometry.content - geometry.visible)))
+                : 0
+            Capsule()
+                .fill(.white.opacity(0.22))
+                .frame(width: 3, height: thumb)
+                .offset(y: travel * progress)
+                .allowsHitTesting(false)
+        }
     }
 }
 
