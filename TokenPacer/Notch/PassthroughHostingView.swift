@@ -54,7 +54,8 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
         let area = NSTrackingArea(
             rect: liveRect,
             options: [.mouseEnteredAndExited, .activeAlways],
-            owner: self
+            owner: self,
+            userInfo: [Self.shellArea: true]
         )
         addTrackingArea(area)
         hoverArea = area
@@ -67,8 +68,27 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
         report(liveRect.contains(convert(point, from: nil)))
     }
 
-    override func mouseEntered(with event: NSEvent) { report(true) }
-    override func mouseExited(with event: NSEvent) { report(false) }
+    /// Marks the shell's own area. Checked by key rather than by identity: the
+    /// area is rebuilt every time the shell changes size, and the exit that
+    /// closes a card arrives for the one that was current when it opened.
+    private static var shellArea: String { "tokenpacer.shell" }
+
+    /// Only our own area's. SwiftUI's hover area has this view as its owner
+    /// too, so swallowing every entry here swallowed SwiftUI's: `.onHover` in
+    /// the shell worked only when SwiftUI happened to make its area with the
+    /// pointer already inside — the hover card, opened by the pointer — and
+    /// never on a card that was up before the pointer arrived.
+    override func mouseEntered(with event: NSEvent) {
+        isShell(event) ? report(true) : super.mouseEntered(with: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isShell(event) ? report(false) : super.mouseExited(with: event)
+    }
+
+    private func isShell(_ event: NSEvent) -> Bool {
+        event.trackingArea?.userInfo?[Self.shellArea] != nil
+    }
 
     /// Only on a change: a report resizes the shell, which rebuilds the area,
     /// which reports again. Second time round the answer is the same and it stops.
