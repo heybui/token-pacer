@@ -174,9 +174,7 @@ actor CopilotSource: UsageSource {
                 model: text(statement, 1),
                 // `owner/name` when the session was opened in a repository,
                 // which reads better than the folder name behind it.
-                project: text(statement, 9) ?? text(statement, 10).map {
-                    URL(filePath: $0).lastPathComponent
-                },
+                project: text(statement, 9) ?? text(statement, 10).flatMap(ProjectName.of),
                 sessionID: text(statement, 8),
                 counts: counts
             ))

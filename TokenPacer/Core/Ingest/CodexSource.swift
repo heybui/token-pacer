@@ -90,13 +90,13 @@ actor CodexSource: UsageSource {
         switch row.type {
         case "session_meta":
             if let cwd = row.payload?.cwd {
-                projectByFile[file] = URL(fileURLWithPath: cwd).lastPathComponent
+                projectByFile[file] = ProjectName.of(cwd)
             }
             return []
 
         case "turn_context":
             if projectByFile[file] == nil, let cwd = row.payload?.cwd {
-                projectByFile[file] = URL(fileURLWithPath: cwd).lastPathComponent
+                projectByFile[file] = ProjectName.of(cwd)
             }
             // Overwritten rather than kept: `/model` mid-session is a new
             // `turn_context`, and the turns after it are that model's.

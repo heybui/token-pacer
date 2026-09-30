@@ -291,3 +291,45 @@ private func line(id: String, output: Int, at date: Date) -> String {
     #expect(state.limits[.codex]?.planType == "Plus")
     #expect(UsageStore(sources: [], archive: archive, appVersion: "1.1.2 (267)").errors.isEmpty)
 }
+
+/// An archive from an older decoder is read over: every log once more, the
+/// fresh events replacing the archived ones by id, and an archived event whose
+/// log is gone kept rather than lost with it.
+@MainActor
+@Test func anArchiveFromAnOlderDecoderIsReadOver() async throws {
+    let root = FileManager.default.temporaryDirectory
+        .appending(path: "token-pacer-tests/\(UUID().uuidString)")
+    let log = try writeLog([line(id: "1", output: 100, at: Date())], to: root, named: "session.jsonl")
+    let size = try FileHandle(forReadingFrom: log).seekToEnd()
+
+    func archived(_ id: String, project: String) -> UsageEvent {
+        UsageEvent(id: id, source: .claude, timestamp: Date(), model: "claude-opus-5",
+                   project: project, sessionID: "s",
+                   counts: TokenCounts(input: 10, output: 100))
+    }
+    let archive = temporaryArchive()
+    var old = ArchivedEvents()
+    old.version = 1
+    old.sources[.claude] = ArchivedEvents.PerSource(
+        // A cursor at the end: honoured, the log would never be read again.
+        cursors: [log.path: JSONLReader.Cursor(offset: size, inode: 0)],
+        events: [archived("claude:m1#1", project: "src"), archived("claude:gone", project: "gone")]
+    )
+    archive.saveEvents(old)
+
+    let store = UsageStore(sources: [CountingSource(root: root)], interval: 3600, archive: archive)
+    store.start()
+    // Until the first poll has landed, not a fixed wait: under a parallel run
+    // 200ms was not always enough for the restore and the read over.
+    func projects() -> Set<String> {
+        Set(store.snapshots[.claude]?.panel.byProject.map(\.name) ?? [])
+    }
+    let deadline = Date.now.addingTimeInterval(3)
+    while projects().isEmpty, Date.now < deadline {
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    store.stop()
+
+    #expect(store.eventCount(.claude) == 2)
+    #expect(projects() == ["demo", "gone"])
+}

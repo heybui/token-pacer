@@ -630,3 +630,36 @@ private func codexRecord(_ stamp: String, input: Int) -> String {
     #expect(events.map(\.counts.input).sorted() == [30, 40, 100])
 }
 
+
+// MARK: - Projects
+
+/// A project is the repository, wherever in it the agent had `cd`ed to, and a
+/// worktree is the repository it was cut from — even once it is deleted.
+@Test func aProjectIsTheRepositoryItsDirectoryIsIn() throws {
+    let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let repo = root.appending(path: "duotyping")
+    let deep = repo.appending(path: "apps/portal/src")
+    try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: repo.appending(path: ".git"), withIntermediateDirectories: true)
+
+    let worktree = repo.appending(path: ".claude/worktrees/agent-a06c")
+    try FileManager.default.createDirectory(at: worktree, withIntermediateDirectories: true)
+    try "gitdir: \(repo.path)/.git/worktrees/agent-a06c\n"
+        .write(to: worktree.appending(path: ".git"), atomically: true, encoding: .utf8)
+    // A worktree kept somewhere else entirely still names its repository.
+    let elsewhere = root.appending(path: "urban-memory-b411")
+    try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+    try "gitdir: \(repo.path)/.git/worktrees/urban-memory-b411\n"
+        .write(to: elsewhere.appending(path: ".git"), atomically: true, encoding: .utf8)
+
+    #expect(ProjectName.resolve(deep.path) == "duotyping")
+    #expect(ProjectName.resolve(worktree.path) == "duotyping")
+    #expect(ProjectName.resolve(worktree.appending(path: "src").path) == "duotyping")
+    #expect(ProjectName.resolve(elsewhere.path) == "duotyping")
+    #expect(ProjectName.resolve(repo.appending(path: "deleted/since").path) == "duotyping")
+    // In no repository, a directory is its own project.
+    #expect(ProjectName.resolve(root.appending(path: "scratch").path) == "scratch")
+    // An agent's own home is not a project.
+    #expect(ProjectName.resolve(AgentHome.copilot.appending(path: "chats/6c8f").path) == nil)
+}

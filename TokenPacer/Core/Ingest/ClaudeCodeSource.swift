@@ -92,7 +92,7 @@ actor ClaudeCodeSource: UsageSource {
             source: .claude,
             timestamp: stamp,
             model: row.message?.model,
-            project: row.cwd.map { URL(fileURLWithPath: $0).lastPathComponent },
+            project: row.cwd.flatMap(ProjectName.of),
             sessionID: row.sessionId,
             counts: counts
         )]

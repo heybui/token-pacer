@@ -52,7 +52,15 @@ struct ArchivedState: Codable, Sendable {
 /// has been appended since. Kept in its own file: it is a thousand times the size
 /// of the limits state and is written a thousand times less often.
 struct ArchivedEvents: Codable, Sendable {
-    static let currentVersion = 1
+    /// Bumped when the same log line decodes to a different event — a field
+    /// derived differently, a line newly read. An older archive still loads,
+    /// but its cursors are dropped and every log is read once more; the fresh
+    /// events replace the archived ones by id, and an archived event whose log
+    /// is gone is kept.
+    ///
+    /// 2: a project is the repository the directory is in, not the directory,
+    /// and Codex before 0.153 is read off its `token_count` lines.
+    static let currentVersion = 2
 
     struct PerSource: Codable, Sendable {
         var cursors: [String: JSONLReader.Cursor] = [:]

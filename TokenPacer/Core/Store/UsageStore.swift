@@ -269,10 +269,17 @@ final class UsageStore {
         guard let archived = archive?.loadEvents() else { return }
         var count = 0
 
+        let stale = archived.version < ArchivedEvents.currentVersion
         for source in sources where !source.rereadsOnLaunch {
             guard let state = archived.sources[source.id] else { continue }
             events[source.id] = state.events
             count += state.events.count
+            if stale {
+                // Read everything again, as this build decodes it. The first
+                // poll's events replace these by id; see `ArchivedEvents`.
+                rebuilding.insert(source.id)
+                continue
+            }
             // `seen` catches history replayed into a *new* file on resume, so it
             // is rebuilt from the archived ids rather than stored a second time.
             await source.restore(
@@ -283,6 +290,10 @@ final class UsageStore {
         let ms = Int(Date.now.timeIntervalSince(started) * 1000)
         Log.ingest.info("restored \(count, privacy: .public) events in \(ms, privacy: .public)ms")
     }
+
+    /// Sources whose archived events came from an older decoder and are
+    /// waiting for the full re-read to replace them.
+    private var rebuilding: Set<SourceID> = []
 
     /// Cheap to encode but megabytes to write, so it goes out on a slow cadence
     /// and on the way out of the process — never on the 5s tick.
@@ -419,16 +430,26 @@ final class UsageStore {
             do {
                 let fresh = try await source.poll()
                 var merged = events[source.id] ?? []
-                let newest = merged.last?.timestamp
-                merged.append(contentsOf: fresh.events)
-
-                // Sorted already, and fresh lines arrive in order, so the join is
-                // the only place order can break — a resumed session replaying
-                // history behind what is already held. Sorting every retained
-                // event on each 5s tick to append a handful of new ones was the
-                // most expensive thing in the poll, and it grew with the history.
-                if Self.isDisordered(fresh.events, after: newest) {
+                if rebuilding.remove(source.id) != nil {
+                    // The whole log corpus, decoded afresh: it replaces what was
+                    // archived, and only what it no longer has is kept.
+                    let reread = Set(fresh.events.map(\.id))
+                    merged.removeAll { reread.contains($0.id) }
+                    merged.append(contentsOf: fresh.events)
                     merged.sort { $0.timestamp < $1.timestamp }
+                } else {
+                    let newest = merged.last?.timestamp
+                    merged.append(contentsOf: fresh.events)
+
+                    // Sorted already, and fresh lines arrive in order, so the join
+                    // is the only place order can break — a resumed session
+                    // replaying history behind what is already held. Sorting every
+                    // retained event on each 5s tick to append a handful of new
+                    // ones was the most expensive thing in the poll, and it grew
+                    // with the history.
+                    if Self.isDisordered(fresh.events, after: newest) {
+                        merged.sort { $0.timestamp < $1.timestamp }
+                    }
                 }
 
                 // Expiry is a prefix of a sorted array, so this walks only what it
