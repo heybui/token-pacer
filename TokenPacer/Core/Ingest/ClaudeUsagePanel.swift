@@ -16,7 +16,7 @@ struct ClaudeUsagePanel: UsagePanel {
     func fetch(now: Date = Date.now) async throws -> RateLimits {
         let text = try await read()
         guard let limits = Self.parse(text, now: now) else {
-            throw PanelText.looksLikeSignIn(text) ? PanelError.notSignedIn : PanelError.unreadable
+            throw PanelText.failure(in: text)
         }
         return limits
     }

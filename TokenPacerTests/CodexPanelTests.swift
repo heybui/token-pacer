@@ -53,6 +53,17 @@ private let now = Date()
     await #expect(throws: PanelError.unreadable) { try await notJSON.fetch(now: now) }
 }
 
+/// What `codex app-server` answers with the network down. Read as a layout
+/// change it said "Could not read Codex's usage panel" for as long as the
+/// backoff held it, long after the network was back.
+@Test func aRequestThatNeverLeftIsOfflineNotUnreadable() async {
+    let offline = CodexUsagePanel {
+        #"{"error":{"code":-32603,"message":"failed to fetch codex rate limits: error sending request for url (https://chatgpt.com/backend-api/wham/usage)"},"id":2}"#
+    }
+    await #expect(throws: PanelError.offline) { try await offline.fetch(now: now) }
+    #expect(PanelError.offline.isFatal == false)
+}
+
 /// A workspace metered in credits: no five-hour window exists, because a credit
 /// budget is the only limit the account has.
 private let creditReply = """

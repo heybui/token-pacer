@@ -364,6 +364,22 @@ final class UsageStore {
         if let recheckedAt, now.timeIntervalSince(recheckedAt) < Self.recheckCooldown { return }
         recheckedAt = now
         Log.usage.info("recheck: every provider asked again")
+        askAgain()
+    }
+
+    /// The network came back. Every failure while it was gone was the network's,
+    /// and the backoff they ran up would hold a stale complaint for up to an
+    /// hour, so this is a recheck that no button asked for and no cooldown holds.
+    /// Only when something is failing: a laptop rejoins Wi-Fi on every wake,
+    /// and booting every CLI each time for figures that were fine is the cost
+    /// the floor exists to avoid.
+    func reconnected() {
+        guard !limitsErrors.isEmpty else { return }
+        Log.usage.info("reconnected: every provider asked again")
+        askAgain()
+    }
+
+    private func askAgain() {
         limitsDisabled.removeAll()
         limitsErrors.removeAll()
         errors.removeAll()
@@ -596,6 +612,9 @@ final class UsageStore {
            stated.observedAt > (poller.lastRunAt ?? .distantPast) {
             liveLimits[id] = stated
             poller.ran(at: stated.observedAt)
+            // A newer figure than the failed run is the answer it failed to get.
+            limitsErrors[id] = nil
+            failures[id] = nil
         }
         // Only what the last reading has not already seen. A cold start replays
         // every retained event, and 90 days of history would look like activity

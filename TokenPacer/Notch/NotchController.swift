@@ -1,4 +1,5 @@
 import AppKit
+import Network
 import SwiftUI
 
 /// Owns the panel and keeps it glued to the notch of whichever screen is active.
@@ -33,6 +34,8 @@ final class NotchController {
     /// A pending shrink. Cancelled by whatever happens next, which is what makes
     /// a hover that comes back mid-collapse cost nothing.
     private var shrink: Task<Void, Never>?
+    /// Watches for the network coming back. See `watchConnectivity`.
+    private var connectivity: Task<Void, Never>?
     /// When the install locations were last looked at. See `detectInstalled`.
     private var lastDetect = Date.distantPast
 
@@ -110,6 +113,7 @@ final class NotchController {
         panel.orderFrontRegardless()
 
         store.start()
+        watchConnectivity()
         if ProcessInfo.processInfo.environment["TP_OPEN_PREFS"] != nil {
             NSApp.setActivationPolicy(.regular)
             preferencesWindow.show(preferences: preferences, store: store, updater: updater)
@@ -127,6 +131,26 @@ final class NotchController {
         guard now.timeIntervalSince(lastDetect) > 30 else { return }
         lastDetect = now
         preferences.refreshTracked()
+    }
+
+    /// A reading that failed offline otherwise waits out its backoff after the
+    /// network is back, up to an hour of a complaint about nothing. Only the
+    /// edge from down to up asks: the monitor also reports every change of
+    /// interface, and Wi-Fi to Ethernet is not news.
+    private func watchConnectivity() {
+        connectivity = Task { [weak store] in
+            var wasOnline = true
+            for await path in NWPathMonitor() {
+                let online = path.status == .satisfied
+                if online, !wasOnline {
+                    // A link that just came up often has no DNS for a moment, and
+                    // a read sent into that fails the same way it did offline.
+                    try? await Task.sleep(for: .seconds(3))
+                    store?.reconnected()
+                }
+                wasOnline = online
+            }
+        }
     }
 
     func flush() async { await store.flush() }

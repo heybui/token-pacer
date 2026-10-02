@@ -28,6 +28,9 @@ enum PanelError: Error, Equatable {
     case timedOut
     /// The CLI drew a sign-in prompt where the panel should have been.
     case notSignedIn
+    /// The CLI could not reach its own server. Codex's app-server says so as
+    /// `error sending request for url (…/wham/usage)` where the figures go.
+    case offline
     /// The panel rendered but carried no figure we recognise — in practice a
     /// layout change in a new release.
     case unreadable
@@ -38,7 +41,7 @@ enum PanelError: Error, Equatable {
     var isFatal: Bool {
         switch self {
         case .cliNotFound, .noTrustedDirectory: true
-        case .spawnFailed, .timedOut, .notSignedIn, .unreadable: false
+        case .spawnFailed, .timedOut, .notSignedIn, .offline, .unreadable: false
         }
     }
 
@@ -51,6 +54,7 @@ enum PanelError: Error, Equatable {
         case .spawnFailed(let code): "Could not start \(cli) (\(code))"
         case .timedOut: "\(cli) did not answer in time"
         case .notSignedIn: "Sign in to \(cli)"
+        case .offline: "\(cli) can't connect right now"
         case .unreadable: "Could not read \(cli)'s usage panel"
         }
     }
@@ -228,6 +232,21 @@ enum PanelText {
         return (1..<match.numberOfRanges).map {
             Range(match.range(at: $0), in: text).map { String(text[$0]) } ?? ""
         }
+    }
+
+    /// Why a reply that carried no figure carried none. Shared so every
+    /// provider tells the same three apart the same way.
+    static func failure(in raw: String) -> PanelError {
+        if looksLikeSignIn(raw) { return .notSignedIn }
+        let text = normalize(raw)
+        for pattern in [
+            #"error\s*sending\s*request"#, #"failed\s*to\s*fetch"#,
+            #"could\s*not\s*resolve"#, #"network\s*(is\s*)?unreachable"#,
+            #"connection\s*(refused|reset|failed)"#,
+        ] where text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil {
+            return .offline
+        }
+        return .unreadable
     }
 
     static func looksLikeSignIn(_ raw: String) -> Bool {
