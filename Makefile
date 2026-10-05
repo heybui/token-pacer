@@ -240,7 +240,7 @@ NOTES_MD ?= build/notes.md
 notes:
 	@mkdir -p build/feed
 	@[ -s $(NOTES_MD) ] \
-	  || gh release view v$(VERSION) --json body -q .body > $(NOTES_MD) 2>/dev/null \
+	  || gh release view v$(VERSION) --repo $(RELEASE_REPO) --json body -q .body > $(NOTES_MD) 2>/dev/null \
 	  || true
 	@# No notes is a state, not a failure: leaving the fragment out is what tells
 	@# generate_appcast this version has nothing to say.

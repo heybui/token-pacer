@@ -536,7 +536,7 @@ compiled into it. `SUPublicEDKey` in `Info.plist` is a one-way door.
 
 One-time setup, in order:
 
-0. The two public repos and the domain; `gh` authenticated as their owner for
+0. The public repos and the domain; `gh` authenticated as their owner for
    the local path, `SITE_REPO_TOKEN` for the CI one.
 1. **A Developer ID Application certificate** (paid Developer Program). An Apple
    Development certificate cannot be notarized and Gatekeeper refuses it on any
