@@ -471,18 +471,18 @@ make release VERSION=0.1.0                   # the same thing, from a laptop
 stapling rewrites the disk image, so the feed is signed *after* it or it signs
 bytes nobody downloads. Individual targets stand alone for a dry run.
 
-**Where it publishes.** The app source and its releases are public. Sparkle
-reads the feed from the website's stable URL, while the DMG is an asset on the
-app's release:
+**Where it publishes.** The app source and its releases are public. New builds
+read the appcast asset on the latest app release; older builds still read the
+website's feed URL:
 
 | Repo | Holds | Reached by |
 |---|---|---|
-| `heybui/token-pacer` | source, release notes, notarized DMG and appcast snapshot | GitHub release assets |
-| `heybui/tokenpacer.com` | landing page and `appcast.xml` | Sparkle, at `https://tokenpacer.com/appcast.xml` |
+| `heybui/token-pacer` | source, release notes, notarized DMG and appcast | Sparkle, at `https://github.com/heybui/token-pacer/releases/latest/download/appcast.xml` |
+| `heybui/tokenpacer.com` | landing page and `appcast.xml` | Older builds, at `https://tokenpacer.com/appcast.xml` |
 | `redevify/homebrew-tap` | `Casks/token-pacer.rb` | `brew tap redevify/tap` |
 
-The feed stays on the domain: installed builds keep polling the URL they were
-compiled with. The app release gets an identical appcast snapshot. New feed
+Both URLs serve the same generated feed. Installed builds keep polling the URL
+they were compiled with, so the website copy must remain available. Feed
 entries point to the app repo. `RELEASE_REPO`, `SITE_DIR`, `HOMEBREW_TAP_REPO`
 and `HOMEBREW_TAP_DIR` in the Makefile are the relevant knobs.
 

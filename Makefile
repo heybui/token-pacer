@@ -39,14 +39,14 @@ VERSION ?= $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString"
 BUILD   ?= $(shell git rev-list --count HEAD)
 DMG     := build/$(APP)-$(VERSION).dmg
 
-## The app's public release carries the DMG and an appcast snapshot. The site
-## serves that same feed at the URL baked into installed apps; the tap has the cask.
+## The app's public release carries the DMG and appcast. The site serves the
+## same feed to older installed builds; the tap has the cask.
 RELEASE_REPO ?= heybui/token-pacer
 SITE_DIR  ?= ../tokenpacer.com
 HOMEBREW_TAP_REPO ?= redevify/homebrew-tap
 HOMEBREW_TAP_DIR  ?= ../homebrew-tap
-## Per release, so it is never the URL baked into a build — only the feed is that,
-## and the feed is the domain.
+## Versioned DMG links go in the feed; the app's feed URL points to the latest
+## appcast asset, while older builds keep using the domain.
 RELEASE_URL := https://github.com/$(RELEASE_REPO)/releases/download
 
 ## Distribution needs a *Developer ID Application* certificate — the Apple
@@ -206,7 +206,7 @@ $(DMG):
 	 echo "the cask have to describe the stapled image, not a freshly built one."; \
 	 exit 1
 
-## The feed Sparkle reads is served from the domain, including for installed apps.
+## Generate one feed for the app release and the website's legacy feed URL.
 ## Signs each update with the EdDSA key in the login Keychain — without it an
 ## installed copy refuses the download, which is the whole point of the key.
 appcast: $(DMG)
@@ -315,7 +315,7 @@ release:
 	  gh release create v$(VERSION) --repo $(RELEASE_REPO) --verify-tag \
 	    --title "$(APP) $(VERSION)" --notes-file $(NOTES_MD) $(DMG) build/appcast.xml; \
 	fi
-	@# The site's static feed remains the URL baked into installed apps and
+	@# The site's static feed remains the URL baked into older installed apps and
 	@# supplies the website's version and download link at build time.
 	@# It goes in public/ — the site deploys dist/, built from src/ and public/,
 	@# so a copy at the repo root is never served and Sparkle would 404.

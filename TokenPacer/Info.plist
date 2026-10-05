@@ -21,12 +21,12 @@
 	<key>CFBundleIconFile</key><string>TokenPacer</string>
 	<key>LSUIElement</key><true/>
 
-	<!-- Sparkle. The feed stays on the domain because installed builds poll
-	     the URL they shipped with; release DMGs are in the public app repo.
+	<!-- Sparkle. New builds follow the latest app release's appcast asset.
+	     Older builds still poll tokenpacer.com/appcast.xml, so keep publishing it.
 	     The private half of SUPublicEDKey lives in the login Keychain as
 	     "Private key for signing Sparkle updates" — it is not in this repo, and
 	     it cannot be recovered. -->
-	<key>SUFeedURL</key><string>https://tokenpacer.com/appcast.xml</string>
+	<key>SUFeedURL</key><string>https://github.com/heybui/token-pacer/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key><string>upjF7oD8vW9TXGxqDlR4XSQ5AQNojCkT8Xi87J0DZWc=</string>
 	<key>SUEnableAutomaticChecks</key><true/>
 	<key>SUAutomaticallyUpdate</key><true/>
