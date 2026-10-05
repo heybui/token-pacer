@@ -1,0 +1,37 @@
+name: Feedback
+description: A bug, an idea, or a question about Token Pacer.
+labels: [feedback]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sent from the site? Everything below is already filled in — add a screenshot and post it.
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - Bug
+        - Idea
+        - Question
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened
+      description: What you expected, what you got, and the steps to get there.
+      placeholder: The panel stays open after the window resets.
+    validations:
+      required: true
+
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshot or recording
+      description: |
+        Drag images or a screen recording straight into this box — GitHub uploads them and leaves a link behind.
+        A shot of the notch is worth a paragraph. Skip it if it doesn't apply.
+      placeholder: Drop files here.
