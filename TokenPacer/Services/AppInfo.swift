@@ -29,10 +29,9 @@ enum AppInfo {
         return url
     }()
 
-    /// A version's public release page, where its notes are. The site's
-    /// repository, not this one: this one is private.
+    /// A version's public release page, where its notes are.
     static func releasePage(for version: String) -> URL? {
-        URL(string: "https://github.com/heybui/tokenpacer.com/releases/tag/v\(version)")
+        URL(string: "https://github.com/heybui/token-pacer/releases/tag/v\(version)")
     }
 
     private static func string(_ key: String) -> String? {

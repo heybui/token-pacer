@@ -54,14 +54,14 @@ Copy from inside the block, delete what does not apply.
 
 ## What breaks in the dialog
 
-- **No `#123`, no `@name`.** This repo is private: the autolink points at
-  something the reader cannot open, and a mention leaks a handle to everyone.
+- **No unexplained `#123`, no `@name`.** The notes appear in Sparkle's dialog;
+  spell out issues and avoid pinging people from release notes.
 - **Absolute `https://` links only.** A relative path resolves against the
   release page, not the app, and 404s for every reader.
 - **`###` and lists.** `#` and `##` are shouting at that size; tables run off
   the side; an image has to be a public URL and is usually a scroll of nothing.
 - **No screenshots of internal tooling** — the notes are public the moment the
-  site release is created.
+  app release is published.
 
 ## A good one
 

@@ -7,11 +7,12 @@
 ## docs/ARCHITECTURE.md §7 lists them and what the button costs.
 name: Release
 
-## Publishing a release in this repo is the whole ceremony. Its tag names the
-## version, its body is the release notes, and publishing it starts this run.
+## Publishing a release in this repo starts the build. Its tag names the
+## version, its body is the release notes, and its assets are the notarized DMG
+## and the appcast snapshot also published on the website.
 ## Nothing has to be bumped in the repo first, and nothing about the release is
-## written twice: what you typed in the form is what the site's release page,
-## the Sparkle dialog and the update banner all say.
+## written twice: what you typed in the form is what the release page,
+## Sparkle dialog and update banner all say.
 ##
 ## Draft releases do not fire this — `published` is the event, so the form can
 ## be saved and edited until it is right.
@@ -25,8 +26,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  ## The tag already exists — it triggered this. Write stays for the fallback in
-  ## `make release`, which creates it when a release is cut from a laptop.
+  ## Upload the notarized DMG and appcast to the release that triggered this workflow.
   contents: write
 
 jobs:
@@ -121,20 +121,14 @@ jobs:
             exit 1
           fi
 
-          ## Proves the token reaches the repo. Without this the release check
-          ## below reads a permission failure as "no such release" and sails on.
+          ## Proves the site token reaches the repo before notarization begins.
           gh api "repos/$SITE_REPO" --jq .full_name > /dev/null || {
             echo "::error::SITE_REPO_TOKEN cannot read $SITE_REPO. It needs contents write on that repo."
             exit 1
           }
 
-          ## Not an error any more. Re-pushing a tag takes `--force`, so a second
-          ## run of the same version is a retry, and `make release` replaces the
-          ## notes and the image in place instead of refusing. Said out loud
-          ## because the only other way to notice is the release history.
-          if gh release view "v$VERSION" --repo "$SITE_REPO" > /dev/null 2>&1; then
-            echo "::warning::v$VERSION already exists in $SITE_REPO — this run replaces it."
-          fi
+          ## The release that triggered this workflow is the upload target.
+          GH_TOKEN="${{ github.token }}" gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null
 
       - name: Import the Developer ID certificate
         env:
@@ -192,7 +186,8 @@ jobs:
         ## Everything slow lives here; the notary wait has its own bound below.
         timeout-minutes: 20
         env:
-          GH_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          SITE_REPO_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
           SITE_REPO: ${{ vars.SITE_REPO || 'heybui/tokenpacer.com' }}
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -207,7 +202,7 @@ jobs:
           # The token rides in the URL so the push inside `make release` needs no
           # credential helper. The clone dies with the runner.
           git clone --depth 1 \
-            "https://x-access-token:$GH_TOKEN@github.com/$SITE_REPO.git" "$RUNNER_TEMP/site"
+            "https://x-access-token:$SITE_REPO_TOKEN@github.com/$SITE_REPO.git" "$RUNNER_TEMP/site"
 
           # The tap lives in another owner's account, so it takes its own token: a
           # fine-grained one is scoped to a single owner. Optional on purpose —

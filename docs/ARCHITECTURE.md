@@ -471,21 +471,22 @@ make release VERSION=0.1.0                   # the same thing, from a laptop
 stapling rewrites the disk image, so the feed is signed *after* it or it signs
 bytes nobody downloads. Individual targets stand alone for a dry run.
 
-**Where it publishes, and why not here.** The source is private, and a private
-repo's release assets have no unauthenticated URL — there is no setting to flip.
-Sparkle cannot authenticate and neither can `brew`, so two public repos carry the
-distribution surface, both checked out beside this one:
+**Where it publishes.** The app source and its releases are public. Sparkle
+reads the feed from the website's stable URL, while the DMG is an asset on the
+app's release:
 
 | Repo | Holds | Reached by |
 |---|---|---|
-| `heybui/tokenpacer.com` | landing page, `appcast.xml`, the DMG as a release asset | Sparkle, at `https://tokenpacer.com/appcast.xml` |
+| `heybui/token-pacer` | source, release notes, notarized DMG and appcast snapshot | GitHub release assets |
+| `heybui/tokenpacer.com` | landing page and `appcast.xml` | Sparkle, at `https://tokenpacer.com/appcast.xml` |
 | `redevify/homebrew-tap` | `Casks/token-pacer.rb` | `brew tap redevify/tap` |
 
-The feed is served from the domain, never from the release it ships with: a build
-polls the URL it was compiled with for ever. `SITE_REPO`, `SITE_DIR`, `HOMEBREW_TAP_REPO`
-and `HOMEBREW_TAP_DIR` in the Makefile are the only knobs.
+The feed stays on the domain: installed builds keep polling the URL they were
+compiled with. The app release gets an identical appcast snapshot. New feed
+entries point to the app repo. `RELEASE_REPO`, `SITE_DIR`, `HOMEBREW_TAP_REPO`
+and `HOMEBREW_TAP_DIR` in the Makefile are the relevant knobs.
 
-**Publishing a release in this repo is the release.** Its tag names the version
+**Publishing a release in this repo starts the release build.** Its tag names the version
 and its body is the notes. The workflow hands the tag to `make` as `VERSION`,
 and `make app` stamps it into `CFBundleShortVersionString`; the figure in
 `TokenPacer/Info.plist` is only the fallback a local build uses. So nothing has
@@ -493,26 +494,23 @@ to be bumped before releasing, and no button can disagree with the tag about
 what shipped. Drafts do not fire it — the event is `published`.
 
 **The same version can be released twice.** Force-pushing a tag that already
-exists is deliberate, so a second run is a retry — of a release that notarized
-and then died on the tap, say. It replaces the notes and the image on the
-existing GitHub release rather than failing the run, keeping that release's URL
-and the download link already in someone's hands. The feed, the cask and the
-site commit are idempotent to match: nothing to commit is success, not a failure
-to publish.
+exists is deliberate, so a second run is a retry. It replaces both assets on
+the existing app release without changing the release notes or download URL.
+The feed, cask and site commit are idempotent to match.
 
-**Release notes are written, not generated.** The body of that release is the
-only copy: CI writes it to `build/notes.md`, `gh api /markdown` renders the
-fragment Sparkle embeds, and the site's release page carries the same text. A
-generated log was tried and thrown out — it lists `chore` and `ci` under a
+**Release notes are written, not generated.** The body of the app release is the
+only copy: CI writes it to `build/notes.md`, and `gh api /markdown` renders the
+fragment Sparkle embeds. A generated log was tried and thrown out — it lists
+`chore` and `ci` under a
 version, and the update dialog is the last place anyone wants to read that.
 Locally, `make notes` reads the body back off the release, so a laptop and a
 runner publish the same words. An empty body publishes without a description
 rather than failing. `docs/RELEASE_NOTES.md` is the template and the house rules
-for writing one: what that dialog can render, and what leaks out of a private
-repo if you paste it in.
+for writing one: what that dialog can render, and what should stay out of
+public release notes.
 
 **Also from CI.** `.github/workflows/release.yml` runs that same `make release`
-on a `macos-26` runner, triggered by the tag push. It only supplies what a
+on a `macos-26` runner, triggered by publishing the app release. It only supplies what a
 laptop already has: a throwaway keychain holding the Developer ID identity, a
 checkout of the site repo as `SITE_DIR`, and the two overrides the Makefile
 exposes — `NOTARY_ARGS` for credentials that live in that keychain rather than

@@ -39,18 +39,15 @@ VERSION ?= $(shell /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString"
 BUILD   ?= $(shell git rev-list --count HEAD)
 DMG     := build/$(APP)-$(VERSION).dmg
 
-## Where the public can reach this. The source repo is private, and a private
-## repo's release assets have no unauthenticated URL at all — nothing Sparkle or
-## Homebrew fetches can live in it. Two public repos carry that instead: the site
-## serves the feed from a domain we own, so it survives a move off GitHub, and the
-## tap carries the cask. Both are checked out beside this one.
-SITE_REPO ?= heybui/tokenpacer.com
+## The app's public release carries the DMG and an appcast snapshot. The site
+## serves that same feed at the URL baked into installed apps; the tap has the cask.
+RELEASE_REPO ?= heybui/token-pacer
 SITE_DIR  ?= ../tokenpacer.com
 HOMEBREW_TAP_REPO ?= redevify/homebrew-tap
 HOMEBREW_TAP_DIR  ?= ../homebrew-tap
 ## Per release, so it is never the URL baked into a build — only the feed is that,
 ## and the feed is the domain.
-RELEASE_URL := https://github.com/$(SITE_REPO)/releases/download
+RELEASE_URL := https://github.com/$(RELEASE_REPO)/releases/download
 
 ## Distribution needs a *Developer ID Application* certificate — the Apple
 ## Development one above is for this machine only and cannot be notarized.
@@ -209,8 +206,7 @@ $(DMG):
 	 echo "the cask have to describe the stapled image, not a freshly built one."; \
 	 exit 1
 
-## The feed Sparkle reads, served from the domain and nowhere else. A second
-## copy attached to the release would be read by nothing and trusted by someone.
+## The feed Sparkle reads is served from the domain, including for installed apps.
 ## Signs each update with the EdDSA key in the login Keychain — without it an
 ## installed copy refuses the download, which is the whole point of the key.
 appcast: $(DMG)
@@ -307,29 +303,20 @@ release:
 	$(MAKE) cask
 	@# The same words the release in this repo carries — `appcast` above already
 	@# fetched them for the feed. --generate-notes is not an option: it reads the
-	@# repo the release is filed in, which is the website.
-	@# Re-releasing the same version replaces what is there rather than failing.
-	@# Pushing a tag that already exists takes a deliberate `--force`, so by the
-	@# time a second run reaches here it is a retry — of a release that notarized
-	@# and then died on the tap, or one whose image has to be rebuilt. Edit and
-	@# clobber rather than delete and recreate: the release keeps its URL, and
-	@# the download link already in someone's hands keeps working.
-	@if gh release view v$(VERSION) --repo $(SITE_REPO) >/dev/null 2>&1; then \
-	  echo "v$(VERSION) is already released — replacing its notes and image."; \
-	  gh release edit v$(VERSION) --repo $(SITE_REPO) \
-	    --title "$(APP) $(VERSION)" --notes-file $(NOTES_MD); \
-	  gh release upload v$(VERSION) --repo $(SITE_REPO) $(DMG) --clobber; \
-	else \
-	  gh release create v$(VERSION) --repo $(SITE_REPO) \
-	    --title "$(APP) $(VERSION)" --notes-file $(NOTES_MD) $(DMG); \
-	fi
-	@# Publishing the release on GitHub created this tag already, and CI checked
-	@# it out. Creating it again would fail the run after it had published, so
-	@# this only covers a release cut from a laptop before the tag exists.
+	@# A local release may not have a tag yet. CI already has one: it was the
+	@# source release's tag, so this fallback does nothing there.
 	@git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null \
 	  || { git tag -a v$(VERSION) -m "$(APP) $(VERSION)" && git push origin v$(VERSION); }
-	@# The feed lives at the domain, not at the release: a build polls the URL it
-	@# shipped with for ever, and that one has to outlive wherever the DMG sits.
+	@# The release in this repo already holds the hand-written notes. A retry
+	@# replaces the DMG and appcast snapshot; the versioned URLs stay the same.
+	@if gh release view v$(VERSION) --repo $(RELEASE_REPO) >/dev/null 2>&1; then \
+	  gh release upload v$(VERSION) --repo $(RELEASE_REPO) $(DMG) build/appcast.xml --clobber; \
+	else \
+	  gh release create v$(VERSION) --repo $(RELEASE_REPO) --verify-tag \
+	    --title "$(APP) $(VERSION)" --notes-file $(NOTES_MD) $(DMG) build/appcast.xml; \
+	fi
+	@# The site's static feed remains the URL baked into installed apps and
+	@# supplies the website's version and download link at build time.
 	@# It goes in public/ — the site deploys dist/, built from src/ and public/,
 	@# so a copy at the repo root is never served and Sparkle would 404.
 	cp build/appcast.xml $(SITE_DIR)/public/appcast.xml

@@ -219,7 +219,7 @@ reading as missing features.
 | Preferences, alerts in the pill, launch at login | ✅ |
 | Pinned panel — sparkline, splits, history | ✅ |
 | In-app updates | ✅ Sparkle, automatic checks on by default |
-| Release — notarized DMG, appcast | ✅ cut by CI on a published release, served from tokenpacer.com |
+| Release — notarized DMG, appcast | ✅ cut by CI on a published release; DMG in token-pacer, feed on tokenpacer.com |
 | Homebrew cask | 🔨 written every release, published only when the tap is checked out beside this repo — CI has none |
 
 ## Open questions
