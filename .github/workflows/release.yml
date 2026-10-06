@@ -35,7 +35,9 @@ jobs:
     ## an arm64 runner, which is also what the shipped binary is: `swift build`
     ## produces one architecture, and an Intel runner would quietly publish a
     ## disk image no machine with a notch can run.
-    runs-on: macos-26
+    ## `xcode-27` is the macOS 27 preview image, the only one that carries
+    ## Xcode 27; `macos-26` tops out at 26.6.
+    runs-on: xcode-27
     ## Default is six hours. On a 10x-billed runner that is most of a month's
     ## quota spent on something already stuck, so this is set from what a run
     ## actually costs rather than from caution: a cold build and a notary round
@@ -54,15 +56,13 @@ jobs:
           fetch-depth: 0
 
       - name: Select the toolchain
-        ## Newest the image carries, not its default. This is written against
-        ## Xcode 27, no runner image ships that yet, and every failure from an
-        ## older one reads as a bug in the source rather than a version gap:
-        ## SwiftUI's `.plain` comes back main-actor isolated, `Data.split` turns
-        ## ambiguous, and Aggregator's `map` times out the type checker. Taking
-        ## the newest closes that gap on its own the week the image catches up.
+        ## Pinned to the image's Xcode 27.0 release, not the newest it carries:
+        ## that is a 27.2 beta, and a shipped build should not depend on one.
+        ## The source needs 27 — on 26 SwiftUI's `.plain` comes back main-actor
+        ## isolated, `Data.split` turns ambiguous, and Aggregator's `map` times
+        ## out the type checker, all of which read as bugs rather than a gap.
         run: |
-          XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
-          sudo xcode-select -s "${XCODE:-/Applications/Xcode.app}"
+          sudo xcode-select -s /Applications/Xcode_27.app
           xcodebuild -version
           swift --version
 
