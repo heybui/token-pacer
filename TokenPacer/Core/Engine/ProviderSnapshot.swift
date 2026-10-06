@@ -35,7 +35,7 @@ struct SnapshotInput {
 /// the two providers that state nothing and wrong for the one that does, in
 /// three separate ways at once. A policy that belongs to one provider now lives
 /// with that provider, where a change to it cannot reach the other two.
-protocol ProviderSnapshot {
+protocol ProviderSnapshot: SendableMetatype {
     /// Which limits this provider's row is drawn from.
     static func limits(_ input: SnapshotInput) -> RateLimits?
 
@@ -76,7 +76,7 @@ extension ProviderSnapshot {
             panelMovedAt: input.panelMovedAt,
             panel: input.panelData,
             windows: input.windows,
-            splitSpan: panelWindow
+            splitSpan: { panelWindow(provider: $0, logged: $1) }
         )
     }
 }

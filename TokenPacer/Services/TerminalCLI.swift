@@ -142,7 +142,7 @@ enum TerminalCLI {
         // "could not read the usage panel". The _r form writes into our own.
         var name = [CChar](repeating: 0, count: Int(PATH_MAX))
         guard ttyname_r(slave, &name, name.count) == 0,
-              let terminal = String(validatingCString: name)
+              let terminal = String(validating: name.prefix { $0 != 0 }, as: UTF8.self)
         else {
             close(master)
             close(slave)

@@ -40,7 +40,7 @@ enum SingleInstance {
         // not it, until that orphan exits. Seen for real: TokenPacer quit, a
         // `claude` process it had spawned held the descriptor with ppid 1, and
         // every relaunch printed "Token Pacer is already running".
-        fcntl(fd, F_SETFD, FD_CLOEXEC)
+        _ = fcntl(fd, F_SETFD, FD_CLOEXEC)
 
         guard flock(fd, LOCK_EX | LOCK_NB) == 0 else {
             close(fd)
