@@ -19,6 +19,9 @@ struct PillRootView: View {
     /// The border runs once when the first reading lands, so the eye goes to
     /// the notch at the moment there is something there.
     @State private var isPulsing = false
+    /// The report runs every CLI and takes about a minute; a second click in
+    /// that minute would start a second set of them.
+    @State private var isCopyingDiagnostics = false
 
     var menuItems: [NotchMenuItem] {
         [
@@ -29,8 +32,25 @@ struct PillRootView: View {
             NotchMenuItem(title: String(localized: "Send feedback")) {
                 NSWorkspace.shared.open(AppInfo.feedbackPage)
             },
+            NotchMenuItem(
+                title: isCopyingDiagnostics
+                    ? String(localized: "Copying diagnostic info…")
+                    : String(localized: "Copy diagnostic info"),
+                isEnabled: !isCopyingDiagnostics,
+                action: copyDiagnostics
+            ),
             NotchMenuItem(title: String(localized: "Quit Token Pacer"), key: "⌘Q") { NSApp.terminate(nil) },
         ]
+    }
+
+    private func copyDiagnostics() {
+        isCopyingDiagnostics = true
+        Task {
+            let report = await Probe.rawReport()
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(report, forType: .string)
+            isCopyingDiagnostics = false
+        }
     }
 
     /// Jobs in flight, or none when the count is switched off. One answer, so
